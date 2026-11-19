@@ -56,6 +56,7 @@ function shNav() {
   const nh = shNavHide();
   $$("nav button[data-p]").forEach(b => b.classList.toggle("nh", nh.has(b.dataset.p) && !SH_LOCK.has(b.dataset.p) && !b.classList.contains("sub")));   // вкладки — вместе со своим разделом
   ["#nav-plg-h", "#nav-plugins", "#nav-plg-new", "#nav-plg-all"].forEach(s => { const e = $(s); if (e) e.classList.toggle("nh", nh.has("plugins")); });
+  const sk = $('nav button[data-p="skills"]'); if (sk) sk.classList.toggle("sub", !nh.has("plugins"));   // №907: страница плагинов — «Все плагины» или, если группа скрыта, «Настройка» → «Плагины»
 }
 window.shNav = shNav;
 

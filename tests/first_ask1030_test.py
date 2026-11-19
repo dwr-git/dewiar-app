@@ -21,7 +21,7 @@ from engine_answer import AnswerMixin  # noqa: E402
 from engine_intro import IntroMixin  # noqa: E402
 
 ok(SET.DEFAULTS["ui"]["first_ask"] is None, "по умолчанию (прежние пользователи) — None: подсказок нет")
-ok("first_asked(self)" in inspect.getsource(AnswerMixin.ask), "любой вопрос (голос, текст, кнопка) отмечает «первый вопрос задан»")
+ok("first_asked(self, text)" in inspect.getsource(AnswerMixin.ask), "любой вопрос (голос, текст, кнопка) отмечает «первый вопрос задан»")
 
 
 class S:

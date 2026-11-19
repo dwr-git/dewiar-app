@@ -592,6 +592,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self.cloud.loop, name="cloud", daemon=True).start()
 
     def shutdown(self):
+        try:
+            self.health_quit()                                      # «Первая минута»: закрыли в первые 10 минут — пульс сразу
+        except Exception:  # noqa: BLE001
+            pass
         self.stopping.set()
         try:
             self.sshlink.stop()                                     # туннель ssh не оставляем висеть после выхода

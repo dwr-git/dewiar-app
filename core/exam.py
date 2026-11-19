@@ -439,6 +439,8 @@ async def check_state(core, state, t_start):
                     return False
             if "hm" in want and f"{at:%H:%M}" != want["hm"]:
                 return False
+            if "dow" in want and at.weekday() != int(want["dow"]):        # «в следующий понедельник» — именно понедельник (№897)
+                return False
             if want.get("kind") and (x.get("kind") or "reminder") != want["kind"]:        # таймер — именно таймер (отсчёт на экране)
                 return False
             if want.get("att") and int(x.get("att") or 0) < int(want["att"]):           # с картинкой — она правда при напоминании

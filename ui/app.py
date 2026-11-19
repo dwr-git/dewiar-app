@@ -4255,6 +4255,8 @@ def main():
     ap.add_argument("--mic", action="store_true", help="«Позвать Лиру» (сочетание клавиш, ui/hotkey.py, идея №154)")
     ap.add_argument("target", nargs="?", help="файл .dewiar или ссылка dewiar://connect?server=…")
     args = ap.parse_args()
+    if args.autostart:
+        os.environ["DEWIAR_AUTOSTART"] = "1"      # ядро, запущенное отсюда, знает: запуск вместе с системой (пульс, 20.11)
     from urllib.parse import quote
     extra = ""
     if args.target:

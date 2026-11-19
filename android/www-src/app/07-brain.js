@@ -2,7 +2,14 @@
 //@ Собирается в android/assets/www/app.js (tools/app_join.py) — порядок частей = порядок исполнения; шапка «//@» в app.js не попадает.
 /* ---------- мозг: модель с инструментами ---------- */
 let busy = false, turnAbort = null, lastDone = "";
-const CUR = (() => { const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || ""); return /Minsk/.test(tz) ? "BYN" : /Kiev|Kyiv/.test(tz) ? "UAH" : /Almaty|Astana/.test(tz) ? "KZT" : "RUB"; })();
+/* валюта трат по часовому поясу — как COUNTRY_CUR/_TZ_COUNTRY в core/money.py (идея №348, 19.11: в Молдове записывалось
+   в рублях — знали только Минск, Киев и Казахстан) */
+const CUR_TZ = [[/Minsk/, "BYN"], [/Kiev|Kyiv|Zaporozh|Uzhgorod/, "UAH"], [/Almaty|Astana|Qostanay|Aqtau|Aqtobe|Atyrau|Oral|Qyzylorda/, "KZT"],
+  [/Tashkent|Samarkand/, "UZS"], [/Bishkek/, "KGS"], [/Yerevan/, "AMD"], [/Tbilisi/, "GEL"], [/Baku/, "AZN"], [/Chisinau/, "MDL"],
+  [/Warsaw/, "PLN"], [/London/, "GBP"], [/Jerusalem|Tel_Aviv/, "ILS"], [/Prague/, "CZK"], [/Istanbul/, "TRY"], [/Shanghai|Chongqing|Harbin|Urumqi/, "CNY"],
+  [/Berlin|Paris|Rome|Madrid|Lisbon|Amsterdam|Brussels|Vienna|Helsinki|Dublin|Athens|Bratislava|Ljubljana|Tallinn|Riga|Vilnius|Luxembourg|Malta|Nicosia|Zagreb/, "EUR"],
+  [/^America\/(?:New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Detroit|Indiana|Kentucky|Boise)|^Pacific\/Honolulu/, "USD"]];
+const CUR = (() => { const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || ""); const hit = CUR_TZ.find(([rx]) => rx.test(tz)); return hit ? hit[1] : "RUB"; })();
 const WD = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 const MON = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const pad = (n) => String(n).padStart(2, "0");

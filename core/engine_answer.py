@@ -43,7 +43,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
         if via:
             quiet = False
         if not quiet and not raw and hasattr(type(self), "first_asked"):
-            type(self).first_asked(self)                   # первый вопрос новичка — подсказки в виджете больше не нужны
+            type(self).first_asked(self, text)             # первый вопрос новичка — подсказки в виджете больше не нужны
         # 24.10 (владелец: «попросил обновиться — нет; „а теперь“ — она что-то не связанное»): короткое «а теперь?»,
         # «ещё раз», «проверь ещё раз» сразу после быстрой команды без модели — та же команда ещё раз
         lq = getattr(self, "_last_quick", None)
@@ -711,10 +711,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 for kind, val in events:
                     if t_ev is None:
                         t_ev = time.monotonic()
+                        if getattr(self, "lat", None) is not None:
+                            self.lat.mark("ev", t_ev)          # сервер ответил хоть чем-то (первый шаг хода)
                     if turn.cancel.is_set():
                         break
                     if kind == "tools":
                         calls = val
+                        if calls and getattr(self, "lat", None) is not None:
+                            self.lat.act()
                         continue
                     if muted:
                         step_text += val

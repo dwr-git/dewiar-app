@@ -1,0 +1,40 @@
+TITLE
+Lira for your company: staff, clients, website and leads in one place | Lira's AI Academy, lesson 30
+
+DESCRIPTION
+Can't see who's doing what, website leads get lost, clients wait for a call? In Dewiar it all comes together in one place: assignments to employees with photo reports, an assistant on your website and in Telegram, client cards, deals and a weekly summary. Half an hour of setup — and then your company runs itself.
+
+How it works:
+• Your company lives in the studio: “Brain” → “Create company”. One balance for everyone, and each employee has their own limit.
+• An employee joins with a link: they open it on their phone — nothing to install. Assignments arrive in their “Work” section.
+• Assign by voice: “Lira, tell Sergey to replace the wiring at the Ivanovs' by Friday.” The employee taps “I'll take it”, then “Done” with a photo; rescheduling needs a reason. An hour before the deadline, Lira reminds them herself.
+• The board: who's doing what, what's waiting for your review, what's overdue. The same board is on the manager's phone.
+• A website from a description, plus “Website chat”: the knowledge comes from your site in one click. The assistant answers clients day and night — on the site and in the company's Telegram bot, even when the computer is off.
+• A client leaves a phone number — a card appears in “Clients”, and the lead instantly becomes a task for an employee: get in touch within two hours.
+• Deals from lead to payment; who owes you is shown in red.
+• Every Friday — the week in review: tasks given and done, who did how much, how many leads came in, and what's overdue.
+• And every day Lira is an assistant for everyone: reminders, mail, documents, tasks — by voice, on the computer and on the phone.
+• To start: Studio → “Brain” → “Create company”, then “Company launch” walks you through five steps.
+
+0:00 A familiar picture
+0:23 Your company and one balance
+0:32 An employee joins with a link
+0:42 Assignments: “I'll take it” → “Done” with a photo
+1:06 Website and the Telegram assistant
+1:26 Lead → client card and an assignment
+1:37 Deals and who owes you
+1:46 The week in review, and the board on your phone
+2:06 An assistant for everyone, every day
+2:22 How to start
+
+Dewiar is a voice AI assistant for your computer (Windows, Linux, Mac) and phone (Android, iPhone in the browser): https://dewiar.pro
+
+All lessons — the “Lira's AI Academy” playlist.
+
+#Dewiar #AI #AIforBusiness #CRM #BusinessAutomation #AIassistant #SmallBusiness
+
+TAGS (comma-separated)
+Dewiar, Lira, Lira's AI Academy, AI for business, AI assistant for teams, employee task management, assign tasks to employees, CRM for small business, website chatbot, Telegram bot for business, website leads, business automation, voice assistant, small business tools
+
+COVER
+30-company-youtube.en.jpg (1280×720)

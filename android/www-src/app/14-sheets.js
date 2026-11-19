@@ -111,7 +111,7 @@ function histLiveShow() {
   if (!histLive) { box.innerHTML = ""; return; }
   const you = $("#you").textContent.replace(/^«|»$/g, "").trim(), bot = $("#bot").textContent.trim(), wait = !bot || $("#bot").className === "wait";
   const near = $("#sh-hist").scrollHeight - $("#sh-hist").scrollTop - $("#sh-hist").clientHeight < 120;   // читают выше — не дёргаем
-  box.innerHTML = (you ? `<div class="msg u"><div>${esc(you)}</div></div>` : "")
+  box.innerHTML = (you ? `<div class="msg u"><div translate="no">${esc(you)}</div></div>` : "")
     + (you || bot ? `<div class="msg a">${wait ? `<div class="hdots" aria-label="${esc(bot || "Думаю")}"><i></i><i></i><i></i></div>` : `<div class="ans">${esc(bot)}</div>`}</div>` : "");
   if (near) histBottom();
 }

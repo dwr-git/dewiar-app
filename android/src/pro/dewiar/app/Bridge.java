@@ -179,6 +179,7 @@ public final class Bridge {
                 w.setStatusBarColor(c);
                 w.setNavigationBarColor(c);
                 a.web.setBackgroundColor(c);
+                if (a.root != null) a.root.setBackgroundColor(c);   // Android 15+: цвет под панелями — это фон корня
                 android.view.View v = w.getDecorView();
                 int f = v.getSystemUiVisibility() & ~(0x2000 | 0x10);   // LIGHT_STATUS_BAR (API 23), LIGHT_NAVIGATION_BAR (API 26)
                 if (light) f |= 0x2000 | (Build.VERSION.SDK_INT >= 26 ? 0x10 : 0);

@@ -323,7 +323,7 @@ window.render = function (T, f) {
   // студия: компания → приглашение → доска → (сайт отдельно) → сделки
   const stuK = Math.max(
     Math.min(out((T - S("company") - 0.2) / 0.5), 1 - out((T - E("people") + 0.4) / 0.4)),
-    Math.min(out((T - at("s5c") + 0.3) / 0.5), 1 - out((T - E("tasks") + 0.4) / 0.4)),
+    Math.min(out((T - at("s5a") - LN.s5a.dur * 0.7) / 0.5), 1 - out((T - E("tasks") + 0.4) / 0.4)),
     Math.min(out((T - S("clients") - 0.2) / 0.5), 1 - out((T - E("clients") + 0.4) / 0.4)));
   vis($("#stu"), clamp(stuK), 24, .97);
   const pane = T < S("people") ? "pCo" : T < S("tasks") ? "pIn" : T < S("clients") ? "pBo" : "pDe";
@@ -351,7 +351,8 @@ window.render = function (T, f) {
   $("#ePh").style.display = T > tDone + 0.5 ? "" : "none"; vis($("#ePh"), out((T - tDone - 0.5) / 0.4), 10);
   $("#eSt").style.display = T > tDone + 0.8 ? "" : "none";
   vis($("#eRem"), out((T - at("s5b") - LN.s5b.dur * 0.75) / 0.4), 10);
-  [...$("#pBo").querySelectorAll(".tk")].forEach(c => vis(c, out((T - at("s5c") - 0.3 - (+c.dataset.c) * 0.5) / 0.4), 10));
+  // доска: в работе и просрочено — сразу; «Ждут проверки» — как только Сергей нажал «Сделано»
+  [...$("#pBo").querySelectorAll(".tk")].forEach(c => vis(c, +c.dataset.c === 0 ? out((T - tDone - 0.8) / 0.4) : out((T - at("s5a") - LN.s5a.dur * 0.7 - 0.4 - (+c.dataset.c) * 0.3) / 0.4), 10));
   // сайт: консультант отвечает; знания — с сайта; бот компании в Telegram
   const w0 = S("site");
   scene($("#w1"), T, w0 + 0.2, E("site"), 24);

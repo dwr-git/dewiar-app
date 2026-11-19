@@ -127,6 +127,7 @@ public class AlarmActivity extends Activity {
         root.addView(ok, lp);
         root.addView(snooze, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)));
         setContentView(root);
+        Compat.edgeInsets(root);
         start();
         // не звонить бесконечно, если человека нет рядом: AlarmTime.RING_MS с первого звука (окно остаётся)
         long fired = getIntent().getLongExtra("fired", 0);

@@ -35,8 +35,11 @@ class NameMixin:
                 continue
             pid, _ = find_name(text, self._wake_aliases(), strict=True)
             short = len(pcm) / 2 / RATE <= 1.6 and len(text.split()) <= 2
-            if not pid and self.vosk_wake_check == uid and short and text and self._name_like(text):
-                # «Лира» одна, с паузой: точная модель ослышала короткое имя («Лиру», «Ира») — это и было имя
+            if not pid and self.vosk_wake_check == uid and text and (
+                    (short and self._name_like(text)) or self._name_like(text, 0.7)):
+                # «Лира» одна, с паузой: точная модель ослышала короткое имя («Лиру», «Ира») — это и было имя.
+                # 20.11 (владелец: «приходится по 5 раз звать»): и в начале фразы — «Лера, какая погода» — если быстрый
+                # слух слышал имя, а первое слово точной модели на него похоже заметно (≥ 0,7): два слуха сходятся — зов
                 pid = self.personas.wake_map(kids=True).get(getattr(self, "_vosk_wake_word", "")) or None
             if pid and kind == "barge" and not self.status.get("aec_real") and self._is_self_echo(text, barge=True):
                 log.info("🔁 Имя поверх ответа — в моей же фразе из колонок, не перебиваю: «%s»", text[:80])
@@ -231,7 +234,7 @@ class NameMixin:
             return spotted, 0
         return None, 0
 
-    def _name_like(self, text):
+    def _name_like(self, text, need=0.55):
         """Похоже ли короткое распознанное на ослышанное имя («Игрова», «Элла» вместо «Эва»), а не на ответ человека.
         Отчёт 11.10: «Лира» → «Слушаю…», затем быстрое «спасибо» / «как дела» принимались за ослышанное имя — фраза
         терялась, и снова «Слушаю…». Пусто или первое слово хоть немного похоже на имя (≥ 0,55) — имя; иначе — фраза."""
@@ -240,7 +243,7 @@ class NameMixin:
         if not w:
             return True
         names = [_norm(a).replace(" ", "") for al in self.aliases.values() for a in al]
-        return any(difflib.SequenceMatcher(None, w[0], a).ratio() >= 0.55 for a in names)
+        return any(difflib.SequenceMatcher(None, w[0], a).ratio() >= need for a in names)
 
     def listen_for_command(self, seconds=None):
         """Имя услышали без вопроса: ждём вопрос seconds секунд (без имени) и даём короткий сигнал. По умолчанию —

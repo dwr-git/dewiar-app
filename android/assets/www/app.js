@@ -2008,7 +2008,14 @@ function finishTurn() {
 
 /* ---------- мозг: модель с инструментами ---------- */
 let busy = false, turnAbort = null, lastDone = "";
-const CUR = (() => { const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || ""); return /Minsk/.test(tz) ? "BYN" : /Kiev|Kyiv/.test(tz) ? "UAH" : /Almaty|Astana/.test(tz) ? "KZT" : "RUB"; })();
+/* валюта трат по часовому поясу — как COUNTRY_CUR/_TZ_COUNTRY в core/money.py (идея №348, 19.11: в Молдове записывалось
+   в рублях — знали только Минск, Киев и Казахстан) */
+const CUR_TZ = [[/Minsk/, "BYN"], [/Kiev|Kyiv|Zaporozh|Uzhgorod/, "UAH"], [/Almaty|Astana|Qostanay|Aqtau|Aqtobe|Atyrau|Oral|Qyzylorda/, "KZT"],
+  [/Tashkent|Samarkand/, "UZS"], [/Bishkek/, "KGS"], [/Yerevan/, "AMD"], [/Tbilisi/, "GEL"], [/Baku/, "AZN"], [/Chisinau/, "MDL"],
+  [/Warsaw/, "PLN"], [/London/, "GBP"], [/Jerusalem|Tel_Aviv/, "ILS"], [/Prague/, "CZK"], [/Istanbul/, "TRY"], [/Shanghai|Chongqing|Harbin|Urumqi/, "CNY"],
+  [/Berlin|Paris|Rome|Madrid|Lisbon|Amsterdam|Brussels|Vienna|Helsinki|Dublin|Athens|Bratislava|Ljubljana|Tallinn|Riga|Vilnius|Luxembourg|Malta|Nicosia|Zagreb/, "EUR"],
+  [/^America\/(?:New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Detroit|Indiana|Kentucky|Boise)|^Pacific\/Honolulu/, "USD"]];
+const CUR = (() => { const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || ""); const hit = CUR_TZ.find(([rx]) => rx.test(tz)); return hit ? hit[1] : "RUB"; })();
 const WD = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 const MON = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const pad = (n) => String(n).padStart(2, "0");
@@ -2913,9 +2920,29 @@ const VISION_HINT = "К сообщению приложено фото. Если
 /* «слушай встреча с Ирой переносится… напомни мне завтра в 9» (экзамен 0.9.18) — модель отвечала «Слушаю тебя.»: «слушай»
    в начале длинной фразы — не просьба послушать, а присказка. Модели — без неё (в истории фраза остаётся как сказана) */
 const LISTEN_LEAD = /^\s*(?:слушай(?:те)?|послушай(?:те)?|слышь|смотри|короче)\s*[,!.—–-]*\s+(?=(?:\S+\s+){3}\S)/i;
+/* Вопрос, не ушедший из-за связи, — отправить самому, когда она вернётся (событие online, возврат в приложение, раз в 20 с),
+   если за это время не спросили другое и прошло не больше 10 минут */
+const NET_RETRY_MS = 10 * 60e3;
+let netRetry = null, netRetryTimer = 0;
+function netRetryArm(text, opts) {
+  netRetry = { text, opts, at: Date.now() };
+  clearInterval(netRetryTimer); netRetryTimer = setInterval(netRetryTry, 20000);
+}
+function netRetryTry() {
+  const r = netRetry;
+  if (!r) { clearInterval(netRetryTimer); return; }
+  if (Date.now() - r.opts.netFirst > NET_RETRY_MS || lastUserAct > r.at + 500) { netRetry = null; clearInterval(netRetryTimer); return; }
+  if (busy || navigator.onLine === false) return;
+  netRetry = null; clearInterval(netRetryTimer);
+  plog("info", "📶 связь вернулась — отправляю вопрос сам");
+  showBot("Связь вернулась — отправляю ваш вопрос", "wait");
+  ask(r.text, Object.assign({}, r.opts, { resent: true }));
+}
+window.addEventListener("online", () => setTimeout(netRetryTry, 1500));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && netRetry) setTimeout(netRetryTry, 1500); });
 async function ask(text, opts = {}) {
   text = String(text || "").trim(); if (!text) return;
-  if (!opts.hidden) { lastUserAct = Date.now(); fsMark("ask"); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
+  if (!opts.hidden && !opts.resent) { lastUserAct = Date.now(); fsMark("ask"); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
   stopListen(); interrupt(true);
   if (!opts.hidden && !(opts.attach || []).length && PHOTO_NOW_RX.test(text)) {
     showYou(text); setState("thinking"); showBot("Включаю камеру — держите телефон ровно", "wait");
@@ -3019,7 +3046,7 @@ async function ask(text, opts = {}) {
   creativeTurn = !opts.hidden && CREATIVE_ASK.test(text) && !reading(text);
   if (creativeTurn) plog("info", "🎨 творческая просьба — смелее (температура " + llmTemp() + ")");
   if (deep) { plog("info", "🧠 сложная просьба — модель подумает перед ответом"); showBot("Подумаю как следует — минутку", "wait"); }
-  let final = "", switchTo = null;
+  let final = "", switchTo = null, ranTools = false;
   lastDone = "";
   try {
     let guided = false;                                      // руководство приложено к вопросу (как вызов app_help)
@@ -3158,6 +3185,7 @@ async function ask(text, opts = {}) {
         const key = c.name + " " + JSON.stringify(safeJSON(c.args));
         if (once.has(key)) { msgs.push({ role: "tool", tool_call_id: c.id, name: c.name, content: "(то же самое уже сделано этим ответом — не повторяй)" }); continue; }
         once.add(key);
+        ranTools = true;
         try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
         plog("info", `🔧 ${c.name} → ${clip(String((res && res.text) || res || "").split("\n")[0], 90)}`);   // что сделано — видно в отчёте (№56)
         if (c.name === "calendar_add" && /^Записано/.test(String(res))) called.add("calendar_write");   // правда записано, а не только спросили
@@ -3246,6 +3274,12 @@ async function ask(text, opts = {}) {
     }
     else if (e.human) { plog("warn", "облако: " + e.message); showBot(e.message, "err"); say(e.message); }       // облако Dewiar объясняет само: «много людей…»
     else if (!D.mock && SELF_HOST_RX.test(llmBase() + "/")) { const m = "Не получилось связаться с мозгом: " + SELF_HOST_TEXT; console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом: адрес модели указывает на сам телефон. Как поправить — на экране."); }
+    else if (e.net && !ranTools && !opts.hidden && !sink.text().trim() && Date.now() - (opts.netFirst || Date.now()) < NET_RETRY_MS) {
+      // №289 (идея, 17.11) и «Голос»: 112 вопросов за неделю на телефоне — «нет связи». Вопрос не теряется: связь вернулась —
+      // уходит сам (ничего ещё не сделано — повтор безопасен; за 10 минут — дальше уже не к месту)
+      netRetryArm(text, Object.assign({}, opts, { netFirst: opts.netFirst || Date.now() }));
+      const m = "Нет связи с мозгом ({1}). Вопрос отправится сам, как только связь вернётся.".replace("{1}", e.message); console.warn(m); showBot(m, "err"); say("Нет связи. Вопрос отправится сам, как только связь вернётся.");
+    }
     else { const m = "Не получилось связаться с мозгом: " + e.message + netHint(); console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом."); }
   } finally {
     if (turnAbort === ctl) { busy = false; turnAbort = null; }
@@ -6432,7 +6466,7 @@ function histLiveShow() {
   if (!histLive) { box.innerHTML = ""; return; }
   const you = $("#you").textContent.replace(/^«|»$/g, "").trim(), bot = $("#bot").textContent.trim(), wait = !bot || $("#bot").className === "wait";
   const near = $("#sh-hist").scrollHeight - $("#sh-hist").scrollTop - $("#sh-hist").clientHeight < 120;   // читают выше — не дёргаем
-  box.innerHTML = (you ? `<div class="msg u"><div>${esc(you)}</div></div>` : "")
+  box.innerHTML = (you ? `<div class="msg u"><div translate="no">${esc(you)}</div></div>` : "")
     + (you || bot ? `<div class="msg a">${wait ? `<div class="hdots" aria-label="${esc(bot || "Думаю")}"><i></i><i></i><i></i></div>` : `<div class="ans">${esc(bot)}</div>`}</div>` : "");
   if (near) histBottom();
 }
@@ -7632,7 +7666,7 @@ function tasksHtml() {
     + q.map(x => `<div class="it"><div class="bd"><b>${esc(x.title)}</b><small>⏳ отправляю…</small></div></div>`).join("")
     + taskSentList().map(taskSentHtml).join("")
     + (ts.length ? `<div class="bugh">Задачи</div>` + ts.map(([id, t]) => `<details class="dday task ${esc(t.status || "")}"${t.status === "done" && (t.files || []).length ? " open" : ""}><summary><div class="bd"><b>${esc(t.title)}</b><small><span class="tst">${esc(TASK_RU[t.status] || t.status || "")}</span>${t.where === "cloud" ? " · в облаке" : ""}${t.activity && t.status === "running" ? " · " + esc(t.activity) : ""}</small></div></summary>
-        <div class="dtext tk">${t.question && t.status === "waiting" ? `<p><b>Вопрос:</b> ${esc(t.question)}</p>` : ""}${t.result ? `<p>${mdLite(t.result)}</p>` : `<p class="hint">${esc(t.goal || "")}</p>`}${t.error ? `<p style="color:#FF8FA8">${esc(t.error)}</p>` : ""}${taskFiles(t)}
+        <div class="dtext tk" translate="no">${t.question && t.status === "waiting" ? `<p><b>Вопрос:</b> ${esc(t.question)}</p>` : ""}${t.result ? `<p>${mdLite(t.result)}</p>` : `<p class="hint">${esc(t.goal || "")}</p>`}${t.error ? `<p style="color:#FF8FA8">${esc(t.error)}</p>` : ""}${taskFiles(t)}
         ${t.status === "waiting" && t.where !== "cloud" ? `<div class="tkans"><textarea rows="2" data-ans-t="${esc(id)}" placeholder="Ваш ответ — задача продолжит"></textarea><button class="btn p" data-ans="${esc(id)}">Ответить</button></div>` : ""}
         <button class="tkdel" data-del="${esc(id)}"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Удалить задачу</button></div></details>`).join("") : "");
 }
@@ -7681,11 +7715,18 @@ function renderSoul() {
   $$("#soul-tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === soulTab));
   const off = on ? "" : `<div class="card"><b>Нужна синхронизация</b><p class="hint">Дневник и душу персонажей ведёт компьютер с Dewiar — они приходят сюда через синхронизацию. Нужен тот же ключ Dewiar или вход аккаунтом, что на компьютере.</p><button class="btn p" id="so-sync">Открыть настройки</button></div>`;
   if (soulTab === "diary") {
-    const days = Object.keys(m.diary).sort().reverse(), ins = m.insights;
+    // №904 (19.11, «открываю Душу — приложение замирает»): дневник за месяцы — сотни записей сразу целиком размечались в
+    // страницу. Теперь — последние 30 дней («Показать ещё» — следующие), а текст дня размечается, только когда его открыли
+    const days = Object.keys(m.diary).sort().reverse(), ins = m.insights, shown = +box.dataset.days || 30;
+    const snip = (t) => { t = String(t || ""); return t.slice(0, 600).replace(/^#+ [^\n]*$/gm, "").replace(/[#*_]/g, "").replace(/\s+/g, " ").trim().slice(0, 120); };
     box.innerHTML = off + (ins && (ins.lines || []).length ? `<div class="card soulins"><small class="hint" style="margin:0">Выводы на завтра${ins.title ? " · «" + esc(ins.title) + "»" : ""}</small>${ins.lines.map(x => `<div>• ${esc(x)}</div>`).join("")}</div>` : "")
-      + (days.length ? days.map(k => { const e = m.diary[k]; const night = /## 🌙/.test(e.text);
-        return `<details class="dday"><summary><div class="tm">${esc(dayHuman(k))}</div><div class="bd"><b>${esc(e.title || (night ? "Ночная запись" : "Записи дня"))}</b><small>${esc(e.mood || "")}${e.mood ? " · " : ""}${esc(String(e.text).replace(/^#+ [^\n]*$/gm, "").replace(/[#*_]/g, "").replace(/\s+/g, " ").trim().slice(0, 120))}</small></div></summary><div class="dtext">${mdLite(e.text)}</div></details>`; }).join("")
+      + (days.length ? days.slice(0, shown).map(k => { const e = m.diary[k] || {}; const night = /## 🌙/.test(String(e.text || "").slice(0, 4000));
+        return `<details class="dday" data-k="${esc(k)}"><summary><div class="tm">${esc(dayHuman(k))}</div><div class="bd"><b>${esc(e.title || (night ? "Ночная запись" : "Записи дня"))}</b><small>${esc(e.mood || "")}${e.mood ? " · " : ""}${esc(snip(e.text))}</small></div></summary><div class="dtext" translate="no"></div></details>`; }).join("")
+        + (days.length > shown ? `<button class="btn w" id="so-more">Показать ещё (${days.length - shown})</button>` : "")
         : (on ? `<div class="empty">Дневник пока пуст.<br>Его ведёт ассистент на компьютере: ночью пишет о прожитом дне — о разговорах и там, и здесь.</div>` : ""));
+    $$("details.dday", box).forEach(d => d.addEventListener("toggle", () => { const t = $(".dtext", d);
+      if (d.open && t && !t.dataset.done) { t.dataset.done = "1"; t.innerHTML = mdLite(String((m.diary[d.dataset.k] || {}).text || "").slice(0, 60000)); } }));
+    if ($("#so-more")) $("#so-more").onclick = () => { box.dataset.days = shown + 30; renderSoul(); };
   } else if (soulTab === "soul") {
     const p = persona(), names = [...new Set([p.name, ...Object.keys(m.souls)])];
     const cur = box.dataset.sname && names.includes(box.dataset.sname) ? box.dataset.sname : p.name;
@@ -7693,7 +7734,7 @@ function renderSoul() {
       ${names.length > 1 ? `<div class="chips">${names.map(n => `<button class="chip${n === cur ? " on" : ""}" data-n="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}
       ${box.dataset.edit === "soul" ? `<label class="f"><span>Душа · ${esc(cur)}</span><textarea id="so-text" rows="14" placeholder="Душа появится, когда в дневнике наберётся пара ночных записей.">${esc((m.souls[cur] || {}).text || "")}</textarea></label>
       <div class="row2"><button class="btn p" id="so-save" style="flex:1">Сохранить</button><button class="btn" id="so-cancel" style="flex:1">Отмена</button></div>`
-      : `${((m.souls[cur] || {}).text || "").trim() ? `<div class="dtext soulv">${mdLite(m.souls[cur].text)}</div>` : `<div class="empty">Душа появится, когда в дневнике наберётся пара ночных записей.</div>`}
+      : `${((m.souls[cur] || {}).text || "").trim() ? `<div class="dtext soulv" translate="no">${mdLite(m.souls[cur].text)}</div>` : `<div class="empty">Душа появится, когда в дневнике наберётся пара ночных записей.</div>`}
       <button class="btn w" id="so-edit">Изменить</button>`}</div>`;
     $$(".chip[data-n]", box).forEach(b => b.onclick = () => { box.dataset.sname = b.dataset.n; box.dataset.edit = ""; renderSoul(); });
     if ($("#so-edit")) $("#so-edit").onclick = () => { box.dataset.edit = "soul"; renderSoul(); };
@@ -7703,7 +7744,7 @@ function renderSoul() {
     box.innerHTML = off + `<div class="card"><p class="hint" style="margin-top:0">Принципы, которые все персонажи соблюдают всегда — с любым характером и настроением. Пишете вы; правка уйдёт и на компьютер.</p>
       ${box.dataset.edit === "const" ? `<label class="f"><span>Конституция</span><textarea id="co-text" rows="16" placeholder="Придёт с компьютера после синхронизации.">${esc(m.constitution || "")}</textarea></label>
       <div class="row2"><button class="btn p" id="co-save" style="flex:1">Сохранить</button><button class="btn" id="co-cancel" style="flex:1">Отмена</button></div>`
-      : `${(m.constitution || "").trim() ? `<div class="dtext soulv">${mdLite(m.constitution)}</div>` : `<div class="empty">Придёт с компьютера после синхронизации.</div>`}
+      : `${(m.constitution || "").trim() ? `<div class="dtext soulv" translate="no">${mdLite(m.constitution)}</div>` : `<div class="empty">Придёт с компьютера после синхронизации.</div>`}
       <button class="btn w" id="co-edit">Изменить</button>`}</div>`;
     if ($("#co-edit")) $("#co-edit").onclick = () => { box.dataset.edit = "const"; renderSoul(); };
     if ($("#co-cancel")) $("#co-cancel").onclick = () => { box.dataset.edit = ""; renderSoul(); };

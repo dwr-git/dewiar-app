@@ -370,3 +370,30 @@ document.addEventListener("keydown", (e) => {
   if (e.target && e.target.isContentEditable) return;      // в редакторе с оформлением Ctrl+B — «жирный»
   e.preventDefault(); navToggle();
 });
+
+/* «Назад», как в браузере (идея №190, 13.11: «перешёл по ссылке — не хватает вернуться, откуда пришёл»): боковая кнопка
+   мыши «назад» и Alt+← возвращают в прошлый раздел студии — без новой кнопки на экране. Раздел помнит своё состояние сам
+   (страница не перерисовывается заново, если её не открывали по-новому). */
+const NAV_BACK = [];
+let navBacking = false;
+document.addEventListener("click", (e) => {
+  const b = e.target && e.target.closest && e.target.closest("nav button[data-p]");
+  if (!b || navBacking) return;
+  const cur = document.querySelector("section.cur"), from = cur && cur.id.replace(/^p-/, "");
+  setTimeout(() => { const now = document.querySelector("section.cur"), to = now && now.id.replace(/^p-/, "");
+    if (from && to && from !== to && NAV_BACK[NAV_BACK.length - 1] !== from) { NAV_BACK.push(from); if (NAV_BACK.length > 30) NAV_BACK.shift(); } }, 0);
+}, true);
+function navBack() {
+  const p = NAV_BACK.pop(); if (!p) return false;
+  const b = $(`nav button[data-p="${p}"]`); if (!b) return false;
+  navBacking = true; try { b._direct = true; b.click(); b._direct = false; } finally { navBacking = false; }
+  return true;
+}
+window.navBack = navBack;
+document.addEventListener("mouseup", (e) => { if (e.button === 3 && navBack()) e.preventDefault(); });
+document.addEventListener("keydown", (e) => {
+  if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey && e.key === "ArrowLeft") {
+    const t = e.target; if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    if (navBack()) e.preventDefault();
+  }
+});

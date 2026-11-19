@@ -66,6 +66,24 @@ def _proc_start():
         return time.time()
 
 
+def _boot_launch():
+    """Запуск вместе с системой: флаг от интерфейса (--autostart → DEWIAR_AUTOSTART, Windows и Mac запускают ядро сами) или
+    ядро стартовало в первые 3 минуты после включения (Linux — служба systemd при входе)."""
+    if os.environ.get("DEWIAR_AUTOSTART") == "1":
+        return True
+    try:
+        if os.name == "nt":
+            import ctypes
+            f = ctypes.WinDLL("kernel32").GetTickCount64
+            f.restype = ctypes.c_ulonglong
+            up = f() / 1000.0
+        else:
+            up = float(open("/proc/uptime", encoding="ascii").read().split()[0])
+    except Exception:  # noqa: BLE001
+        return False
+    return up < 180
+
+
 def _cpu_total():
     """(занято, всего) тиков процессора всей машины — для доли нагрузки между двумя замерами; нет данных — None."""
     try:
@@ -182,7 +200,9 @@ class HealthMixin:
                 lv.write_text(VERSION, encoding="utf-8")
         except OSError:
             pass
-        self._h_start = {"ts": int(time.time()), "first": (self.s.get("ui", "intro") or "") == "", "v": VERSION, "upd": upd}
+        # auto — запуск вместе с системой (--autostart, 20.11): такие дни в воронке — не «открыл и молчит»
+        self._h_start = {"ts": int(time.time()), "first": (self.s.get("ui", "intro") or "") == "", "v": VERSION, "upd": upd,
+                         "auto": _boot_launch()}
         self._h_marks = {}
         if self.wav_input and not os.environ.get("DEWIAR_PULSE_URL"):
             return                                       # прогон по wav-файлу — не пульс человека
@@ -222,6 +242,38 @@ class HealthMixin:
             self._h["starts"] = (self._h.get("starts") or [])[-9:] + [st]
             self._health_save()
 
+    # «Первая минута» компьютера (20.11; воронка: 221 за неделю закрыли в первые 10 минут, ни о чём не спросив, — а что они
+    # успели увидеть, не знали). Как у телефона (04-health.js fsMark): события первого запуска — секунды от старта, вид
+    # приветствия; без текстов. Окно — 10 минут первого запуска; закрыли раньше первого пульса — пульс уходит при выходе.
+    FIRST_KEYS = ("greet", "tries", "try", "ask", "answer", "fail", "nudge", "mic_no", "quit")
+
+    def first_mark(self, e, kind=""):
+        st = getattr(self, "_h_start", None)
+        if self._health_lock is None or not st or not st.get("first") or e not in self.FIRST_KEYS:
+            return
+        sec = int(time.time() - st["ts"])
+        if sec > 600:
+            return
+        with self._health_lock:
+            f = self._h.setdefault("first", {})
+            if e not in f:
+                f[e] = sec
+                if kind and re.fullmatch(r"[a-z]{2,10}", kind):
+                    f["kind"] = kind
+                self._health_save()
+
+    def health_quit(self):
+        """Выход из программы: в первые 10 минут первого запуска — «закрыли» и пульс сразу (иначе такой запуск не виден)."""
+        st = getattr(self, "_h_start", None)
+        if not st or not st.get("first") or time.time() - st["ts"] > 600 or self._health_lock is None:
+            return
+        self.first_mark("quit")
+        if getattr(self, "_pulse_sent", False):
+            return
+        t = threading.Thread(target=self.pulse_send, name="pulse-quit", daemon=True)
+        t.start()
+        t.join(timeout=4)                                # выход не ждёт дольше: нет связи — так нет
+
     def health_count(self, what, n=1):
         """Счётчик для пульса: turns — ответы, net_ok / net_fail — удачные и неудачные запросы к модели, rude / refused —
         грубость к помощнику и его отказы (boundaries.py; только числа)."""
@@ -229,6 +281,8 @@ class HealthMixin:
             return
         with self._health_lock:
             self._h[what] = int(self._h.get(what, 0)) + n
+        if what == "turns" and hasattr(self, "first_mark"):
+            self.first_mark("answer")
 
     def health_cache(self, u, prof=None):
         """«Голос без пауз» (04.11): запрос к модели — сколько токенов в подсказке и сколько сервер взял из кэша начала
@@ -289,6 +343,8 @@ class HealthMixin:
         if self._health_lock is None:
             return
         k = f"{brain_kind(prof)}:{why_kind(err)}"
+        if hasattr(self, "first_mark"):
+            self.first_mark("fail")
         with self._health_lock:
             w = self._h.setdefault("net_why", {})
             if k in w or len(w) < 40:
@@ -382,7 +438,7 @@ class HealthMixin:
                 "turns": h.get("turns", 0), "net_ok": h.get("net_ok", 0), "net_fail": h.get("net_fail", 0), "errors": h.get("errors", 0),
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
                 "problems": [{"sig": k, "text": mask_personal(v["text"]), "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
-                "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}}
+                "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}, "first": h.get("first") or {}}
 
     def _lat_how(self):
         """Чем думает ассистент — для разбивки задержки голоса (dewiar, local, cloud…)."""
@@ -438,6 +494,9 @@ class HealthMixin:
                     if pr[sig]["n"] <= 0:
                         del pr[sig]
             self._h["starts"] = (self._h.get("starts") or [])[len(body["starts"]):]
+            st = getattr(self, "_h_start", None) or {}
+            if body.get("first") and time.time() - st.get("ts", 0) > 600:
+                self._h.pop("first", None)            # «Первая минута» досчитана и ушла — дальше не нужна
             pc, sent_pc = self._h.get("pcache") or {}, body.get("pcache") or {}
             for k in ("n", "k", "ptok_all", "ptok", "cached"):     # кэш подсказки: вычесть отправленное
                 if k in pc:
@@ -467,6 +526,7 @@ class HealthMixin:
         if lat is not None and (body.get("lat") or {}).get("_n"):
             with lat._lock:                              # отправленные ходы — забыть
                 lat.samples = lat.samples[int(body["lat"]["_n"]):]
+        self._pulse_sent = True
         log.info("💓 Пульс отправлен: запусков %d, ответов %d, сбоев %d", len(body["starts"]), body["turns"], len(body["problems"]))
         return True
 

@@ -165,10 +165,14 @@ class Bridge:
         finally:
             self.inflight.pop(key, None)
 
+    # фоновые чтения студии, которые никого не держат (пул большой): долгие — не повод виджету писать «Занят» (20.11,
+    # владелец: «Занят: mail_inbox — 37 с» — «Почта» на «Главной» студии тянула письма с медленного сервера)
+    QUIET = {"mail_inbox"}
+
     def busy(self):
         """Ответ на «ping» прямо из цикла связи (без пула): жив ли и что выполняется дольше всех."""
         now = time.monotonic()
-        slow = sorted(((now - t, c) for c, t in list(self.inflight.values())), reverse=True)
+        slow = sorted(((now - t, c) for c, t in list(self.inflight.values()) if c not in self.QUIET), reverse=True)
         return {"ok": True, "inflight": len(slow), "oldest": round(slow[0][0], 1) if slow else 0,
                 "cmd": slow[0][1] if slow else ""}
 

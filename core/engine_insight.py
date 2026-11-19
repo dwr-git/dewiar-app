@@ -225,8 +225,22 @@ class Radar:
         lg["days"] = dict(sorted(days.items())[-30:])
         self.st.save("log", lg)
 
-    def analyze(self, limit):
-        left = max(0, int(self.conf()["daily_max"]) - self.used_today())
+    def paced(self, now=None):
+        """Сколько разборов можно сделать к этому часу (владелец 19.11: «статьи из Радара — в определённое время, и потом
+        тишина… ночью нагрузка меньше, Радар мог бы работать полнее»). Раньше суточный запас (daily_max) уходил за первые
+        часы работы компьютера — и до полуночи тишина. Теперь он разложен по суткам: ночной час весит вдвое (ночью ~40 %),
+        к каждому часу — его доля плюс час вперёд."""
+        import math
+        now = now or datetime.now()
+        dm = int(self.conf()["daily_max"])
+        a, b = (self.conf().get("night") or [1, 7])[:2]
+        w = [2 if (a <= h < b if a < b else (h >= a or h < b)) else 1 for h in range(24)]
+        done = sum(w[:now.hour]) + w[now.hour] * (now.minute / 60) + w[now.hour]
+        return min(dm, math.ceil(dm * done / sum(w)))
+
+    def analyze(self, limit, paced=True):
+        cap = self.paced() if paced else int(self.conf()["daily_max"])
+        left = max(0, min(cap, int(self.conf()["daily_max"])) - self.used_today())
         n = 0
         for x in self.st.queue(min(limit, left), long_ok=self.night() or self.conf().get("day_long")):
             self.running = {"k": "analyze", "x": x["title"][:50]}
@@ -370,7 +384,7 @@ class Radar:
         try:
             c = self.conf()
             rec["new"] = self.crawl(force=manual)
-            rec["done"] = self.analyze(c["per_tick_night"] if night or manual else c["per_tick_day"])
+            rec["done"] = self.analyze(c["per_tick_night"] if night or manual else c["per_tick_day"], paced=not manual)
             if datetime.now().hour >= int(c.get("brief_hour") or 7) or manual:
                 self.make_brief()
             if night and self.st.load("mind", {}).get("day") != datetime.now().strftime("%Y-%m-%d"):

@@ -16,9 +16,29 @@ const VISION_HINT = "К сообщению приложено фото. Если
 /* «слушай встреча с Ирой переносится… напомни мне завтра в 9» (экзамен 0.9.18) — модель отвечала «Слушаю тебя.»: «слушай»
    в начале длинной фразы — не просьба послушать, а присказка. Модели — без неё (в истории фраза остаётся как сказана) */
 const LISTEN_LEAD = /^\s*(?:слушай(?:те)?|послушай(?:те)?|слышь|смотри|короче)\s*[,!.—–-]*\s+(?=(?:\S+\s+){3}\S)/i;
+/* Вопрос, не ушедший из-за связи, — отправить самому, когда она вернётся (событие online, возврат в приложение, раз в 20 с),
+   если за это время не спросили другое и прошло не больше 10 минут */
+const NET_RETRY_MS = 10 * 60e3;
+let netRetry = null, netRetryTimer = 0;
+function netRetryArm(text, opts) {
+  netRetry = { text, opts, at: Date.now() };
+  clearInterval(netRetryTimer); netRetryTimer = setInterval(netRetryTry, 20000);
+}
+function netRetryTry() {
+  const r = netRetry;
+  if (!r) { clearInterval(netRetryTimer); return; }
+  if (Date.now() - r.opts.netFirst > NET_RETRY_MS || lastUserAct > r.at + 500) { netRetry = null; clearInterval(netRetryTimer); return; }
+  if (busy || navigator.onLine === false) return;
+  netRetry = null; clearInterval(netRetryTimer);
+  plog("info", "📶 связь вернулась — отправляю вопрос сам");
+  showBot("Связь вернулась — отправляю ваш вопрос", "wait");
+  ask(r.text, Object.assign({}, r.opts, { resent: true }));
+}
+window.addEventListener("online", () => setTimeout(netRetryTry, 1500));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && netRetry) setTimeout(netRetryTry, 1500); });
 async function ask(text, opts = {}) {
   text = String(text || "").trim(); if (!text) return;
-  if (!opts.hidden) { lastUserAct = Date.now(); fsMark("ask"); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
+  if (!opts.hidden && !opts.resent) { lastUserAct = Date.now(); fsMark("ask"); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
   stopListen(); interrupt(true);
   if (!opts.hidden && !(opts.attach || []).length && PHOTO_NOW_RX.test(text)) {
     showYou(text); setState("thinking"); showBot("Включаю камеру — держите телефон ровно", "wait");
@@ -122,7 +142,7 @@ async function ask(text, opts = {}) {
   creativeTurn = !opts.hidden && CREATIVE_ASK.test(text) && !reading(text);
   if (creativeTurn) plog("info", "🎨 творческая просьба — смелее (температура " + llmTemp() + ")");
   if (deep) { plog("info", "🧠 сложная просьба — модель подумает перед ответом"); showBot("Подумаю как следует — минутку", "wait"); }
-  let final = "", switchTo = null;
+  let final = "", switchTo = null, ranTools = false;
   lastDone = "";
   try {
     let guided = false;                                      // руководство приложено к вопросу (как вызов app_help)
@@ -261,6 +281,7 @@ async function ask(text, opts = {}) {
         const key = c.name + " " + JSON.stringify(safeJSON(c.args));
         if (once.has(key)) { msgs.push({ role: "tool", tool_call_id: c.id, name: c.name, content: "(то же самое уже сделано этим ответом — не повторяй)" }); continue; }
         once.add(key);
+        ranTools = true;
         try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
         plog("info", `🔧 ${c.name} → ${clip(String((res && res.text) || res || "").split("\n")[0], 90)}`);   // что сделано — видно в отчёте (№56)
         if (c.name === "calendar_add" && /^Записано/.test(String(res))) called.add("calendar_write");   // правда записано, а не только спросили
@@ -349,6 +370,12 @@ async function ask(text, opts = {}) {
     }
     else if (e.human) { plog("warn", "облако: " + e.message); showBot(e.message, "err"); say(e.message); }       // облако Dewiar объясняет само: «много людей…»
     else if (!D.mock && SELF_HOST_RX.test(llmBase() + "/")) { const m = "Не получилось связаться с мозгом: " + SELF_HOST_TEXT; console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом: адрес модели указывает на сам телефон. Как поправить — на экране."); }
+    else if (e.net && !ranTools && !opts.hidden && !sink.text().trim() && Date.now() - (opts.netFirst || Date.now()) < NET_RETRY_MS) {
+      // №289 (идея, 17.11) и «Голос»: 112 вопросов за неделю на телефоне — «нет связи». Вопрос не теряется: связь вернулась —
+      // уходит сам (ничего ещё не сделано — повтор безопасен; за 10 минут — дальше уже не к месту)
+      netRetryArm(text, Object.assign({}, opts, { netFirst: opts.netFirst || Date.now() }));
+      const m = "Нет связи с мозгом ({1}). Вопрос отправится сам, как только связь вернётся.".replace("{1}", e.message); console.warn(m); showBot(m, "err"); say("Нет связи. Вопрос отправится сам, как только связь вернётся.");
+    }
     else { const m = "Не получилось связаться с мозгом: " + e.message + netHint(); console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом."); }
   } finally {
     if (turnAbort === ctl) { busy = false; turnAbort = null; }

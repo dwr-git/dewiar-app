@@ -73,6 +73,7 @@ public class HtmlView extends Activity {
         });
         root.addView(web, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         setContentView(root);
+        Compat.edgeInsets(root);
         web.loadDataWithBaseURL("https://view.dewiar.invalid/", html, "text/html", "utf-8", null);
     }
 

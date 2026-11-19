@@ -39,7 +39,7 @@ PY
 for V in hands base; do
   M="$HERE/AndroidManifest.xml"; [ "$V" = base ] && M="$B/AndroidManifest-base.xml"
   "$BT/aapt2" link -I "$FR" --manifest "$M" --java "$B/gen" -A "$B/assets" -o "$B/base-$V.apk" \
-    --min-sdk-version 24 --target-sdk-version 34 --version-code "$CODE" --version-name "$VER" "$B/res.zip"
+    --min-sdk-version 24 --target-sdk-version 35 --version-code "$CODE" --version-name "$VER" "$B/res.zip"
 done
 python3 "$HERE/tools/fgs_type.py" "$B/base-hands.apk" "$B/base-base.apk"   # тип службы CloseLive — remoteMessaging (см. сам файл)
 cp "$B/base-hands.apk" "$B/base.apk"                    # R.java — из полной сборки (в ней есть все ресурсы)
