@@ -16,16 +16,30 @@ def t_search_documents(a, ctx):
     kn = ctx.get("knowledge")
     if not kn:
         raise ToolError("папка «Знания» недоступна")
-    q = a.get("query", "")
+    q = str(a.get("query") or "").strip()
     mine = []
     try:                                           # Отзыв 17.11 «книги»: папки текущего персонажа — первыми (его книги, его база)
         mine = list((ctx.get("persona_folders") or (lambda: []))() or [])
     except Exception:  # noqa: BLE001
         mine = []
-    res = kn.search(q, limit=5, within=mine) if mine else []
-    if len(res) < 5:
+    if a.get("file"):                              # отзыв 19.11 (двойник автора, 12 книг): одна книга — искать в ней или читать подряд
+        return _doc_read(kn, a, q, mine)
+    if not q:
+        raise ToolError("что искать? Назови ключевые слова (query) или файл (file), чтобы читать его подряд")
+    try:                                           # мозг — облако Dewiar: кандидатов больше, лучшие выберет реранкер
+        rr = (ctx.get("kb_rerank") or (lambda: None))()
+    except Exception:  # noqa: BLE001
+        rr = None
+    n = 30 if rr else 5
+    res = kn.search(q, limit=n, within=mine) if mine else []
+    if len(res) < n:
         seen = {(r["path"], r["text"][:80]) for r in res}
-        res += [r for r in kn.search(q, limit=5) if (r["path"], r["text"][:80]) not in seen][:5 - len(res)]
+        res += [r for r in kn.search(q, limit=n) if (r["path"], r["text"][:80]) not in seen][:n - len(res)]
+    if rr:
+        try:
+            res = rr(q, res)[:6]
+        except Exception:  # noqa: BLE001
+            res = res[:5]
     if not res:
         return "В документах («Знания» и свои папки) ничего подходящего не нашлось."
     if ctx.get("sources"):                         # под ответом — кнопки «открыть» найденных файлов (Engine._turn_sources)
@@ -33,8 +47,45 @@ def t_search_documents(a, ctx):
             ctx["sources"]([{"key": r["key"], "name": Path(r["path"]).name, "label": r["path"]} for r in res])
         except Exception:  # noqa: BLE001
             pass
-    return "\n\n".join(f"[Файл «{Path(r['path']).name}» — {r['path']}]\n{r['text']}" for r in res) + \
-        "\n\nОтвечай по этим отрывкам и назови файл, откуда взято (по имени, например «Регламент.pdf»). Если ответа в них нет — так и скажи."
+    return "\n\n".join(f"[Файл «{Path(r['path']).name}» — {r['path']}{_pos(r)}]\n{r['text']}" for r in res) + \
+        "\n\nОтвечай по этим отрывкам и назови файл, откуда взято (по имени, например «Регламент.pdf»). Если ответа в них нет — так и скажи." + \
+        ("\nНужно больше контекста (вся глава, что было дальше) — читай подряд: search_documents с file и from." if any("of" in r for r in res) else "")
+
+
+def _pos(r):
+    return f" · отрывок {r['i'] + 1} из {r['of']}" if r.get("of") else ""
+
+
+def _doc_read(kn, a, q, mine):
+    """search_documents с file: поиск внутри одной книги (есть query) или чтение подряд с отрывка from (нет query)."""
+    key = (kn.find_file(a["file"], within=mine) if mine else None) or kn.find_file(a["file"])
+    if not key:
+        raise ToolError(f"файла «{a['file']}» среди прочитанных нет. Есть ли он в «Моих файлах» или в папке персонажа? "
+                        "Имя можно назвать частью («Книга 3»)")
+    if q:
+        res = kn.search(q, limit=6, key=key)
+        if not res:
+            return f"В «{kn.label(key)}» по словам «{q}» ничего не нашлось — попробуй другие слова или читай подряд (from)."
+        return "\n\n".join(f"[«{Path(r['path']).name}»{_pos(r)}]\n{r['text']}" for r in res) + \
+            "\n\nЧитать подряд с нужного места — search_documents с file и from (номер отрывка)."
+    if a.get("from") in (None, ""):                   # без from — оглавление (если есть главы): сразу открыть нужную
+        ol = kn.outline(key)
+        if len(ol) >= 2:
+            r0 = kn.passages(key, 0, chars=1)
+            return (f"[«{Path(kn.label(key)).name}» · оглавление · всего отрывков {r0['total'] if r0 else '?'}]\n"
+                    + "\n".join(f"- {t} — from {i + 1}" for t, i in ol)
+                    + "\n\nЧитай нужную главу: search_documents с file и from (номер отрывка из оглавления); "
+                    "с начала книги — from 1.")
+    try:
+        start = max(0, int(a.get("from") or 1) - 1)
+    except (TypeError, ValueError):
+        start = 0
+    r = kn.passages(key, start)
+    if not r:
+        raise ToolError(f"в «{kn.label(key)}» нет текста")
+    more = (f"\n\n…дальше: search_documents с file «{a['file']}» и from {r['end'] + 1} (всего отрывков {r['total']})."
+            if r["end"] < r["total"] else "\n\n(конец файла)")
+    return f"[«{Path(r['path']).name}» · отрывки {r['start'] + 1}–{r['end']} из {r['total']}]\n{r['text']}{more}"
 
 
 def t_ask_knowledge(a, ctx):
@@ -162,10 +213,20 @@ def _doc_path(a, ctx, exts=None):
     return p
 
 
+def _ws_rel(p, ctx):
+    try:
+        return Path(p).resolve().relative_to(_ws(ctx).root.resolve()).as_posix()
+    except (ValueError, OSError, AttributeError):
+        return str(p)
+
+
 def t_doc_find(a, ctx):
     """Где в документе встречается текст — как grep, до правки: чтобы заменить ровно то, что нужно."""
     import docedit as DE
     p = _doc_path(a, ctx)
+    if not str(a.get("text") or "").strip():          # №892: пустой поиск давал «найдено 40: Дата, Дата…» вместо содержимого
+        raise ToolError(f"что найти в «{p.name}»? Чтобы прочитать документ или таблицу целиком — read_file "
+                        f"с путём {_ws_rel(p, ctx)}")
     try:
         hits = DE.find(p, str(a.get("text") or ""), whole=bool(a.get("whole_word")))
     except DE.DocEditError as e:

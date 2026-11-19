@@ -137,12 +137,14 @@ def _short_path(s: str) -> str:
         return ""
 
 
-def kaldi_path(model_dir: Path) -> Path:
+def kaldi_path(model_dir: Path, name: str = "") -> Path:
     """Путь к модели Vosk, который Kaldi откроет. В Windows он открывает файлы «узкими» путями: папка с русскими
     буквами (C:\\Users\\Виталий\\AppData\\…) для него не существует — «Failed to create a model», и слух не поднимался
     вовсе: ни имя, ни кнопка микрофона (отчёты №120–125, 19.10: «глухой», «по пробелу тоже не слышит»).
     Путь не ASCII — короткое имя 8.3; его нет — копия модели (45 МБ, один раз) в ASCII-папку: %ProgramData%\\Dewiar,
-    %PUBLIC%\\Dewiar или C:\\DewiarData. DEWIAR_KALDI_NT=1 и DEWIAR_KALDI_BASE — для проверок не в Windows."""
+    %PUBLIC%\\Dewiar или C:\\DewiarData. DEWIAR_KALDI_NT=1 и DEWIAR_KALDI_BASE — для проверок не в Windows.
+    Так же — словари eSpeak голоса Piper (№895, 19.11: имя пользователя кириллицей, eSpeak не открыл словари и завершил
+    всё ядро — exit(1) на каждом ответе голосом); name — своё имя копии (с версией: старая копия не подменит новую)."""
     s = str(model_dir)
     nt = os.name == "nt" or os.environ.get("DEWIAR_KALDI_NT") == "1"
     if not nt or s.isascii():
@@ -155,7 +157,7 @@ def kaldi_path(model_dir: Path) -> Path:
     for base in bases:
         if not base or not str(base).isascii():
             continue
-        dst = Path(base) / "Dewiar" / "models" / model_dir.name
+        dst = Path(base) / "Dewiar" / "models" / (name or model_dir.name)
         try:
             if not (dst / ".complete").exists():
                 tmp = dst.with_name(dst.name + ".copy")

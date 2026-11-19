@@ -567,7 +567,7 @@ class BareCallCatcher:
                     return []
                 if isinstance(args, str):
                     try:
-                        args = json.loads(args)
+                        args = loads_args(args)
                     except ValueError:
                         args = {"_raw": args}
                 out.append({"name": name, "args": args if isinstance(args, dict) else {}})
@@ -655,7 +655,7 @@ def parse_tool_call(raw):
         if name:
             if isinstance(args, str):
                 try:
-                    args = json.loads(args)
+                    args = loads_args(args)
                 except ValueError:
                     args = {"_raw": args}
             return {"name": name, "args": args if isinstance(args, dict) else {}}
@@ -673,6 +673,22 @@ def tools_prompt(tools):
             + lines + "\n</tools>\n\nЧтобы вызвать функцию, выведи ровно так и больше ничего:\n<tool_call>\n"
             '{"name": "<имя функции>", "arguments": {<аргументы>}}\n</tool_call>\n'
             "Результат придёт в <tool_response></tool_response>. Если функция не нужна — просто отвечай.")
+
+
+_ESC_RX = re.compile(r'\\(["\\/bfnrt]|u[0-9a-fA-F]{4})|\\')
+
+
+def loads_args(raw):
+    """JSON аргументов вызова -> объект. Модели пишут пути Windows с одиночной косой («C:\\Users\\…» без удвоения) —
+    такой JSON нечитаем, и вызов уходил пустым (№892: delete_files «не указано, что удалить»). Неверные экранирования
+    удваиваем и читаем снова; ValueError — если и так не вышло."""
+    try:
+        return json.loads(raw)
+    except ValueError:
+        fixed = _ESC_RX.sub(lambda m: m.group(0) if m.group(1) else "\\\\", raw)
+        if fixed == raw:
+            raise
+        return json.loads(fixed)
 
 
 def repair_json(raw):

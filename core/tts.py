@@ -156,6 +156,35 @@ def _download(url, path, on_progress=None):
 _PIPER_LOCK = threading.Lock()          # eSpeak (фонемы Piper) — один на процесс и не любит параллельных вызовов
 
 
+def espeak_dir():
+    """Словари eSpeak голоса Piper по пути, который eSpeak откроет. №895 (19.11, Windows, «постоянно отваливается ЯДРО»):
+    имя пользователя кириллицей — eSpeak не находит словари в C:\\Users\\Екатерина\\…, а при неудачном запуске сам
+    завершает весь процесс (exit(1) в espeak_Initialize) — ядро падало на каждом ответе голосом, без строчки в журнале.
+    Путь не ASCII — короткое имя 8.3 или копия в ASCII-папку (как модели Vosk, listen.kaldi_path); не вышло — PiperError:
+    лучше другой голос, чем падение. DEWIAR_KALDI_NT=1 — проверка «как в Windows»."""
+    from piper.phonemize_espeak import ESPEAK_DATA_DIR
+    d = Path(ESPEAK_DATA_DIR)
+    if (os.name != "nt" and os.environ.get("DEWIAR_KALDI_NT") != "1") or str(d).isascii():
+        return d
+    from listen import kaldi_path
+    try:
+        from importlib.metadata import version
+        ver = version("piper-tts")
+    except Exception:  # noqa: BLE001
+        ver = "x"
+    out = kaldi_path(d, f"espeak-ng-data-piper{ver}")
+    if not str(out).isascii():
+        raise PiperError(f"словари eSpeak лежат по пути с не латинскими буквами ({d}) и не скопировались — голос Piper "
+                         "недоступен на этом компьютере")
+    if out != d:
+        log.info("Piper: словари eSpeak — %s (путь %s не открылся бы)", out, d)
+    return out
+
+
+class PiperError(RuntimeError):
+    """Piper на этом компьютере не запустится (eSpeak не откроет словари) — взять другой голос."""
+
+
 class PiperTTS:
     name = "Piper"
 
@@ -202,7 +231,10 @@ class PiperTTS:
             if voice_id not in self.voices:
                 from piper import PiperVoice
                 m, c = self.paths(voice_id)
-                self.voices[voice_id] = PiperVoice.load(str(m), config_path=str(c))
+                try:
+                    self.voices[voice_id] = PiperVoice.load(str(m), config_path=str(c), espeak_data_dir=espeak_dir())
+                except TypeError:                       # старый piper-tts (до 1.3) — без своего пути к словарям
+                    self.voices[voice_id] = PiperVoice.load(str(m), config_path=str(c))
             return self.voices[voice_id]
 
     def synth(self, text, voice_cfg, speed=1.0, norm=True):

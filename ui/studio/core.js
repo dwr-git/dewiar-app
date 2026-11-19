@@ -303,7 +303,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "voice") loadVosk();
   if (b.dataset.p === "look") loadLook();
   if (b.dataset.p === "close") loadClose(true);
-  if (b.dataset.p === "chat") loadChat();
+  if (b.dataset.p === "chat" && typeof loadChat === "function") loadChat();   // №892: нажали раньше, чем загрузился chat.js
 });
 /* Идея №156 (11.2026): «кнопка „спрятать меню слева“ — чтобы раздел, например чат, был на всю ширину». Кнопка в углу меню
    прячет его, маленькая кнопка слева вверху — возвращает; Ctrl+B (и Ctrl+И в русской раскладке) — то же с клавиатуры.

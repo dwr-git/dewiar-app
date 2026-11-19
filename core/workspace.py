@@ -488,7 +488,7 @@ class Workspace:
         p = self._vault_path(rel) if str(rel).startswith("obsidian:") else self.safe(rel)
         if not p.is_file():
             raise WorkspaceError("файла нет")
-        if p.suffix.lower() in (".pdf", ".docx", ".odt"):          # документы — текстом (как в «Знаниях»)
+        if p.suffix.lower() in (".pdf", ".docx", ".odt", ".xlsx", ".xlsm", ".ods", ".pptx"):   # документы и таблицы (№892) — текстом
             try:
                 from knowledge import extract
                 text = extract(p)

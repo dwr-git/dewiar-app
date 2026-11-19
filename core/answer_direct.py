@@ -92,11 +92,14 @@ class DirectMixin:
             info = {}
             try:
                 # скан PDF (идея №68) — страницы без текста распознаёт локальный движок, если он есть (ocr.py)
-                body = extract(dst, ocr="local", info=info) if dst.suffix.lower() in (".md", ".txt", ".csv", ".html", ".htm", ".pdf", ".docx", ".odt") \
+                from knowledge import EXTS as KX                  # №892: и Excel, LibreOffice, PowerPoint — текстом
+                body = extract(dst, ocr="local", info=info) if dst.suffix.lower() in KX | {".xls"} \
                     else (data.decode("utf-8") if len(data) < 400_000 else "")
             except Exception as e:  # noqa: BLE001
                 body = ""
                 log.info("Вложение %s: текст не извлечён (%s)", name, e)
+                if isinstance(e, ValueError) and not isinstance(e, UnicodeDecodeError):   # понятная причина (sheets: «.xls — сохраните как .xlsx»)
+                    info["why"] = str(e)
             body = (body or "").strip()
             if not body and info.get("scan"):
                 # распознать нечем — первые страницы картинками: модель со зрением прочитает их сама (без зрения —
@@ -116,7 +119,8 @@ class DirectMixin:
                 parts.append(f"[Файл «{name}», сохранён в папке ассистента: {rel}]\n{cut}" +
                              ("\n…(дальше файл обрезан — целиком его можно прочитать инструментом read_file)" if len(cut) < len(body) else ""))
             else:
-                parts.append(f"[Файл «{name}» ({len(data) // 1024} КБ) сохранён в папке ассистента: {rel}; текста в нём нет]")
+                parts.append(f"[Файл «{name}» ({len(data) // 1024} КБ) сохранён в папке ассистента: {rel}; " +
+                             (f"прочитать не удалось: {info['why']}]" if info.get("why") else "текста в нём нет]"))
             log.info("📎 %s → %s", name, rel)
         self._chat_att = (time.monotonic(), saved)
         q = text.strip() or ATT_DEFAULT_Q

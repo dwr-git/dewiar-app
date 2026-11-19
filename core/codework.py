@@ -493,17 +493,19 @@ class CodeWork:
         return self._run(command, timeout) + note
 
     def _run(self, command, timeout=180):
+        # PYTHONDONTWRITEBYTECODE: байткод Python сверяется по времени (до секунды) и размеру файла — правка кода той же длины
+        # в ту же секунду брала бы старый .pyc, и тесты шли бы по прежнему коду (замок на тесты моргал: tests_lock1118)
         timeout = max(5, min(900, int(timeout or 180)))
         try:
             if os.name == "nt":                    # Windows: PowerShell; вывод переключаем на UTF-8, иначе кириллица — кракозябры
                 ps = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " + command
                 r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], cwd=self.work,
                                    capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace",
-                                   env=dict(os.environ, PYTHONIOENCODING="utf-8", **GIT_ENV), stdin=subprocess.DEVNULL,
+                                   env=dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1", **GIT_ENV), stdin=subprocess.DEVNULL,
                                    creationflags=0x08000000)
             else:
                 r = subprocess.run(["bash", "-lc", command], cwd=self.work, capture_output=True, text=True, timeout=timeout,
-                                   env=dict(os.environ, **GIT_ENV), stdin=subprocess.DEVNULL)
+                                   env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1", **GIT_ENV), stdin=subprocess.DEVNULL)
             out, code = (r.stdout + ("\n" + r.stderr if r.stderr else "")).strip(), r.returncode
         except subprocess.TimeoutExpired as e:
             out, code = f"{e.stdout or ''}\nОстановлено: дольше {timeout} с".strip(), -1

@@ -9,7 +9,7 @@ import re
 from llm_base import LLMError, log
 from llm_hints import drop_cjk
 from llm_net import net_calls_filter, NET_SERVER_RX
-from llm_text import repair_json, ThinkStripper, ToolTagStripper
+from llm_text import loads_args, repair_json, ThinkStripper, ToolTagStripper
 
 
 class _Collector:
@@ -243,7 +243,7 @@ class _Collector:
             if not c["name"]:
                 continue
             try:
-                args = json.loads(c["args"]) if c["args"].strip() else {}
+                args = loads_args(c["args"]) if c["args"].strip() else {}
             except ValueError:
                 args = repair_json(c["args"])
                 if args is None:

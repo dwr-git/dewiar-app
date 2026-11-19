@@ -216,6 +216,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.toolbox.hooks["persona_folders"] = lambda: [b["path"] for b in ((self.personas.get(self.s.get("persona")) or {})
                                                                             .get("knowledge") or [])
                                                          if b.get("kind") == "folder" and b.get("path")]
+        # поиск по документам: реранкер облака Dewiar, когда персонаж и так думает облаком (engine_brain._kb_rerank_ok)
+        self.toolbox.hooks["kb_rerank"] = lambda: self._kb_rerank if self._kb_rerank_ok() else None
         threading.Thread(target=self.knowledge.watch, name="knowledge-folders", daemon=True).start()
         from writing import Writing
         import knowledge as _kn

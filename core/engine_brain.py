@@ -953,6 +953,48 @@ class BrainMixin:
         except Exception:  # noqa: BLE001
             return []
 
+    def _kb_rerank_ok(self):
+        """Переставлять найденное реранкером облака Dewiar можно, когда персонаж и так думает облаком Dewiar: отрывки уходят
+        туда вместе с вопросом — новых данных на сервер не попадает. Своя модель, ключ сервиса — только поиск на компьютере.
+        Выключатель — knowledge.rerank (по умолчанию включено)."""
+        try:
+            if (self.s.get("knowledge") or {}).get("rerank") is False:
+                return False
+            prof = self.persona_llm() if hasattr(self, "persona_llm") else self.s.active_llm()
+            return bool((prof or {}).get("cloud")) and bool(getattr(getattr(self, "cloud", None), "key", ""))
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _kb_rerank(self, q, res, keep=6):
+        """Кандидаты поиска (до 30) -> лучшие keep по смыслу (реранкер шлюза, /kb/rerank). Замер 19.11 на 12 книгах: в первых
+        30 отрывках поиска нужное есть в 29 из 36 вопросов, в первых 6 — в 22. Не вышло — первые keep как есть."""
+        if len(res) <= keep:
+            return res
+        t0 = time.monotonic()
+        try:
+            from cloud import fetch
+            r = fetch(self.cloud.url, self.cloud.key, "/kb/rerank", timeout=6,
+                      body={"query": q[:1000], "documents": [x["text"][:1500] for x in res[:40]]})
+            order = r.get("order")
+        except Exception as e:  # noqa: BLE001
+            log.info("📚 Реранкер облака не ответил: %s", e)
+            order = None
+        if not order:
+            return res[:keep]
+        top = [res[i] for i in order if isinstance(i, int) and 0 <= i < len(res)][:keep]
+        log.info("📚 Реранкер облака: %d → %d за %.1f с", len(res), len(top), time.monotonic() - t0)
+        return top or res[:keep]
+
+    def _kb_persona_quiet(self, text):
+        """Персонаж со своей базой знаний (книги автора, документы клуба) — заметки человека к вопросу не подмешиваем
+        (отзыв 19.11: «цифровой двойник» автора «почему-то заметки мои ещё всосал, хотя не должен был»). Сам просит
+        заметки, записи, дневник — подмешиваем как всегда. -> True — не подмешивать."""
+        try:
+            p = self.personas.get(self.s.get("persona")) or {}
+        except Exception:  # noqa: BLE001
+            return False
+        return bool(p.get("knowledge")) and not KB_NOTES_RX.search((text or "").split("\n\nВложения:")[0])
+
     def _persona_knowledge(self, text, turn, p=None, quiet=False, hist=None):
         """У персонажа подключены базы сайта Dewiar (например, «Библия» из публичной библиотеки): перед ответом
         ищем во всех параллельно по вопросу и даём модели найденное — персонаж отвечает по источнику, своим голосом.
@@ -1033,12 +1075,13 @@ class BrainMixin:
         labels = ", ".join(f"«{b.get('label') or Path(b['path']).name}»" for b in folders)
         paths = [b["path"] for b in folders]
         try:
-            res = kn.search(q, limit=6, within=paths)
+            rr = getattr(self, "_kb_rerank_ok", lambda: False)()   # мозг — облако Dewiar: 30 кандидатов, лучшие 6 — реранкер
+            res = kn.search(q, limit=30 if rr else 6, within=paths)
             prev = prev_ask(getattr(self, "history", None) or [], q)
             if len(res) < 3 and prev:                     # «а что было дальше?» — слова прошлого вопроса тоже в поиск
                 seen = {(r["path"], r["text"][:80]) for r in res}
                 res += [r for r in kn.search(prev + " " + q, limit=6, within=paths) if (r["path"], r["text"][:80]) not in seen]
-                res = res[:6]
+            res = self._kb_rerank(q, res) if rr else res[:6]
         except Exception as e:  # noqa: BLE001
             log.warning("Знания персонажа (папки): %s", e)
             return ""
@@ -1050,7 +1093,10 @@ class BrainMixin:
         files = folder_files(kn, paths)
         have = (f" В них: {', '.join(files[:12])}" + (f" и ещё {len(files) - 12}" if len(files) > 12 else "") + "." if files else "")
         rule = (" Эти файлы уже у тебя — НЕ проси человека прислать их или «полный текст». Нужного нет в отрывках — поищи "
-                "сама: search_documents с другими словами (имена, события, названия глав). Заметки человека (find_notes) не "
+                "сама: search_documents с другими словами (имена, события, названия глав). Нужна вся глава, сюжет целиком "
+                "или «что было дальше» — не говори «надо прочитать весь текст», а читай: search_documents с file (имя книги) "
+                "и from (номер отрывка), порцию за порцией, сколько нужно для ответа; оглавление книги с номерами глав — "
+                "search_documents с одним file. Заметки человека (find_notes) не "
                 "трогай, если он сам о них не просит.")
         if not res:
             busy = any(st.get("busy") for st in getattr(kn, "fstate", {}).values())
@@ -1063,7 +1109,8 @@ class BrainMixin:
             self.emit("tool", name="knowledge", title=f"Найдено в {labels}", status="done")
         return (f"\n\nТВОЯ БАЗА ЗНАНИЙ (папки на компьютере пользователя: {labels}).{have} Найдено по вопросу — отвечай, "
                 f"опираясь на это, называй файл, откуда взято; чего в найденном нет — не выдумывай.{rule}\n\n"
-                + "\n\n".join(f"### Файл «{Path(r['path']).name}»\n{r['text'][:1500]}" for r in res)[:7000])
+                + "\n\n".join(f"### Файл «{Path(r['path']).name}»" + (f" · отрывок {r['i'] + 1} из {r['of']}" if r.get("of") else "")
+                                + f"\n{r['text'][:1500]}" for r in res)[:7000])
 
     def _show_rag_images(self, images):
         """Картинки к найденному (гравюры, схемы) — в виджет: скачиваем с сайта с токеном входа (до трёх, каждая
@@ -1256,6 +1303,9 @@ def prev_ask(history, q):
     asks = [m.get("content") for m in history if m.get("role") == "user" and isinstance(m.get("content"), str)]
     asks = [a for a in asks if a.strip() and a.strip() != (q or "").strip()]
     return asks[-1][:300] if asks else ""
+
+
+KB_NOTES_RX = re.compile(r"заметк|записк|в записях|мои записи|дневник|напомина|в (?:моей )?памяти|обо мне", re.I)
 
 
 def folder_files(kn, paths):

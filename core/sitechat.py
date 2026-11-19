@@ -27,6 +27,7 @@ from pathlib import Path
 
 log = logging.getLogger("dewiar.sitechat")
 KB_MAX = 60000
+DOCS_MAX = 3_000_000       # документы папок персонажа целиком — сервер ищет по ним (sitechat_kb.php, 19.11: «12 книг»)
 DEF = {"persona": "", "title": "", "greeting": "", "brief": "", "kb": "", "folders": False, "ask_contact": True,
        "per_ip": 40, "per_day": 500, "on": False, "theme": "auto"}
 THEMES = ("soft", "night", "auto", "brand", "classic", "neo", "neo-dark")   # оформление окна чата (владелец 11.11): server/dwrapp/sitechat.php
@@ -133,7 +134,7 @@ class SiteChat:
         if not self._key():
             raise SiteChatError("нужен вход аккаунтом dewiar.pro или ключ Dewiar — студия → «Мозг»")
         try:
-            return fetch(self.host.cloud.url, self._key(), path, timeout=25, body=body)
+            return fetch(self.host.cloud.url, self._key(), path, timeout=180 if (body or {}).get("docs") else 25, body=body)   # книги целиком — сервер режет их не сразу
         except CloudError as e:
             raise SiteChatError(str(e)) from e
 
@@ -158,12 +159,12 @@ class SiteChat:
         except Exception:  # noqa: BLE001
             return ""
 
-    def _folder_text(self, p, room):
-        """Текст документов из папок знаний персонажа (по порядку, сколько влезет)."""
+    def _folder_docs(self, p, room=DOCS_MAX):
+        """Документы папок знаний персонажа целиком: [{f: имя, t: текст}] — до room знаков всего. Сервер режет их на
+        отрывки и к вопросу посетителя ищет лучшие (sitechat_kb.php). Отзыв 19.11 (автор, 12 книг): раньше уходило
+        60 000 знаков — начало первой книги. В self.fit — что вошло (студия показывает, если вошло не всё)."""
         from knowledge import EXTS, extract
-        out = []
-        # отзыв 17.11: «чат на сайте книг не видит и уверенно фантазирует» — в знания сайта влезает 60 000 знаков, а книга —
-        # это 500 000 и больше: уходило начало первой. Теперь владелец видит в студии, что вошло (fit), а что — нет
+        docs = []
         fit = {"files": 0, "full": 0, "cut": [], "out": 0}
         for b in p.get("knowledge") or []:
             if b.get("kind") != "folder" or not b.get("path"):
@@ -180,25 +181,33 @@ class SiteChat:
                 except Exception:  # noqa: BLE001
                     continue
                 if t:
-                    whole = f"Документ «{f.name}»:\n{t}"
-                    t = whole[:room]
-                    if len(t) < len(whole):
+                    if len(t) > room:
                         fit["cut"].append(f.name)
+                        t = t[:room]
                     else:
                         fit["full"] += 1
-                    out.append(t)
-                    room -= len(t) + 2
+                    docs.append({"f": f.stem[:120], "t": t})
+                    room -= len(t)
         self.fit = fit
+        return docs
+
+    def _folder_text(self, p, room):
+        """Старый сервер (без поиска по документам): текст документов по порядку, сколько влезет в знания (60 000)."""
+        out = []
+        for d in self._folder_docs(p):
+            if room <= 200:
+                break
+            t = f"Документ «{d['f']}»:\n{d['t']}"[:room]
+            out.append(t)
+            room -= len(t) + 2
         return "\n\n".join(out)
 
     def build(self, c):
         p = self._persona(c.get("persona"))
         kb = (c.get("kb") or "").strip()[:KB_MAX]
         self.fit = None
-        if c.get("folders"):
-            extra = self._folder_text(p, KB_MAX - len(kb) - 2)
-            kb = (kb + "\n\n" + extra).strip() if extra else kb
-        return {"name": p.get("name") or "Консультант", "character": re.sub(r"\s+", " ", str(p.get("character") or "")).strip()[:900],
+        docs = self._folder_docs(p) if c.get("folders") else []
+        return {"docs": docs, "name": p.get("name") or "Консультант", "character": re.sub(r"\s+", " ", str(p.get("character") or "")).strip()[:900],
                 "brief": c.get("brief") or "", "greeting": c.get("greeting") or "", "title": c.get("title") or "", "kb": kb[:KB_MAX],
                 "color": readable(p.get("color")) if re.fullmatch(r"#[0-9a-fA-F]{6}", str(p.get("color") or "")) else "#6a5cf0",
                 "avatar": self._avatar(p), "ask_contact": bool(c.get("ask_contact")), "on": True,
@@ -220,6 +229,13 @@ class SiteChat:
         if site:
             body["site"] = site
         r = self._fetch("/sitechat/save", body)
+        if body.get("docs") and "docs" not in r:          # сервер ещё без поиска по документам — по-старому, началом в знаниях
+            p = self._persona(c.get("persona"))
+            extra = self._folder_text(p, KB_MAX - len(body["kb"]) - 2)
+            body = dict(body, kb=(body["kb"] + "\n\n" + extra).strip()[:KB_MAX] if extra else body["kb"])
+            body.pop("docs")
+            r = self._fetch("/sitechat/save", body)
+            self.fit = dict(self.fit or {}, old=True)
         if site and not r.get("per_site"):
             raise SiteChatError("сервер Dewiar ещё не умеет отдельный чат для сайта — обновите сервер")
         self.remotes[site] = r

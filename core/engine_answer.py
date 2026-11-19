@@ -415,7 +415,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 log.info("🛡 грубость в адрес помощника — отвечу спокойно, с границей")
             recalled = ""
             try:
-                recalled = self.recall.context(text.split("\n\nВложения:")[0])
+                if not self._kb_persona_quiet(text):     # отзыв 19.11: у «знатока книги» заметки человека не подмешиваем
+                    recalled = self.recall.context(text.split("\n\nВложения:")[0])
             except Exception as e:  # noqa: BLE001
                 log.info("Поиск по записям: %s", e)
             ctx = [self._turn_context(text)] + ([pdelta] if pdelta else []) + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней

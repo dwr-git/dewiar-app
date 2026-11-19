@@ -21,7 +21,7 @@ from pathlib import Path
 
 log = logging.getLogger("dewiar.knowledge")
 FOLDER = "Знания"
-EXTS = {".md", ".txt", ".html", ".htm", ".pdf", ".docx", ".odt", ".csv"}
+EXTS = {".md", ".txt", ".html", ".htm", ".pdf", ".docx", ".odt", ".csv", ".xlsx", ".xlsm", ".ods", ".pptx"}   # таблицы и слайды — №892
 CHUNK, OVERLAP = 900, 150
 SCAN_WAIT = "скан без текстового слоя — распознается, когда поставлено распознавание текста"
 MAX_FILE = 60 * 1024 * 1024
@@ -34,17 +34,41 @@ README = """# Знания
 Всё остаётся на этом компьютере. Папки внутри — можно.
 """
 
-_END = re.compile(r"(ами|ями|ого|его|ому|ему|ыми|ими|ах|ях|ов|ев|ей|ой|ий|ый|ая|яя|ое|ее|ые|ие|ую|юю|ом|ем|ам|ям|"
-                  r"ть|ти|ла|ло|ли|ет|ит|ут|ют|ат|ят|ешь|ишь|ем|им|ете|ите|ся|сь|а|я|о|е|ы|и|у|ю|ь)$")
+_STEMS = {}
 
 
 def stem(w):
-    """Короткие и нерусские слова — как есть; иначе без одного окончания (основа не короче 3 букв)."""
+    """Основа слова: русские — алгоритмом Snowball (rustem.py, замер 19.11 на 12 книгах), остальные — как есть."""
     w = w.lower().replace("ё", "е")
-    if len(w) <= 4 or not re.match(r"[а-я]", w):
-        return w
-    s = _END.sub("", w)
-    return s if len(s) >= 3 else w[:4]
+    r = _STEMS.get(w)
+    if r is None:
+        import rustem
+        r = rustem.stem(w) if len(w) > 2 and re.match(r"[а-я]", w) else w
+        if len(_STEMS) < 500_000:
+            _STEMS[w] = r
+    return r
+
+
+# слова вопроса, которые ничего не ищут («как звали кучера Чичикова?» — искать «кучер», «Чичиков», а не «как», «звали»)
+QSTOP = set("""как кто что чем чего кого кому где куда когда почему зачем какой какая какое какие каким какую каком каких
+звали зовут называлась назывался называлось назывались называли был была было были это эта этот эти тот та то те
+его ее их ему ей им из на по за под над при для про без до от у о об в во с со к ко и а но или ли же бы не ни да нет
+вот там тут свой своей свою своего себя сам сама очень все вся всё мне меня мой моя мои ты тебя твой вы вас ваш
+скажи расскажи подскажи напомни объясни можешь пожалуйста ли""".split())
+
+
+_HEAD_RX = re.compile(r"^(?:#{1,3}\s+\S|(?:глава|часть|книга|раздел|chapter|part)\s+[\wIVXLCё-]+)", re.I)
+_ROMAN_RX = re.compile(r"^[IVXLC]{1,7}\.?$")
+
+
+def _qstop():
+    global _QSTEMS
+    if _QSTEMS is None:
+        _QSTEMS = frozenset(QSTOP | {stem(w) for w in QSTOP})
+    return _QSTEMS
+
+
+_QSTEMS = None
 
 
 def words(text):
@@ -92,6 +116,9 @@ def extract(p: Path, ocr=None, info=None) -> str:
             with z.open("word/document.xml" if ext == ".docx" else "content.xml") as f:
                 xml = f.read(TEXT_MAX)
         return _xml_text(xml.decode("utf-8", "replace"), "w:p" if ext == ".docx" else "text:p")
+    if ext in (".xlsx", ".xlsm", ".ods", ".pptx", ".xls"):   # №892 (.xls — понятная просьба пересохранить): таблицы Excel и слайды — текстом (sheets.py)
+        import sheets
+        return sheets.text(p)
     if ext == ".pdf":
         import pdftext                                    # pypdf — в отдельном процессе с пределами (PDF-бомба)
         pages = pdftext.pages(p, limit=500, cap=TEXT_MAX)
@@ -424,26 +451,101 @@ class Knowledge:
         p = Path(key[1:]) if key.startswith("@") else self.root / key
         return p if p.is_file() else None
 
-    def search(self, query, limit=5, within=None):
+    def find_file(self, name, within=None):
+        """Файл индекса по имени или его части («Книга 3», «Регламент.pdf») -> ключ или None. within — только в этих
+        папках (книги персонажа). Точное имя важнее части, короткое имя — важнее длинного."""
+        want = " ".join(str(name or "").lower().replace("ё", "е").split())
+        if not want:
+            return None
+        with self._lock:
+            keys = [k for k, e in self.index.items() if e.get("chunks")]
+        if within is not None:
+            pre = tuple("@" + Path(os.path.expanduser(str(f))).resolve().as_posix().rstrip("/") + "/" for f in within)
+            rt = self.root.resolve()
+            cloud = any(Path(os.path.expanduser(str(f))).resolve() == rt for f in within)
+            keys = [k for k in keys if k.startswith(pre) or (cloud and not k.startswith("@"))]
+        def nm(k):
+            return " ".join(Path(k[1:] if k.startswith("@") else k).name.lower().replace("ё", "е").split())
+        exact = [k for k in keys if nm(k) == want or Path(nm(k)).stem == want]
+        part = sorted((k for k in keys if want in nm(k)), key=lambda k: len(nm(k)))
+        return (exact or part or [None])[0]
+
+    def passages(self, key, start=0, chars=6000):
+        """Отрывки файла подряд с номера start (с нуля) — «прочитать главу целиком», а не два отрывка поиском (отзыв
+        19.11: цифровой двойник автора по 12 книгам «говорит „надо прочитать весь текст“, а потом читает не всё").
+        -> {path, key, start, end, total, text}; соседние отрывки перекрываются (OVERLAP) — стык убираем."""
+        with self._lock:
+            e = self.index.get(key) or {}
+            ch = list(e.get("chunks") or [])
+        if not ch:
+            return None
+        start = max(0, min(int(start or 0), len(ch) - 1))
+        out, i, used = [], start, 0
+        while i < len(ch) and (not out or used + len(ch[i]) <= chars):
+            c = ch[i]
+            if out:                                       # перекрытие с прошлым отрывком — не повторяем
+                tail = out[-1][-OVERLAP:]
+                j = c.find(tail[-60:]) if len(tail) >= 60 else -1
+                if 0 <= j < OVERLAP + 60:
+                    c = c[j + 60:].lstrip()
+            out.append(c)
+            used += len(c)
+            i += 1
+        return {"path": self.label(key), "key": key, "start": start, "end": i, "total": len(ch), "text": "\n".join(out)}
+
+    def outline(self, key, cap=80):
+        """Оглавление книги по заголовкам («Глава I», «Часть первая», «# Раздел», римские номера отдельной строкой)
+        -> [(заголовок, номер отрывка с нуля)]. Чтобы «что в седьмой главе?» открывалось сразу (search_documents с from),
+        а не перебором. Глав больше cap — только крупные (части, книги, главы)."""
+        with self._lock:
+            ch = list((self.index.get(key) or {}).get("chunks") or [])
+        big, small, seen = [], [], set()
+        for i, c in enumerate(ch):
+            lines = [x.strip() for x in c.split("\n")]
+            for j, ln in enumerate(lines):
+                if not ln or len(ln) > 90:
+                    continue
+                ln = re.sub(r"\[\d+\]", "", ln).strip()          # сноски «Сержант гвардии[1]»
+                m = _HEAD_RX.match(ln) if len(ln.split()) <= 8 else None
+                roman = not m and _ROMAN_RX.match(ln)
+                if not (m or roman):
+                    continue
+                nxt = re.sub(r"\[\d+\]", "", next((x for x in lines[j + 1:j + 4] if x), "")).strip()
+                title = ln.rstrip(".") + (f". {nxt}" if nxt and len(nxt) < 70 and not _HEAD_RX.match(nxt) and not _ROMAN_RX.match(nxt)
+                                          and (roman or len(ln.split()) <= 3) and not nxt.endswith((",", ":", ".", "!", "?", "…", ";"))
+                                          else "")
+                k = (ln.lower(), i // 3)                  # отрывки перекрываются — один заголовок не дважды
+                if k in seen or (ln.lower(), i // 3 - 1) in seen:
+                    continue
+                seen.add(k)
+                (small if roman else big).append((title.rstrip("."), i))
+        out = sorted(big + small, key=lambda x: x[1]) if len(big) + len(small) <= cap else big[:cap]
+        return out
+
+    def search(self, query, limit=5, within=None, key=None):
         """-> [{path, score, text}] — лучшие отрывки, не больше двух из файла. Путь файла тоже участвует в поиске.
         within — только в этих своих папках (знания персонажа из папки на компьютере). В журнал — что нашлось и с какой
         оценкой (27.10: «ассистент не знает» — по отчёту видно, пустая выдача или нашлось не то; текст отрывков — нет)."""
-        out = self._search(query, limit, within)
+        out = self._search(query, limit, within, key)
         log.info("📚 Знания: «%s» → %s (файлов в поиске: %d)", " ".join(str(query or "").split())[:60],
                  ", ".join(f"{r['path']} {r['score']}" for r in out[:5]) or "ничего не нашлось", len(self.index))
         return out
 
-    def _search(self, query, limit=5, within=None):
+    def _search(self, query, limit=5, within=None, key=None):
         self.refresh()
         self.fresh_folders()
-        q = [w for w in words(query) if len(w) > 2] or words(query)     # короткие основы — только если других нет
+        stop = _qstop()
+        q = [w for w in words(query) if len(w) > 2 and w not in stop] or \
+            [w for w in words(query) if w not in stop] or words(query)   # служебные и короткие — только если других нет
         if not q:
             return []
         with self._lock:
             items = list(self.index.items())
         def pre(fs):
             return tuple("@" + Path(os.path.expanduser(str(f))).resolve().as_posix().rstrip("/") + "/" for f in fs)
-        if within is not None:
+        if key is not None:                      # поиск внутри одного файла (search_documents с file)
+            items = [x for x in items if x[0] == key]
+        elif within is not None:
             # «Облако Лиры» у персонажа (1.0.23): папка «Знания» — её файлы в индексе без «@» (по пути внутри папки)
             rt = self.root.resolve()
             cloud = any(Path(os.path.expanduser(str(f))).resolve() == rt for f in within)
@@ -487,10 +589,12 @@ class Knowledge:
         scored.sort(key=lambda x: -x[0])
         out, per_file = [], {}
         for s, rel, i, c in scored:
-            if per_file.get(rel, 0) >= 2:                       # не больше двух отрывков из одного файла
+            # не больше двух отрывков из файла; в одном файле и в книгах персонажа — сколько просили (замер 19.11:
+            # 12 книг персонажа, вопрос про одну — ей доставалось 2 места из 6)
+            if per_file.get(rel, 0) >= (limit if key or within is not None else 2):
                 continue
             per_file[rel] = per_file.get(rel, 0) + 1
-            out.append({"path": self.label(rel), "key": rel, "score": round(s, 2), "text": c})
+            out.append({"path": self.label(rel), "key": rel, "score": round(s, 2), "text": c, "i": i, "of": len(self._tok.get(rel) or ())})
             if len(out) >= limit:
                 break
         return out
