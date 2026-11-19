@@ -19,6 +19,7 @@ cp "$ROOT/ui/assets/codes.js" "$ROOT/ui/assets/vendor/zxing.min.js" "$W/"   # п
 cp "$ROOT/ui/assets/refnet.js" "$W/"                     # «Моё созвездие» — приглашённые друзья картиной
 cp "$ROOT/ui/assets/i18n.data.js" "$ROOT/ui/assets/i18n.tx.js" "$ROOT/ui/assets/i18n.js" "$W/"   # языки (0.89): те же словари data/i18n, что у студии
 cp "$ROOT/ui/assets/speechnorm.js" "$W/"                 # числа словами для голоса сервера — как core/speechnorm.py
+cp "$ROOT/ui/assets/tone.js" "$W/"                       # эмоции в голосе — как core/tone.py
 cp "$ROOT/ui/assets/rich.js" "$W/"                       # схемы Mermaid и картинки к рассказу — тот же код, что у компьютера
 cp -r "$ROOT/ui/assets/emoji" "$W/emoji"                 # смайлы картинками (Fluent Emoji, MIT) — те же, что в студии
 cp -r "$ROOT/ui/assets/arcade" "$W/arcade"               # «Досуг»: игры и полка (arcade/shelf.js) — те же, что у компьютера

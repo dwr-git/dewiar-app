@@ -26,6 +26,9 @@ class ListenMixin:
             if not frame:
                 return
             now = time.monotonic()
+            sa = getattr(self, "soft_aec", None)
+            if sa is not None:
+                frame = sa.near(frame, now)                 # своё эхоподавление (проба): свой голос — из микрофона
             if now - sleep_chk > 10 and os.name == "nt" and not self.wav_input:
                 sleep_chk = now
                 if self._sleep_due():
@@ -61,6 +64,12 @@ class ListenMixin:
             if not self.wav_input and self._mic_zero_step(zst, frame, now) == "heal":
                 return
             self._listen_live = now                        # слух обрабатывает звук: окно «ваша очередь» закроет он сам
+            lm = getattr(self, "_listen_min_t", None)          # минуты слушания — знаменатель для «ложных за 10 ч»
+            if lm is None or now - lm > 120:
+                self._listen_min_t = now
+            elif now - lm >= 60:
+                self._listen_min_t = lm + 60
+                self._wake_count("listen_min")
             speaking = self.state == "speaking"
             if speaking and not self.status["aec"]:
                 # полудуплекс: себя не слушаем — кроме короткого «стоп / хватит / пауза / отмена»
@@ -84,6 +93,7 @@ class ListenMixin:
                         pass                                   # №564: решит точная модель (_stop_check), голос пока тише
                     else:
                         log.info("✋ «%s» — замолкаю (без эхоподавления)", w)
+                        self._wake_stop_early()
                         self.stop_utt, self.stop_time, self._stop_sleep = True, now, True
                         self.interrupt(w, follow=False)
                 continue
@@ -103,12 +113,8 @@ class ListenMixin:
                 if kind == "wake" and self._meeting_ignores(phrase):
                     log.info("🎧 Созвон — имя «%s» пропускаю (%s)", phrase, ", ".join(self.meeting) or "")
                     continue
-                if kind == "wake" and self._noisy() and self.state == "idle" and self.wake_checker() is not None:
-                    # вокруг много говорят (созвон, видео, гости): быстрый слух часто ошибается — сначала проверим
-                    # фразу точной моделью и только потом откликнемся
-                    log.info("🎤 «%s»? Вокруг разговор — проверю точной моделью", phrase)
-                    self.vosk_wake_check, self._vosk_wake_word = self.utt_id, phrase
-                    continue
+                if kind == "wake" and self.state == "idle":
+                    self._wake_count("wake_spot")
                 if kind == "wake" and self.state == "speaking" and not self.status.get("aec_real") and self._own_word(phrase):
                     # №543: без настоящего эхоподавления быстрый слух слышит имя в моём же ответе («…Джарвис расскажет»)
                     log.info("🎤 «%s» — имя в моей же речи (эхо), не перебиваю", phrase)
@@ -131,6 +137,15 @@ class ListenMixin:
                             log.info("🎧 «%s» посреди %.0f с сплошной речи — похоже на видео, проверю точной моделью", phrase, long_s)
                             self.vosk_wake_check, self._vosk_wake_word = self.utt_id, phrase
                             continue
+                    if (self.state == "idle" and self.wake_checker() is not None
+                            and (self._noisy() or self.s.get("audio", "wake_verify") is not False)):
+                        # Быстрый слух только предлагает, решает точная модель (владелец 19.11: «держу микрофон выключенным —
+                        # за день почти десяток ложных срабатываний, колонка Алиса — ни одного»). Раньше проверка была
+                        # лишь когда вокруг много говорят; теперь — каждый раз: не подтвердилось — молча ждём дальше, без
+                        # виджета и сигнала. Цена — доля секунды до «слушаю».
+                        log.info("🎤 «%s»? Проверю точной моделью%s", phrase, " — вокруг разговор" if self._noisy() else "")
+                        self.vosk_wake_check, self._vosk_wake_word = (self.utt_id if in_speech else self.utt_id + 1), phrase
+                        continue
                     self.emit("wake", phrase=phrase)
                     if self.state in ("speaking", "thinking") and barge != "off":
                         self.interrupt("имя")
@@ -159,6 +174,7 @@ class ListenMixin:
                     log.info("«%s» — это моё же слово во фразе (эхо), не останавливаюсь", phrase)
                 elif kind == "stop" and self.state in ("speaking", "thinking") and barge != "off":
                     log.info("✋ «%s» — замолкаю", phrase)
+                    self._wake_stop_early()
                     self.stop_utt = now - self.wake_time > 3     # одно «стоп» — не вопрос; «стоп, лучше …» — вопрос
                     self.stop_time, self._stop_sleep = now, self.stop_utt
                     self.interrupt(phrase, follow=False)
@@ -564,8 +580,8 @@ class ListenMixin:
             self.emit("heard", text=text)
             self.announce("Передал в задачу.")
             return
-        pid, end = find_name(text, self.aliases, strict=True)
-        if pid:                                                # имя — первым словом: «Патрик, …»
+        pid, end = find_name(text, getattr(self, "held_aliases", None) or self.aliases, strict=True)
+        if pid:                                                # имя — первым словом: «Патрик, …» (любого персонажа)
             if pid != self.s.get("persona"):
                 self.switch_persona(pid)
             rest = text[end:].lstrip(" ,.!?:;—-").strip()

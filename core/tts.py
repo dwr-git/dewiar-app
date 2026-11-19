@@ -778,6 +778,11 @@ class RemoteTTS:
                 "response_format": "pcm", "stream": True, "speed": speed}
         if voice_cfg.get("_pid"):                         # служба голосов Dewiar даёт персонажу его собственный голос
             body["persona"] = voice_cfg["_pid"]
+        tn = voice_cfg.get("_tone")
+        if tn and (c.get("cloud") or c.get("from_account") or "dewiar.pro" in str(c.get("base_url") or "")):
+            from tone import INSTRUCT                     # эмоции (19.11): манера на эту фразу — только службе голосов Dewiar
+            if tn in INSTRUCT:
+                body["instruct"] = INSTRUCT[tn]
         extra = dict(c.get("extra") or {})
         # 0.96: «language: Russian» в настройках по умолчанию — а фраза английская (программа по-английски или английская
         # вставка): служба голосов читала бы её как русскую. Английский текст — английским

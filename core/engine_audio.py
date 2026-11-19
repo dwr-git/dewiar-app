@@ -21,6 +21,11 @@ from ears_name import NameMixin
 from ears_echo import EchoMixin
 
 
+
+# «не тебе», «это не тебе», «я не с тобой», «не к тебе», «я не тебя звал» — коротко, целиком (не «расскажи, почему не тебе…»)
+NOT_ME_RX = re.compile(r"^(?:(?:да|нет|ой|это|я|ну)\s+){0,2}не\s+(?:тебе|к\s+тебе|с\s+тобой|тебя\s+звал[аи]?|тебя)"
+                       r"(?:\s+(?:говорю|говорил[аи]?|сказал[аи]?|звал[аи]?|обращаюсь|обращался|обращалась))?[\s.!,]*$")
+
 class AudioMixin(ModelsMixin, MicMixin, ListenMixin, NameMixin, EchoMixin):
     # ---------- перезапуск и фоновые циклы ----------
 
@@ -140,7 +145,19 @@ class AudioMixin(ModelsMixin, MicMixin, ListenMixin, NameMixin, EchoMixin):
             self.emit("heard", text=text)
             self.announce("Передал в задачу.")
             return
+        if text and (by_wake or follow) and NOT_ME_RX.search(_norm(text)):
+            # «не тебе», «я не с тобой» (владелец 19.11: учиться на «не тебе») — звали не меня: молча засыпаю, в счёт,
+            # минуту не откликаюсь на голос
+            if getattr(self, "lat", None) is not None:
+                self.lat.drop()
+            self.follow_up_until = 0.0
+            self._wake_was_false("«" + text.strip()[:30] + "»")
+            self.set_state("idle")
+            self.play_tone("sleep")
+            return
         pid, end = find_name(text, self.aliases) if text else (None, 0)
+        if pid and by_wake:
+            self._voice_turn_t = time.monotonic()           # ответ начат по голосу — «стоп» в первые секунды в счёт
         if not pid and by_wake and dur is not None and dur <= 1.6 and len(text.split()) <= 2 and self._name_like(text):
             # Быстрый слух услышал имя, а точная модель в короткой фразе ослышалась («Игрова», «Элла» вместо «Эва»):
             # это и было имя. Слушаем вопрос, а не гаснем и не отправляем «Эллу» модели как вопрос.

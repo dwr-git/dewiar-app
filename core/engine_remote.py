@@ -589,6 +589,8 @@ class RemoteMixin:
             исключение — вместо None, если фраза так и не прозвучала."""
             locked = None                               # движок, которым начали говорить (весь ответ — им)
             chunks = None                               # куски фразы, которая сейчас синтезируется (None — ни одной)
+            import tone as _tone                         # эмоции в голосе (19.11): тон фразы — по её словам и настроению вопроса
+            mood = _tone.mood_of(getattr(turn, "asked", ""))
             try:
                 while True:
                     s = sentences.get()
@@ -616,7 +618,16 @@ class RemoteMixin:
                             # высота голоса без отдельной обработки: синтезируем в 1/pitch раз быстрее, а играем с частотой
                             # rate*pitch — темп прежний, голос ниже (pitch < 1) или выше
                             t_syn = time.monotonic()
-                            for rate, pcm in self._synth_mixed(eng, text, voice, speed / pitch):
+                            tn = _tone.tone_of(text, mood) if self.s.get("tts", "tone") is not False else None
+                            v_t, sp_t = voice, speed
+                            if tn:
+                                v_t = dict(voice, _tone=tn)          # голос Dewiar — манера на фразу (RemoteTTS)
+                                sp_t = speed * _tone.speed_of(tn)    # и чуть темп — всем голосам (свои голоса-образцы
+                                                                     # на сервере манеру не понимают, темп — да)
+                                if tn != getattr(turn, "_tone_said", None):
+                                    turn._tone_said = tn
+                                    self.emit("tone", tone=tn)
+                            for rate, pcm in self._synth_mixed(eng, text, v_t, sp_t / pitch):
                                 if not sent and time.monotonic() - t_syn > 3:   # синтез не успевает за речью (для отчётов)
                                     log.info("🗣 %s: фраза из %d симв. синтезировалась %.1f с", getattr(eng, "name", "голос"), len(text),
                                              time.monotonic() - t_syn)
@@ -699,6 +710,8 @@ class RemoteMixin:
                 if self.player is None:                  # микрофон ещё не открылся (или его нет) — голос всё равно нужен
                     self.player = Player(device=self.s.get("audio", "output") or "", on_level=lambda v: self._level(v, "voice"),
                                          null=self.null_player)
+                    if getattr(self, "soft_aec", None) is not None:
+                        self.player.far_sink = self.soft_aec.far
                 said_mark = False
                 try:
                     while True:

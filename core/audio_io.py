@@ -650,6 +650,7 @@ class Player:
         self._written = 0
         self.captured = []           # для тестов (null=True)
         self.gain = 1.0              # приглушить, пока пользователь начинает говорить поверх ответа
+        self.far_sink = None         # своё эхоподавление (soft_aec.SoftAEC.far): что и когда зазвучит
 
     def start(self, rate, channels=1):
         """channels=2 — стерео (радио и своя музыка, №374: «звук моно везде»); голос — моно."""
@@ -719,6 +720,12 @@ class Player:
                         self.proc.write(chunk)
             except (BrokenPipeError, OSError, AttributeError):   # AttributeError: stop() обнулил self.proc на ходу
                 return False
+            fs = getattr(self, "far_sink", None)
+            if fs is not None:
+                try:
+                    fs(chunk, self.rate, ch, self._t0 + self._written / self.rate)
+                except Exception:  # noqa: BLE001 — эхоподавление не должно мешать голосу
+                    pass
             self._written += len(chunk) // (2 * ch)            # кадры (на канал), не отсчёты
             if self.on_level:
                 a = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)

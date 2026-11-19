@@ -20,11 +20,13 @@ def ok(c, m):
 import engine as E  # noqa: E402
 
 
-def run(sound_s, checker):
+def run(sound_s, checker, verify=None):
     e = E.Engine.__new__(E.Engine)
     e.calls, e.tones = [], []
     e.play_tone = lambda k: e.tones.append(k)
-    e.s = SimpleNamespace(get=lambda *k, default=None: {("audio", "end_silence_ms"): 650, ("audio", "barge_in"): "smart"}.get(k, default))
+    e.s = SimpleNamespace(get=lambda *k, default=None: {("audio", "end_silence_ms"): 650, ("audio", "barge_in"): "smart",
+                                                        ("audio", "wake_verify"): verify}.get(k, default))
+    e.health_use = lambda *a: e.calls.append(a)
     e.stopping, e.restart_audio, e.muted, e.state = threading.Event(), threading.Event(), False, "idle"
     e.status, e.meeting, e.alarm, e.utt_id, e.wake_time = {"aec": True}, [], None, 7, 0.0
     e._listen_peak = e._listen_vad = 0.0
@@ -68,8 +70,14 @@ e, got = run(16.5, GIGA)
 ok(e.state == "idle" and e.tones == [] and e.vosk_wake_check not in (-1, None) and e._vosk_wake_word == "агент",
    f"«агент» посреди 16 с речи из видео — не откликаюсь сразу, проверит точная модель: {e.state}, {e.tones}")
 ok(got and got[0] < 3.0, f"на проверку — фраза с имени, а не 16 с ролика ({got[0] if got else '—'})")
+e, got = run(4.0, GIGA, verify=False)
+ok(e.state == "listening" and e.tones == ["wake"] and e.vosk_wake_check == -1, "проверка выключена: имя после 4 с звука — слушаю сразу, как раньше")
+# 19.11 (владелец: «десяток ложных срабатываний за день»): по умолчанию каждое имя от быстрого слуха проверяет точная модель —
+# до подтверждения ни сигнала, ни «слушаю»
 e, got = run(4.0, GIGA)
-ok(e.state == "listening" and e.tones == ["wake"] and e.vosk_wake_check == -1, "имя после 4 с звука (музыка, человек рядом) — слушаю сразу, как раньше")
+ok(e.state == "idle" and e.tones == [] and e.vosk_wake_check not in (-1, None) and ("wake_spot",) in e.calls,
+   f"имя после 4 с звука — сначала проверка точной моделью, молча: {e.state}, {e.tones}")
+ok(got and got[0] < 3.0, f"и на проверку — фраза с имени ({got[0] if got else '—'})")
 e, got = run(16.5, None)
 ok(e.state == "listening", "нечем проверить (нет точной модели) — как раньше, слушаю с имени")
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

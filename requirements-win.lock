@@ -1,4 +1,5 @@
 # Закреплённые версии для Windows (проверены под Wine). Обновить: uv pip compile requirements-win.txt --python-platform x86_64-pc-windows-msvc --python-version 3.12 --no-header --no-annotate -o requirements-win.lock
+aec-audio-processing==1.0.1
 anyio==4.15.1
 bottle==0.13.4
 casttube==0.2.1

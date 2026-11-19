@@ -24,6 +24,7 @@ class ModelsMixin:
             self.asr_names = sorted(self.personas.wake_map(only=only))
             self.aliases = {p["id"]: p.get("aliases") or p.get("wake") or [p["name"]]
                             for p in self.personas.all() if (not only or p["id"] == only) and (not p.get("kids") or only == p["id"])}
+            self._all_aliases(kids)
             return
         wm = self.personas.wake_map(only=only)
         words = {w for phrase in wm for w in phrase.split()}
@@ -48,9 +49,18 @@ class ModelsMixin:
         self.spotter = WakeSpotter(self.vosk_model, fast, self.decoys)
         self.aliases = {p["id"]: p.get("aliases") or p.get("wake") or [p["name"]]
                         for p in self.personas.all() if (not only or p["id"] == only) and (not p.get("kids") or only == p["id"])}
+        self._all_aliases(kids)
         log.info("Имена (мгновенно): %s; через точное распознавание: %s",
                  ", ".join(sorted(fast)) or "—", ", ".join(self.asr_names) or "—")
         self._names_note()
+
+    def _all_aliases(self, kids):
+        """Имена всех персонажей — для явной речи (удержание кнопки): «Патрик, …» переключает и тогда, когда слух по имени —
+        только на активного (19.11: ложные срабатывания). Детский режим — только друг ребёнка."""
+        if kids and kids.on():
+            self.held_aliases = dict(self.aliases)
+            return
+        self.held_aliases = {p["id"]: p.get("aliases") or p.get("wake") or [p["name"]] for p in self.personas.all() if not p.get("kids")}
 
     def wake_checker(self):
         """Чем искать имя в произвольной фразе: локальный GigaAM, иначе ваш сервер распознавания."""

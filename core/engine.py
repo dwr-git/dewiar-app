@@ -174,6 +174,11 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             # метка v2 — чтобы не перебить выбор Piper, сделанный позже вручную. №226 (24.10): на слабом компьютере
             # (лёгкий режим) Vosk TTS синтезирует фразу 17–36 с — там Piper оставляем
             self.s.update({"tts": {"engine": "piper" if self.s.get("device", "light") else "vosk", "v2": True}})
+        if not self.s.get("audio", "names_v2"):
+            # разовый перенос (19.11, владелец: «за день почти десяток ложных срабатываний»): откликаться только на имя
+            # активного персонажа — каждое лишнее имя в слухе («Оскар», «агент», «Джарвис») — лишние ложные отклики;
+            # другого персонажа зовут через активного («Лира, позови Патрика»). Вернуть — в «Звук и поведение»
+            self.s.update({"all_names": False, "audio": {"names_v2": True}})
         if self.s.get("audio", "barge_in") == "wakeword" and not self.s.get("audio", "barge_v2"):
             # разовый перенос: перебивать можно просто речью, а не только именем; метка barge_v2 — сделано один раз
             self.s.update({"audio": {"barge_in": "smart", "barge_v2": True}})

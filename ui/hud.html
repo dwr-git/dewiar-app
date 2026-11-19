@@ -889,7 +889,8 @@ function fqDraw() {
 }
 core.on("hello", d => { firstAsk = d.settings && d.settings.ui ? d.settings.ui.first_ask : null; fqDraw(); fqSync(); });
 core.on("first_ask", e => { if (e.phrases && e.phrases.length) { fqList = e.phrases; fqDraw(); } firstAsk = e.on ? false : true; fqSync(); });
-core.on("state", e => fqSync(e && e.state));          // этот обработчик — раньше того, что меняет state
+core.on("state", e => fqSync(e && e.state));
+core.on("tone", e => { window.DEWIAR_TONE = { tone: e && e.tone, at: Date.now() }; });   // эмоции (19.11): лицо — по тону ответа          // этот обработчик — раньше того, что меняет state
 core.on("kids", setKids);
 core.on("council", e => { if (e && e.open) { const a = api(); if (a && a.open_settings) a.open_settings("council"); } });
 core.on("podcast", e => { if (e && e.open) { const a = api(); if (a && a.open_settings) a.open_settings("podcast"); } });   // «сделай подкаст» голосом — ход в студии   // «собери совет» голосом — обсуждение в студии

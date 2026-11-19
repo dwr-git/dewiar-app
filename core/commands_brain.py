@@ -30,7 +30,8 @@ class BrainCommands:
             if before["audio"]["input"] != after["audio"]["input"] or \
                before["audio"]["output"] != after["audio"]["output"] or \
                before["audio"]["echo_cancel"] != after["audio"]["echo_cancel"] or \
-               before["audio"].get("headphones") != after["audio"].get("headphones"):
+               before["audio"].get("headphones") != after["audio"].get("headphones") or \
+               before["audio"].get("soft_aec") != after["audio"].get("soft_aec"):
                 self.restart_audio.set()                         # устройства звука меняются только перезапуском потока звука
             self.apply_engines()
             self.voiceprints.sensitivity = float(self.s.get("audio", "name_sensitivity") or 1.0)

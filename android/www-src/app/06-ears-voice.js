@@ -325,6 +325,10 @@ function say(text, retry = 0) {
   }
   const id = "s" + (++sayN); sayLeft++;
   turnTime("said");
+  // эмоции (19.11, как core/tone.py): тон фразы — голосу Dewiar манерой, всем — чуть темп, лицу — улыбка или без
+  const tn = window.DewiarTone && S.tts.tone !== false ? DewiarTone.toneOf(t, DewiarTone.moodOf(typeof turnAsk === "string" ? turnAsk : "")) : null;
+  const tsp = tn ? DewiarTone.speedOf(tn) : 1;
+  if (tn) window.DEWIAR_TONE = { tone: tn, at: Date.now() };
   const cv = (S.tts.engine === "cloud" || (S.tts.engine === "system" && !ttsOk())) ? cloudVoice() : null;
   const srvDown = Date.now() - srvVoiceDownAt < 120e3 && ttsOk();   // голос сервера только что не ответил — пока свой
   const fem = persona().gender === "female";
@@ -338,7 +342,8 @@ function say(text, retry = 0) {
     // старая служба голосов читала цифры странно («ствисе», отзыв 16.10), а новая сделает это сама — дважды не мешает
     const said = window.DewiarSpeech && !isEnglish(t) ? (DewiarSpeech.norm(t, false) || t) : t;   // английское — как есть: сервер сам узнаёт язык
     const u = cv ? cv.url : S.tts.url, url = u.replace(/\/+$/, "") + (/speech$/.test(u) ? "" : "/audio/speech");
-    const body = cv ? { model: "tts-1", input: said, voice: persona().voice_remote || (persona().gender === "female" ? "serena" : "aiden"), persona: persona().id || "", response_format: "wav", speed: +S.tts.rate || 1 }
+    const body = cv ? Object.assign({ model: "tts-1", input: said, voice: persona().voice_remote || (persona().gender === "female" ? "serena" : "aiden"), persona: persona().id || "", response_format: "wav", speed: (+S.tts.rate || 1) * tsp },
+      tn ? { instruct: DewiarTone.INSTRUCT[tn] } : {})
       : { model: S.tts.model || "tts-1", input: said, voice: (fem ? S.tts.voice : (S.tts.voice_m || S.tts.voice)) || "alloy", persona: persona().id || "", response_format: "mp3" };
     const sv0 = sysVoiceFor(persona().gender);
     if (D.speakRemoteFb && ttsOk())     // запасной голос — в той же очереди, по порядку (отчёт №93: два голоса разом)
@@ -357,7 +362,7 @@ function say(text, retry = 0) {
     }
     const sv = sysVoiceFor(persona().gender);                 // героям — мужской голос устройства, героиням — женский
     if ((isEnglish(t) || (appEn() && !/[а-яё]/i.test(t))) && D.speakLang) D.speakLang(id, t, S.tts.rate || 1.0, sv.pitch, "", true, "en-US");   // по-английски — английским голосом (приложение по-английски — и короткое «OK.»)
-    else D.speak(id, t, S.tts.rate || 1.0, sv.pitch, sv.name, true);
+    else D.speak(id, t, (S.tts.rate || 1.0) * tsp, sv.pitch, sv.name, true);
   }
   if (state !== "speaking" && state !== "listening") setState("speaking");
 }

@@ -40,8 +40,33 @@ class MicMixin:
         dev = AEC_SINK if use_aec else a["output"]
         if self.player is None or self.player.device != dev:
             self.player = Player(device=dev, on_level=lambda v: self._level(v, "voice"), null=self.null_player)
-        log.info("Микрофон: %s; эхоподавление: %s", self.status["input"], "да" if use_aec else "нет")
+        self._soft_aec_setup(a, use_aec, headphones)
+        log.info("Микрофон: %s; эхоподавление: %s", self.status["input"], "да" if use_aec else
+                 "своё (проба)" if self.status.get("aec_soft") else "нет")
         self.emit("status", status=self.status)
+
+    def _soft_aec_setup(self, a, use_aec, headphones):
+        """«Перебивать без наушников (проба)» (19.11, владелец: «готов протестировать, пока под флагом»): системного
+        эхоподавления нет (Windows, Mac) и не «Я в наушниках» — вычитаем свой голос сами (soft_aec), и слушаем во время
+        ответа. Порог перебивания — как без настоящего AEC (aec_real остаётся False): осторожнее, чем с системным."""
+        self.soft_aec = None
+        self.status["aec_soft"] = False
+        if self.player is not None:
+            self.player.far_sink = None
+        if use_aec or headphones or self.wav_input or not a.get("soft_aec"):
+            return
+        import soft_aec
+        if not soft_aec.available():
+            log.info("Своё эхоподавление: на этом компьютере нет библиотеки — слушаю как раньше")
+            return
+        try:
+            self.soft_aec = soft_aec.SoftAEC()
+        except Exception as e:  # noqa: BLE001
+            log.warning("Своё эхоподавление не запустилось: %s", e)
+            return
+        if self.player is not None:
+            self.player.far_sink = self.soft_aec.far
+        self.status["aec"] = self.status["aec_soft"] = True
 
     def _out_crash_check(self, mark=None):
         """№521, №523 (04.11): ядро обрывалось, как только начинал звучать голос (вывод — HDMI монитора), без строчки в

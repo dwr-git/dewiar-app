@@ -21,7 +21,7 @@ BASE = ROOT / "tests" / "i18n_baseline.json"
 CYR = re.compile(r"[А-Яа-яЁё]")
 GLOBS = ["ui/*.html", "ui/studio/*.js", "ui/assets/*.js", "android/assets/www/*.js", "android/assets/www/*.html"]
 SKIP = {"ui/assets/i18n.data.js", "ui/assets/i18n.tx.js",
-        "ui/assets/speechnorm.js", "android/assets/www/exam.js"}   # русская речь и фразы экзамена — не интерфейс
+        "ui/assets/speechnorm.js", "android/assets/www/exam.js", "ui/assets/tone.js"}   # русская речь и фразы экзамена — не интерфейс
 REGEX_BEFORE = set("(,=:[!&|?{};+-*%<>~^")
 TEXT = ROOT / "data" / "i18n" / "text" / "en.json"
 _TX = None

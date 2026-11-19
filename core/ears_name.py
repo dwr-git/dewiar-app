@@ -34,6 +34,10 @@ class NameMixin:
                 log.debug("проверка имени не удалась: %s", e)
                 continue
             pid, _ = find_name(text, self._wake_aliases(), strict=True)
+            short = len(pcm) / 2 / RATE <= 1.6 and len(text.split()) <= 2
+            if not pid and self.vosk_wake_check == uid and short and text and self._name_like(text):
+                # «Лира» одна, с паузой: точная модель ослышала короткое имя («Лиру», «Ира») — это и было имя
+                pid = self.personas.wake_map(kids=True).get(getattr(self, "_vosk_wake_word", "")) or None
             if pid and kind == "barge" and not self.status.get("aec_real") and self._is_self_echo(text, barge=True):
                 log.info("🔁 Имя поверх ответа — в моей же фразе из колонок, не перебиваю: «%s»", text[:80])
                 pid = None                                 # №543: «…Джарвис» в ответе — не зов
@@ -49,11 +53,15 @@ class NameMixin:
                     self._chatter.append(time.monotonic())     # вокруг разговаривают — не со мной
                 if self.vosk_wake_check == uid:
                     self.vosk_wake_check = -1
-                    log.info("🎧 «%s» от быстрого слуха не подтвердилось — вокруг разговор, пропускаю", self._vosk_wake_word)
+                    self._wake_count("wake_no")
+                    self.wake_time = 0.0                            # следующая фраза — не «по имени»
+                    log.info("🎧 «%s» от быстрого слуха не подтвердилось — это не обращение, молча жду дальше", self._vosk_wake_word)
                     self.set_state("idle")
                 continue
             if self.vosk_wake_check == uid:
                 self.vosk_wake_check = -1
+                self._wake_count("wake_ok")
+                self._voice_turn_t = time.monotonic()
             log.info("🎤 Имя распознано точной моделью: «%s»", text)
             self.emit("wake", phrase=pid)
             if kind == "barge":
@@ -72,7 +80,35 @@ class NameMixin:
                 self.set_state("thinking")
             else:
                 self.set_state("thinking")
-                self.handle_text(text, True, False)
+                self.handle_text(text, True, False, dur=len(pcm) / 2 / RATE)
+
+    # ---------- ложные срабатывания: счёт и «не тебе» ----------
+
+    def _wake_count(self, what):
+        """Счёт слуха по имени для «Здоровья» (только числа): wake_spot — быстрый слух услышал имя, wake_ok — точная
+        модель подтвердила, wake_no — не подтвердила (молча ждём дальше), wake_false — «не тебе» или стоп кнопкой сразу
+        после отклика по голосу, wake_stop — «стоп / хватит» в первые секунды ответа на голос."""
+        try:
+            if hasattr(self, "health_use"):
+                self.health_use(what)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _wake_was_false(self, why):
+        """Человек сказал, что это было не ему («не тебе», «я не с тобой»), или остановил кнопкой ответ, начатый голосом:
+        счёт, минуту не откликаемся на голос (кнопка работает) и считаем, что вокруг разговор — проверка строже."""
+        now = time.monotonic()
+        self._wake_count("wake_false")
+        self._quiet_until = now + 60
+        ch = getattr(self, "_chatter", None)
+        if ch is not None:
+            ch.extend([now] * 4)                           # _noisy(): ближайшие полторы минуты — разговор рядом
+        log.info("🙊 Ложное срабатывание (%s) — минуту не откликаюсь на голос", why)
+
+    def _wake_stop_early(self):
+        """«Стоп / хватит / замолчи» в первые секунды ответа, начатого по голосу, — возможно, звали не меня: в счёт."""
+        if time.monotonic() - getattr(self, "_voice_turn_t", -99.0) < 12:
+            self._wake_count("wake_stop")
 
     # ---------- созвон ----------
 

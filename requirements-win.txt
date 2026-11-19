@@ -22,3 +22,4 @@ pypdf>=4.0
 tzdata>=2024.1
 soundcard>=0.4.3      # звук компьютера для суфлёра (WASAPI loopback)
 truststore>=0.10        # сертификаты из хранилища Windows (Касперский с проверкой HTTPS — net.trust_system)
+aec-audio-processing>=1.0.1    # «Перебивать без наушников (проба)»: эхоподавление WebRTC, BSD-3, ~1 МБ (soft_aec.py)

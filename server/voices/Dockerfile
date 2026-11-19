@@ -35,6 +35,19 @@ RUN pip freeze | grep -iE '^(torch|torchaudio)==' > /tmp/keep.txt \
 # Словари и модели ударений — в образ: не качаются при каждом запуске
 RUN python -c "from ruaccent import RUAccent; a = RUAccent(); a.load(omograph_model_size='turbo3.1', use_dictionary=True, workdir='/opt/ruaccent'); print(a.process_all('Привет, я голос Девиара.'))"
 
+# CosyVoice3 — проба (19.11): ставится, только если в панели выбран движок «CosyVoice3» (COSY=1), в своё окружение
+# /opt/cosy — его зависимости не смешиваются со службой. Убрать: выбрать ESpeech и «Обновить службу» — образ соберётся без него.
+ARG COSY=0
+ARG COSY_REF=main
+LABEL dewiar.cosy=${COSY}
+RUN if [ "$COSY" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends git build-essential && rm -rf /var/lib/apt/lists/* \
+      && python -m venv /opt/cosy \
+      && git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git /opt/cosy/src \
+      && git -C /opt/cosy/src checkout "${COSY_REF}" && git -C /opt/cosy/src submodule update --init --recursive \
+      && /opt/cosy/bin/pip install -r /opt/cosy/src/requirements.txt huggingface_hub numpy ; \
+    fi
+
 WORKDIR /opt/voices
 COPY *.py ./
 

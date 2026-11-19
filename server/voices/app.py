@@ -81,8 +81,13 @@ MODELS = {
     "base": os.getenv("TTS_BASE_MODEL", "Qwen/Qwen3-TTS-12Hz-0.6B-Base"),
     "design": os.getenv("TTS_DESIGN_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"),
     "espeech": os.getenv("TTS_ESPEECH_MODEL", "ESpeech/ESpeech-TTS-1_RL-V2:espeech_tts_rlv2.pt"),
+    "cosy": os.getenv("TTS_COSY_MODEL", "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"),
 }
-CLONE_ENGINE = os.getenv("TTS_CLONE_ENGINE", "espeech")             # кто озвучивает свои голоса: espeech | qwen
+CLONE_ENGINE = os.getenv("TTS_CLONE_ENGINE", "espeech")             # кто озвучивает свои голоса: espeech | qwen | cosyvoice
+# CosyVoice3 — проба (19.11): своё окружение в образе (/opt/cosy, только если выбран в панели), отдельный процесс
+COSY_PY = os.getenv("TTS_COSY_PY", "/opt/cosy/bin/python")
+COSY_ARGS = os.getenv("TTS_COSY_ARGS", "")                          # проверки: --fake
+COSY_PORT = int(os.getenv("TTS_COSY_PORT", "8011"))
 QWEN_FAST = os.getenv("TTS_QWEN_FAST", "1") == "1"                  # faster-qwen3-tts, если он стоит
 ESPEECH_NFE = int(os.getenv("TTS_ESPEECH_NFE", "24"))               # шагов: больше — чище, меньше — быстрее и тише карта
 BUILTIN_ON = os.getenv("TTS_BUILTIN", "1") == "1"                  # 0 — встроенных дикторов Qwen нет: их имена → свои голоса
@@ -466,7 +471,8 @@ def role_for(spec) -> str:
     """Какая модель озвучивает голос: свои — ESpeech или Qwen Base, по описанию — VoiceDesign, встроенные — CustomVoice."""
     k = spec.get("kind")
     if k == "clone":
-        return "espeech" if (spec.get("engine") or CLONE_ENGINE) == "espeech" else "base"
+        e = spec.get("engine") or CLONE_ENGINE
+        return "espeech" if e == "espeech" else "cosy" if e == "cosyvoice" else "base"
     return "design" if k == "design" else "custom"
 
 
@@ -532,6 +538,43 @@ class Engine:
             accent = None
         return types.SimpleNamespace(model=model, vocoder=vocoder, accent=accent, device=dev)
 
+    def _load_cosy(self, dev):
+        """CosyVoice3 — отдельный процесс в своём окружении (cosy_worker.py). Нет окружения — понятная ошибка (фраза уйдёт ESpeech)."""
+        import types
+        import urllib.request
+        if not os.path.exists(COSY_PY):
+            raise RuntimeError("CosyVoice3 не установлен в образ — выберите его в панели и нажмите «Применить» (служба пересоберётся)")
+        cmd = [COSY_PY, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cosy_worker.py"), "--model", MODELS["cosy"],
+               "--port", str(COSY_PORT)] + COSY_ARGS.split()
+        proc = subprocess.Popen(cmd)
+        url = f"http://127.0.0.1:{COSY_PORT}"
+        t0 = time.time()
+        while time.time() - t0 < 1800:                   # первый запуск скачивает модель
+            if proc.poll() is not None:
+                raise RuntimeError(f"CosyVoice3 не запустился (код {proc.returncode})")
+            try:
+                with urllib.request.urlopen(url + "/ready", timeout=2) as r:
+                    sr = int(json.loads(r.read() or b"{}").get("sr") or OUT_SR)
+                return types.SimpleNamespace(proc=proc, url=url, sr=sr)
+            except OSError:
+                time.sleep(0.5)
+        proc.kill()
+        raise RuntimeError("CosyVoice3 не загрузился за 30 минут")
+
+    def _cosy(self, spec, texts):
+        import urllib.request
+        c = self.get("cosy")
+        out = []
+        for t in texts:
+            body = json.dumps({"text": t, "ref": vdir(spec["audio"]), "ref_text": plain(spec.get("text", "")),
+                               "instruct": spec.get("instruct", "")}, ensure_ascii=False).encode()
+            req = urllib.request.Request(c.url + "/tts", body, {"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=120) as r:
+                sr = int(r.headers.get("X-Rate") or c.sr)
+                w = np.frombuffer(r.read(), dtype=np.float32)
+            out.append(resample(w, sr) if sr != OUT_SR else w)
+        return out, OUT_SR
+
     def get(self, role):
         if role in self.models:
             self.models[role][1] = time.time()
@@ -539,12 +582,13 @@ class Engine:
         while len(self.models) >= MAX_MODELS:            # место на видеокарте — за счёт той, что дольше молчит
             old = min(self.models, key=lambda r: self.models[r][1])
             self.unload(old)
-        import torch
-        dev = self.device()
-        if dev.startswith("cuda") and GPU_MEM_GB > 0 and not self.models:
+        dev = self.device() if role != "cosy" else "cuda:0"     # CosyVoice3 — свой процесс, видеокарту выбирает он сам
+        if role != "cosy" and dev.startswith("cuda") and GPU_MEM_GB > 0 and not self.models:
+            import torch
             total = torch.cuda.get_device_properties(torch.device(dev)).total_memory / 1024 ** 3
             torch.cuda.set_per_process_memory_fraction(min(1.0, GPU_MEM_GB / total), torch.device(dev))
-        load = (lambda: self._load_espeech(dev)) if role == "espeech" else (lambda: self._load_qwen(role, dev))
+        load = (lambda: self._load_espeech(dev)) if role == "espeech" else (lambda: self._load_cosy(dev)) if role == "cosy" \
+            else (lambda: self._load_qwen(role, dev))
         STATE["loading"] = role
         t0 = time.time()
         log.info("загружаю %s (%s) на %s", role, MODELS[role], dev)
@@ -567,8 +611,14 @@ class Engine:
         return m
 
     def unload(self, role):
-        if self.models.pop(role, None) is None:
+        m = self.models.pop(role, None)
+        if m is None:
             return
+        if role == "cosy":                               # CosyVoice3 — свой процесс: закрываем, память видеокарты — его
+            try:
+                m[0].proc.terminate()
+            except Exception:  # noqa: BLE001
+                pass
         if role == "base":
             self.prompts.clear()
         if role == "espeech":
@@ -618,6 +668,17 @@ class Engine:
         return self.refs[key]
 
     def generate(self, spec, texts, lang):
+        if role_for(spec) == "cosy":                     # проба CosyVoice3: не вышло — фразу говорит ESpeech, служба не молчит
+            if time.time() < getattr(self, "_cosy_off", 0):  # недавно не завёлся — 10 минут не пробуем на каждой фразе
+                spec = dict(spec, engine="espeech")
+            else:
+                try:
+                    return self.runaway(spec, texts, lang, *self._cosy(spec, texts)), OUT_SR
+                except Exception as e:  # noqa: BLE001
+                    log.warning("CosyVoice3: %s — говорю ESpeech", e)
+                    STATE["cosy_error"] = str(e)[:200]
+                    self._cosy_off = time.time() + 600
+                    spec = dict(spec, engine="espeech")
         try:
             out, sr = self._generate(spec, texts, lang)
         except ValueError as e:                           # язык не из списка модели — пусть определит сама
@@ -1150,8 +1211,9 @@ class H(BaseHTTPRequestHandler):
             return self._err(503, f"голоса заняты: в очереди уже {STATE['waiting']} — много людей сразу", "busy")
         lang = lang_of(text, str(body.get("language") or ""))
         spec = resolve(str(body.get("voice") or ""), str(body.get("persona") or ""), str(body.get("gender") or ""), lang)
-        if body.get("instruct") and spec.get("kind") == "speaker":          # манера на один ответ: «радостно», «шёпотом»
-            spec = dict(spec, instruct=(spec.get("instruct", "") + " " + str(body["instruct"])).strip())
+        if body.get("instruct") and (spec.get("kind") in ("speaker", "design") or role_for(spec) == "cosy"):   # манера на фразу
+            # (эмоции, 19.11: программа просит тон фразы; голос по описанию — описание + тон, встроенный диктор — тон)
+            spec = dict(spec, instruct=(spec.get("instruct", "") + " " + str(body["instruct"])[:200]).strip())
         speed = min(2.0, max(0.5, float(body.get("speed") or 1.0)))
         fmt = str(body.get("response_format") or "mp3").lower()
         sse = str(body.get("stream_format") or "") == "sse"
