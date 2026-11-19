@@ -32,7 +32,8 @@ const STT_DENIED = /ответил (40[1-3]|429)\b/;
 function sttServerUrl(u) { return u.replace(/\/+$/, "") + (/(transcriptions)$/.test(u) ? "" : "/audio/transcriptions"); }
 async function listen() {
   stopVoice();
-  if (!(await needPerm(MIC))) { showBot("Без микрофона я вас не услышу. Разрешите микрофон — или напишите текстом.", "err"); return; }
+  if (!(await needPerm(MIC))) { fsMark("mic_no"); showBot("Без микрофона я вас не услышу. Разрешите микрофон — или напишите текстом.", "err"); return; }
+  fsMark("mic_ok");
   // ответ не стираем, пока человек не сказал новое (№241: «чат закрывается сам, дочитывать нужно в чате» — Лира
   // спросила «…?», слушание включилось само и убрало ответ); новый вопрос (ask) сменит его сам
   heardPartial = ""; sttUserStop = false; showYou(dict ? dict + " …" : ""); clearCard();

@@ -23,6 +23,8 @@ cp "$ROOT/ui/assets/rich.js" "$W/"                       # схемы Mermaid и
 cp -r "$ROOT/ui/assets/emoji" "$W/emoji"                 # смайлы картинками (Fluent Emoji, MIT) — те же, что в студии
 cp -r "$ROOT/ui/assets/arcade" "$W/arcade"               # «Досуг»: игры и полка (arcade/shelf.js) — те же, что у компьютера
 mkdir -p "$W/vendor" && cp "$ROOT/ui/assets/vendor/mermaid.min.js" "$ROOT/ui/assets/vendor/mermaid.LICENSE-MIT" "$W/vendor/"
+cp "$ROOT/ui/assets/vendor/pdfjs/pdf.min.js" "$ROOT/ui/assets/vendor/pdfjs/pdf.worker.min.js" "$W/vendor/"   # чтение PDF во вложениях (pdf.js 3.11, Apache-2.0) — грузится при первом PDF
+cp "$ROOT/ui/assets/vendor/pdfjs/LICENSE-APACHE-2.0" "$W/vendor/pdfjs.LICENSE-APACHE-2.0"
 cp "$ROOT/ui/assets/vendor/zxing.LICENSE-APACHE-2.0" "$W/"
 cp -r "$ROOT/ui/assets/skins" "$W/skins"
 cp -r "$ROOT/ui/assets/live" "$W/live"                # слои живого лица Эвы (entities.js берёт их из live/)

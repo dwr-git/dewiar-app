@@ -323,7 +323,7 @@ $("#mic").onclick = () => {
     if (!sttActive) { setState("idle"); return; }
     sttUserStop = true; D.stopListen(); sttGuard(2000, "stop"); return;            // сам закончил — длинная диктовка не продолжается
   }
-  if (state !== "idle") interrupt(true); listen(); };
+  if (state !== "idle") interrupt(true); fsMark("mic"); listen(); };
 $("#orbwrap").onclick = () => $("#mic").onclick();
 /* №560 (05.11): «Стоп» — замолчать и не отвечать дальше, не включая микрофон (тем, кто пишет, а не говорит); Esc на
    клавиатуре (веб-версия, планшет с клавиатурой) — то же, если не закрывает лист или картинку (N.back) */
@@ -362,7 +362,7 @@ $("#talk-x").onclick = (e) => { e.stopPropagation(); talkDismiss(60); };
     t.style.transform = ""; t.style.opacity = ""; if (Math.abs(dx) > 90) talkDismiss(dx > 0 ? 80 : -80); });
 })();
 /* Вложения: фото из галереи (уменьшается до 1280 точек) и текстовые файлы (до 30 000 знаков) — уходят модели вместе
-   с вопросом (ask opts.attach). PDF и документы Word телефон пока не читает — честно говорим. */
+   с вопросом (ask opts.attach). PDF, Word, Excel и PowerPoint — текстом (docText ниже, 19.11). */
 let attached = [];
 const ATT_MAX = 4, ATT_TEXT = 30000;
 function shrinkImage(file, max = 1280) {
@@ -375,13 +375,176 @@ function shrinkImage(file, max = 1280) {
     im.src = u;
   });
 }
+/* Документы на телефоне (19.11, план «телефон читает документы»: раньше — «PDF и Word телефон пока не читает»). Как на
+   компьютере (core/knowledge.extract, core/sheets.py): PDF — текстом (pdf.js, грузится только при первом PDF), Word
+   (.docx), Excel (.xlsx), PowerPoint (.pptx), LibreOffice (.odt, .ods) — разбором XML внутри архива (распаковка —
+   DecompressionStream браузера). Таблицы — по листам «## Лист «имя»» и строками «a | b | c», даты — ДД.ММ.ГГГГ. Скан PDF
+   без текста — понятной просьбой прислать фото страницы. -> текст (может быть пустым). */
+const DOC_RX = /\.(pdf|docx|xlsx|xlsm|pptx|odt|ods)$/i;
+async function zipEntries(buf) {
+  const v = new DataView(buf), u8 = new Uint8Array(buf);
+  let e = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 66000); i--) if (v.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error("файл повреждён или это не документ Office");
+  const n = v.getUint16(e + 10, true); let off = v.getUint32(e + 16, true); const out = {};
+  const dec = new TextDecoder();
+  for (let k = 0; k < n; k++) {
+    if (v.getUint32(off, true) !== 0x02014b50) break;
+    const method = v.getUint16(off + 10, true), csize = v.getUint32(off + 20, true), usize = v.getUint32(off + 24, true);
+    const nl = v.getUint16(off + 28, true), xl = v.getUint16(off + 30, true), cl = v.getUint16(off + 32, true), lho = v.getUint32(off + 42, true);
+    const name = dec.decode(u8.subarray(off + 46, off + 46 + nl));
+    out[name] = { method, csize, usize, lho };
+    off += 46 + nl + xl + cl;
+  }
+  out.__read = async (name) => {
+    const z = out[name]; if (!z || z.usize > 64e6) return null;
+    const s = z.lho + 30 + v.getUint16(z.lho + 26, true) + v.getUint16(z.lho + 28, true), data = u8.subarray(s, s + z.csize);
+    if (z.method === 0) return dec.decode(data);
+    if (z.method !== 8) return null;
+    const st = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return await new Response(st).text();
+  };
+  return out;
+}
+const xmlUn = (t) => String(t || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&amp;/g, "&");
+const tagTexts = (xml, tag) => [...String(xml).matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, "g"))].map(m => xmlUn(m[1]));
+function sheetsRender(sheets) {
+  return sheets.map(([title, rows]) => {
+    rows = rows.filter(r => r.some(Boolean)); if (!rows.length) return "";
+    return `## Лист «${title}» · строк ${rows.length}\n` + rows.map(r => r.join(" | ")).join("\n");
+  }).filter(Boolean).join("\n\n");
+}
+function xlsDate(v, d1904) {
+  const f = +v; if (!isFinite(f)) return v;
+  const d = new Date(Date.UTC(d1904 ? 1904 : 1899, d1904 ? 0 : 11, d1904 ? 1 : 30) + Math.round(f * 86400e3));
+  const p = (x) => String(x).padStart(2, "0"), day = `${p(d.getUTCDate())}.${p(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
+  return Math.abs(f - Math.floor(f)) < 1e-9 ? day : f < 1 ? `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}` : `${day} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+const xlsNum = (v) => { const f = +v; return !isFinite(f) ? v : (Number.isInteger(f) ? String(f) : String(+f.toPrecision(10))); };
+async function xlsxText(z) {
+  const shared = z["xl/sharedStrings.xml"] ? [...(await z.__read("xl/sharedStrings.xml")).matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)]
+    .map(m => tagTexts(m[1].replace(/<rPh\b[\s\S]*?<\/rPh>/g, ""), "t").join("")) : [];
+  const wb = await z.__read("xl/workbook.xml") || "", d1904 = /date1904="(1|true)"/.test(wb);
+  const rels = {}; for (const m of String(await z.__read("xl/_rels/workbook.xml.rels") || "").matchAll(/<Relationship\b([^>]*)\/?>/g)) {
+    const id = (m[1].match(/Id="([^"]+)"/) || [])[1], t = (m[1].match(/Target="([^"]+)"/) || [])[1];
+    if (id && t) rels[id] = t.replace(/^\//, "").startsWith("xl/") ? t.replace(/^\//, "") : "xl/" + t.replace(/^\//, "");
+  }
+  const st = String(await z.__read("xl/styles.xml") || ""), custom = {};
+  for (const m of st.matchAll(/<numFmt\b[^>]*numFmtId="(\d+)"[^>]*formatCode="([^"]*)"/g)) {
+    const c = xmlUn(m[2]).replace(/"[^"]*"|\[[^\]]*\]|\\./g, "").toLowerCase(); custom[m[1]] = /[dmyдмг]/.test(c) && !/0[.,]0|#/.test(c);
+  }
+  const xfs = (st.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/) || [])[1] || "", dates = new Set();
+  [...xfs.matchAll(/<xf\b([^>]*)\/?>/g)].forEach((m, i) => { const id = +((m[1].match(/numFmtId="(\d+)"/) || [])[1] || 0);
+    if ((id >= 14 && id <= 22) || (id >= 45 && id <= 47) || custom[id]) dates.add(i); });
+  const sheets = [];
+  for (const m of wb.matchAll(/<sheet\b([^>]*)\/?>/g)) {
+    if (/state="(hidden|veryHidden)"/.test(m[1])) continue;
+    const nm = xmlUn((m[1].match(/name="([^"]*)"/) || [])[1] || ""), rid = (m[1].match(/r:id="([^"]+)"/) || [])[1], path = rels[rid];
+    const x = path && await z.__read(path); if (!x) continue;
+    const rows = [];
+    for (const r of x.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+      const cells = [];
+      for (const c of r[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const a = c[1], body = c[2] || "", ref = (a.match(/\br="([A-Z]+)\d+"/) || [])[1];
+        const col = ref ? [...ref].reduce((s, ch) => s * 26 + ch.charCodeAt(0) - 64, 0) - 1 : cells.length; if (col >= 60) continue;
+        const t = (a.match(/\bt="(\w+)"/) || [])[1] || "n"; let v = xmlUn((body.match(/<v\b[^>]*>([\s\S]*?)<\/v>/) || [])[1] || "");
+        if (t === "s") v = shared[+v] || ""; else if (t === "inlineStr") v = tagTexts(body, "t").join("");
+        else if (t === "b") v = v === "1" ? "да" : v === "0" ? "нет" : v;
+        else if (t === "n" && v !== "") { const s = (a.match(/\bs="(\d+)"/) || [])[1]; v = s != null && dates.has(+s) ? xlsDate(v, d1904) : xlsNum(v); }
+        cells[col] = String(v).replace(/\s*\n\s*/g, " ").replace(/\|/g, "/").trim();
+      }
+      rows.push(Array.from(cells, x => x || ""));
+      if (rows.length >= 20000) break;
+    }
+    sheets.push([nm, rows]);
+  }
+  return sheetsRender(sheets);
+}
+async function odfText(z, calc) {
+  const x = await z.__read("content.xml") || "";
+  if (!calc) return tagTexts(x.replace(/<text:h\b/g, "<text:p").replace(/<\/text:h>/g, "</text:p>"), "text:p").map(t => t.replace(/<[^>]+>/g, "")).filter(Boolean).join("\n");
+  const sheets = [];
+  for (const t of x.matchAll(/<table:table\b([^>]*)>([\s\S]*?)<\/table:table>/g)) {
+    const rows = [];
+    for (const r of t[2].matchAll(/<table:table-row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/table:table-row>)/g)) {
+      const cells = [];
+      for (const c of (r[2] || "").matchAll(/<table:(?:covered-)?table-cell\b([^>]*?)(?:\/>|>([\s\S]*?)<\/table:(?:covered-)?table-cell>)/g)) {
+        const a = c[1]; let v = "";
+        const dv = (a.match(/office:date-value="([^"]+)"/) || [])[1];
+        if (dv) { const d = dv.match(/^(\d{4})-(\d\d)-(\d\d)(?:T(\d\d):(\d\d))?/); v = d ? `${d[3]}.${d[2]}.${d[1]}` + (d[4] && d[4] + d[5] !== "0000" ? ` ${d[4]}:${d[5]}` : "") : dv; }
+        if (!v) v = tagTexts(c[2] || "", "text:p").map(s => s.replace(/<[^>]+>/g, "")).join(" ");
+        const rep = Math.min(+((a.match(/number-columns-repeated="(\d+)"/) || [])[1] || 1), 60);
+        for (let i = 0; i < rep && cells.length < 60; i++) cells.push(v.replace(/\|/g, "/").trim());
+      }
+      while (cells.length && !cells[cells.length - 1]) cells.pop();
+      const rr = Math.min(+((r[1].match(/number-rows-repeated="(\d+)"/) || [])[1] || 1), cells.length ? 50 : 1);
+      for (let i = 0; i < rr; i++) rows.push(cells);
+      if (rows.length >= 20000) break;
+    }
+    sheets.push([xmlUn((t[1].match(/table:name="([^"]*)"/) || [])[1] || "Лист"), rows]);
+  }
+  return sheetsRender(sheets);
+}
+let pdfLib = null;
+function pdfLoad() {
+  if (pdfLib) return pdfLib;
+  pdfLib = new Promise((ok, no) => {
+    if (window.pdfjsLib) return ok(window.pdfjsLib);
+    const s = document.createElement("script"); s.src = window.DEWIAR_PDFJS_SRC || "vendor/pdf.min.js";
+    s.onload = () => { const L = window.pdfjsLib; if (!L) return no(new Error("чтение PDF не загрузилось"));
+      L.GlobalWorkerOptions.workerSrc = s.src.replace(/pdf\.min\.js$/, "pdf.worker.min.js"); ok(L); };
+    s.onerror = () => { pdfLib = null; no(new Error("чтение PDF не загрузилось")); };
+    document.head.appendChild(s);
+  });
+  return pdfLib;
+}
+async function pdfText(buf) {
+  const L = await pdfLoad();
+  const doc = await L.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, disableFontFace: true, useSystemFonts: false }).promise;
+  const out = []; let len = 0;
+  for (let i = 1; i <= Math.min(doc.numPages, 500) && len < 2e6; i++) {
+    const tc = await (await doc.getPage(i)).getTextContent();
+    let line = "", lines = [];
+    for (const it of tc.items) { line += it.str; if (it.hasEOL) { lines.push(line); line = ""; } }
+    if (line) lines.push(line);
+    const t = lines.join("\n").replace(/[ \t]+\n/g, "\n").trim();
+    if (t) { out.push(`— стр. ${i} —\n${t}`); len += t.length; }
+  }
+  return { text: out.join("\n\n"), pages: doc.numPages };
+}
+async function docText(f) {
+  const ext = ((f.name || "").match(DOC_RX) || [])[1] || (/pdf/.test(f.type) ? "pdf" : "");
+  const buf = await f.arrayBuffer();
+  if (ext.toLowerCase() === "pdf") {
+    const r = await pdfText(buf);
+    if (!r.text.trim()) throw new Error(`в PDF нет текста — похоже, это скан (${r.pages} стр.). Пришлите фото нужной страницы — я её прочитаю`);
+    return r.text;
+  }
+  const z = await zipEntries(buf), e = ext.toLowerCase();
+  if (e === "docx") return tagTexts(await z.__read("word/document.xml") || "", "w:p").map(p => tagTexts(p, "w:t").join("")).filter(Boolean).join("\n");
+  if (e === "xlsx" || e === "xlsm") return xlsxText(z);
+  if (e === "pptx") {
+    const sl = Object.keys(z).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => +a.match(/(\d+)\.xml/)[1] - +b.match(/(\d+)\.xml/)[1]);
+    const out = []; for (const [i, n] of sl.entries()) out.push(`## Слайд ${i + 1}\n` + tagTexts(await z.__read(n), "a:p").map(p => tagTexts(p, "a:t").join("")).filter(Boolean).join("\n"));
+    return out.join("\n\n");
+  }
+  if (e === "odt" || e === "ods") return odfText(z, e === "ods");
+  throw new Error("такой документ не открыть");
+}
 async function addAttach(f) {
   if (attached.length >= ATT_MAX) { toast(`Не больше ${ATT_MAX} вложений за раз`); return; }
   try {
     if (/^image\//.test(f.type)) attached.push({ kind: "image", name: f.name || "фото", url: await shrinkImage(f) });
     else if (/^text\/|json|csv|xml|markdown/.test(f.type) || /\.(txt|md|csv|json|log|xml|html?)$/i.test(f.name || "")) {
       const t = await f.text(); attached.push({ kind: "text", name: f.name || "файл", text: t.slice(0, ATT_TEXT), cut: t.length > ATT_TEXT });
-    } else toast(/pdf|word|officedocument/.test(f.type) ? "PDF и Word телефон пока не читает — пришлите фото страницы или текст" : "Такой файл не открыть — подойдут фото и текстовые файлы", 4000);
+    } else if (DOC_RX.test(f.name || "") || /pdf|officedocument|opendocument/.test(f.type)) {
+      if (f.size > 25e6) { toast("Файл больше 25 МБ — пришлите часть или нужные страницы фото"); return; }
+      toast("Читаю «" + (f.name || "документ") + "»…", 1500);
+      const t = await docText(f);
+      if (!t.trim()) { toast("В документе нет текста — пришлите фото нужной страницы"); return; }
+      attached.push({ kind: "text", name: f.name || "документ", text: t.slice(0, ATT_TEXT), cut: t.length > ATT_TEXT });
+    } else toast(/msword|ms-excel|ms-powerpoint/.test(f.type) || /\.(doc|xls|ppt)$/i.test(f.name || "") ? "Старый формат Office — сохраните как .docx, .xlsx или .pptx (или пришлите фото страницы)" : "Такой файл не открыть — подойдут фото, тексты, PDF, Word и Excel");
   } catch (e) { toast("Не получилось открыть: " + e.message); }
 }
 function renderAtts() {
@@ -396,6 +559,7 @@ $("#att-file").onchange = async (e) => {
 };
 const sendTyped = () => {
   const t = $("#typed").value.trim(); if (!t && !attached.length) return;
+  fsMark("type");
   const att = attached; attached = []; renderAtts();
   $("#typed").value = ""; typedGrow(); $("#typed").blur();
   ask(t || (att.some(a => a.kind === "image") ? "Посмотри, пожалуйста." : "Посмотри этот файл."), att.length ? { attach: att } : {});

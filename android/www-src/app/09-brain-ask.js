@@ -18,7 +18,7 @@ const VISION_HINT = "К сообщению приложено фото. Если
 const LISTEN_LEAD = /^\s*(?:слушай(?:те)?|послушай(?:те)?|слышь|смотри|короче)\s*[,!.—–-]*\s+(?=(?:\S+\s+){3}\S)/i;
 async function ask(text, opts = {}) {
   text = String(text || "").trim(); if (!text) return;
-  if (!opts.hidden) { lastUserAct = Date.now(); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
+  if (!opts.hidden) { lastUserAct = Date.now(); fsMark("ask"); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
   stopListen(); interrupt(true);
   if (!opts.hidden && !(opts.attach || []).length && PHOTO_NOW_RX.test(text)) {
     showYou(text); setState("thinking"); showBot("Включаю камеру — держите телефон ровно", "wait");
@@ -323,7 +323,7 @@ async function ask(text, opts = {}) {
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }
     if (turnAbort === ctl) frameAnswer(sink.text() || final);
-    netRecovered(); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
+    netRecovered(); fsMark("answer"); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
     if (isRefused(sink.text() || final)) hCount("refused");
     if (S.llm.cloud) setTimeout(() => cloudBalance(false).catch(() => {}), 1500);
   } catch (e) {
@@ -339,6 +339,7 @@ async function ask(text, opts = {}) {
       } catch (x) { console.log("облако по аккаунту: " + x.message); }
       if (moved) { busy = false; turnAbort = null; return ask(text, Object.assign({}, opts, { fallback: true })); }
     }
+    fsMark("fail");
     if (e.net) netIncident(e);                          // повторы — уже в round1 (по кругу, без повторных действий)
     else { hCount("net_fail"); hWhy(e.message); }       // не сеть, а отказ (ключ, заряд, тариф, «много людей») — тоже не ответил
     if (e.topup) {                                      // 0.82.1: талеры кончились — коротко, кнопка «Пополнить», ссылку вслух не читаем

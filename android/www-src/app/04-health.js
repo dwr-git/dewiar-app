@@ -65,6 +65,25 @@ function hProblem(text) {
   if (!h.problems[sig] && Object.keys(h.problems).length >= 30) return;
   const p = h.problems[sig] = h.problems[sig] || { text, n: 0 }; p.n++; p.text = text; h.errors = (h.errors || 0) + 1; hSave(h);
 }
+/* «Первая минута» (19.11, владелец: «бережно улучшать»; воронка: 289 из 878 новых телефонов закрыли приложение за 10 минут,
+   ни о чём не спросив, — и после 1.0.26 доля та же, 33 %). Что человек успел за первый запуск — только события и секунды от
+   старта (без текстов): приветствие какого вида, подсказки, нажал подсказку / микрофон / написал, разрешил ли микрофон,
+   подключился ли мозг сам, пришёл ли ответ, открыл ли настройки, когда ушёл. Окно — первые 10 минут первого запуска;
+   ушёл раньше минуты — пульс уходит сразу (иначе такие запуски не видны вовсе). В пульс — first. */
+const FS_ON = !prefGet("h_seen") && !prefGet("fs_done");
+const FS_KEYS = ["greet", "tries", "try", "ask", "mic", "mic_ok", "mic_no", "type", "settings", "brain", "brain_no", "answer", "fail", "hide"];
+let fsSent = false;
+function fsSec() { return Math.round((Date.now() - H_T0) / 1000); }
+function fsMark(e, kind) {
+  if (!FS_ON || !FS_KEYS.includes(e) || fsSec() > 600) return;
+  const h = hLoad(), f = h.first = h.first || {};
+  if (!(e in f)) { f[e] = fsSec(); if (kind && /^[a-z]{2,10}$/.test(kind)) f.kind = kind; hSave(h); }
+}
+if (FS_ON) document.addEventListener("visibilitychange", () => {
+  if (!document.hidden || fsSec() > 600) return;
+  fsMark("hide");
+  if (!fsSent && fsSec() < 70) { fsSent = true; pulseSend().catch(() => {}); }   // ушёл раньше первого пульса (через минуту)
+});
 function hReady() {                                       // приложение готово слушать — запуск записан (для «Запуск» в «Здоровье»)
   const h = hLoad(), first = !prefGet("h_seen");
   h.starts = (h.starts || []).slice(-9).concat([{ ts: Math.round(Date.now() / 1000), ready_s: Math.round((Date.now() - H_T0) / 100) / 10, cpu: 0, first }]);
@@ -90,7 +109,7 @@ async function pulseSend() {
     net_fail: h.net_fail || 0, net_why: h.net_why || {}, errors: h.errors || 0, rude: h.rude || 0, refused: h.refused || 0, problems: Object.entries(h.problems || {}).map(([sig, p]) => ({ sig, text: p.text, n: p.n })),
     voice: Object.assign({}, h.voice || {}, { tts_engine: S.tts.engine || "", tts_ready: ttsOk() ? 1 : 0, text_mode: S.textMode ? 1 : 0,
       stt_engine: S.stt.engine || "", recognizer: D.recognizer() ? 1 : 0, vol: (() => { try { return D.volume("get", 0); } catch (e) { return -1; } })() }),
-    pcache: h.pcache || {}, uses: h.uses || {} };
+    pcache: h.pcache || {}, uses: h.uses || {}, first: h.first || undefined };
   let r; try { r = await http("POST", healthBase() + "?p=/pulse", { headers: { "Content-Type": "application/json" }, body, timeout: 20000 }); }
   catch (e) { console.log("💓 пульс не ушёл: " + (e.message || e)); return false; }
   if (r.status >= 400) return false;
@@ -106,6 +125,7 @@ async function pulseSend() {
     for (const [kind, v] of Object.entries(body.pcache.by || {})) { const b = (now.pcache.by || {})[kind]; if (b) { for (let i = 0; i < 3; i++) b[i] = Math.max(0, b[i] - v[i]); if (!b[0]) delete now.pcache.by[kind]; } }
     if (!now.pcache.n) delete now.pcache;
   }
+  if (now.first && fsSec() > 600) { delete now.first; prefSet("fs_done", "1"); }   // окно первой минуты кончилось и ушло — больше не шлём
   hSave(now); prefSet("pulse_at", String(Date.now()));
   console.log(`💓 Пульс отправлен: запусков ${body.starts.length}, ответов ${body.turns}, сбоев ${body.problems.length}`);
   try { const d = JSON.parse(r.body || "{}"); if (d.exam && typeof examOffer === "function") examOffer(d.exam); } catch (e) { }   // экзамен из кабинета

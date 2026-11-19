@@ -192,18 +192,18 @@ const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы при
   const last = history.filter(m => m.role === "assistant").slice(-1)[0];
   if (D.web && (S.llm.trial || trialOn()) && !loggedIn()) {
     // веб-версия без входа: говорим сразу (пробный разговор); войти — без ограничений и с действиями
-    showBot(gfix(`Привет! Я ${persona().name}. Давайте поговорим прямо сейчас — без входа и установки. Нажмите на меня и говорите или напишите.`));
+    showBot(gfix(`Привет! Я ${persona().name}. Давайте поговорим прямо сейчас — без входа и установки. Нажмите на меня и говорите или напишите.`)); fsMark("greet", "web");
     showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — подробные ответы и дела</button>${legalLine()}</div>`);
   } else if (!S.llm.base_url && !loggedIn() && autoOk() && !(S.join && !S.join.auto) && trialOn()) {
     // 0.69, первый запуск: говорим сразу (пробный разговор), бесплатный мозг Dewiar подключается сам — без анкеты
-    greet(gfix(`Привет! Я ${persona().name}. Спросите о чём угодно — нажмите на вопрос ниже или на меня и говорите. На старте — подарок.`));
+    greet(gfix(`Привет! Я ${persona().name}. Спросите о чём угодно — нажмите на вопрос ниже или на меня и говорите. На старте — подарок.`)); fsMark("greet", "auto");
     showCard(`<div class="start" data-first="1"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button>${legalLine()}</div>`);
-    setTimeout(() => autoJoin("первый запуск").then(ok => { if (ok) showCard(""); }), 1200);
+    setTimeout(() => autoJoin("первый запуск").then(ok => { fsMark(ok ? "brain" : "brain_no"); if (ok) showCard(""); }), 1200);
   } else if (!S.llm.base_url && !loggedIn()) {
     // первый запуск: одна понятная кнопка (отзыв: «не понимаю, как ей мозг включить») — бесплатная проба Dewiar;
     // своя модель, ключ сервиса и код с другого устройства — второй кнопкой
     if (S.join) { showBot(gfix(`Привет! Я ${persona().name}. Заявка отправлена — как только её одобрят, я подключусь сама и скажу. Обычно это быстро.`)); setTimeout(() => joinPoll(false).catch(() => {}), 2500); }
-    else showBot(gfix(`Привет! Я ${persona().name}. Чтобы мы могли поговорить, меня нужно один раз подключить — без регистрации, на старте подарок. Это займёт минуту.`));
+    else { showBot(gfix(`Привет! Я ${persona().name}. Чтобы мы могли поговорить, меня нужно один раз подключить — без регистрации, на старте подарок. Это займёт минуту.`)); fsMark("greet", "join"); }
     showCard(S.join ? `<div class="row2"><button class="btn p" onclick="joinPoll(true).then(d => d && !d.key && toast((d && d.text) || 'Пока ждёт проверки')).catch(e => toast(e.message))" style="flex:1">Проверить</button><button class="btn" onclick="openBrain()" style="flex:1">Другие способы</button></div>`
       : `<div class="start" data-first="1"><button class="btn p w" onclick="openBrain('join')">Подключить мозг Dewiar</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button>${legalLine()}</div>`); }
   // последний ответ — только свежий (до 20 минут): старый («С возвращением. В 15:00 встреча…» с утра) после каждого

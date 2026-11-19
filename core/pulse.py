@@ -134,6 +134,22 @@ def list_devices():
     return out
 
 
+def defaults():
+    """-> (выход по умолчанию, вход по умолчанию) — имена устройств сервера звука."""
+    with control() as p:
+        i = p.server_info()
+        return i.default_sink_name or "", i.default_source_name or ""
+
+
+def set_defaults(sink="", source=""):
+    """Вернуть выход и/или вход по умолчанию (пустое — не трогать)."""
+    with control() as p:
+        if sink:
+            p.sink_default_set(sink)
+        if source:
+            p.source_default_set(source)
+
+
 def has_source(name):
     with control() as p:
         return any(s.name == name for s in p.source_list())

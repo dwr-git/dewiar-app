@@ -515,10 +515,11 @@ function triesCheck(quiet) {
     const list = g ? triesList().filter((_, i) => i === 0 || i === 2 || i === 4) : triesList();
     box.innerHTML = (g ? "" : `<p class="th">Попробуйте сказать — или нажмите</p>`) + `<div class="tlist">${list.map(q => `<button class="tq" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`
       + `<button class="lnk tx" id="tries-x">Больше не показывать</button>`;
-    box.querySelectorAll(".tq").forEach(b => b.onclick = () => ask(b.dataset.q));
+    box.querySelectorAll(".tq").forEach(b => b.onclick = () => { fsMark("try"); ask(b.dataset.q); });
     $("#tries-x").onclick = () => { triesState().off = true; saveS(); quietCheck(); };
   }
   box.hidden = !show;
+  if (show) fsMark("tries");
   $("#stage").classList.toggle("tries", show);
 }
 /* Убрать сказанное с экрана: крестик или смахнуть вбок. Разговор не забывается — только экран (23.10). */

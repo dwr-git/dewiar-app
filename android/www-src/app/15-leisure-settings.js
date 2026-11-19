@@ -250,7 +250,7 @@ const ICON = {
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg>',
 };
 let setTab = "brain";
-function openSettings(tab) { if (kidsLocked()) { kidsPin(() => openSettings(tab)); return; } if (!$("#sh-set").classList.contains("on")) bugSnapTake(); setTab = tab || setTab; renderSettings(); openSheet("#sh-set"); }
+function openSettings(tab) { fsMark("settings"); if (kidsLocked()) { kidsPin(() => openSettings(tab)); return; } if (!$("#sh-set").classList.contains("on")) bugSnapTake(); setTab = tab || setTab; renderSettings(); openSheet("#sh-set"); }
 $("#b-set").onclick = () => openSettings("menu");
 if ($("#bal")) $("#bal").onclick = (e) => { e.stopPropagation(); openTopup(); };                // значок баланса у имени персонажа (0.82.1) — сразу «Пополнить»
 /* «Всё» (0.60; владелец 28.10: «сверху иконок многовато»): Досуг, Душа, Работа, Идеи, обучение — плитками в одном листе,

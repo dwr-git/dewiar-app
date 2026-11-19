@@ -25,7 +25,8 @@ class MicMixin:
             # №370 (28.10, Linux Mint, веб-камера C920): эхоподавление отдавало одни нули и после переоткрытия — тогда до
             # перезапуска программы слушаем микрофон напрямую (_aec_bypass ставит _mic_zero_step)
             use_aec = a["echo_cancel"] and not getattr(self, "_aec_bypass", False) and self.aec.setup(a["input"], a["output"])
-        headphones = bool(a.get("headphones")) and not use_aec
+        # №339: Bluetooth-наушники (EchoCancel.bt) — как «Я в наушниках»: эха нет, перебивать можно
+        headphones = (bool(a.get("headphones")) or bool(getattr(self.aec, "bt", False) and not self.wav_input)) and not use_aec
         self.status["aec"] = bool(use_aec) or headphones        # «можно слушать во время ответа»: в наушниках эха нет
         self.status["headphones"] = headphones
         # №543: «наушники» — это слово человека, а не проверенное эхоподавление (Windows, звук шёл в колонки

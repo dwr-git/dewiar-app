@@ -272,6 +272,47 @@ class EchoCancel:
     def __init__(self):
         self.module_id = None
         self.active = False
+        self.bt = False                     # звук идёт в Bluetooth-наушники: эха нет, модуль не грузим (№339)
+
+    @staticmethod
+    def _defaults():
+        """-> (выход, вход) по умолчанию сервера звука или ("", "")."""
+        try:
+            if _pulsectl_ok():
+                return pulse.defaults()
+            code, text, _ = _run(["pactl", "info"])
+            if code == 0:
+                sink = re.search(r"^Default Sink:\s*(\S+)", text, re.M)
+                src = re.search(r"^Default Source:\s*(\S+)", text, re.M)
+                return (sink.group(1) if sink else ""), (src.group(1) if src else "")
+        except Exception:  # noqa: BLE001
+            pass
+        return "", ""
+
+    @staticmethod
+    def _set_defaults(sink="", source=""):
+        try:
+            if _pulsectl_ok():
+                pulse.set_defaults(sink, source)
+                return
+            if sink:
+                _run(["pactl", "set-default-sink", sink])
+            if source:
+                _run(["pactl", "set-default-source", source])
+        except Exception as e:  # noqa: BLE001
+            log.warning("Не вернул звук по умолчанию (%s): %s", sink or source, e)
+
+    def _keep_defaults(self, was):
+        """№339 (19.11, Debian, Bluetooth): после загрузки модуля эхоподавления сервер звука иногда делает его выход и вход
+        «по умолчанию» (module-switch-on-connect) — весь звук компьютера шёл через Dewiar и пропадал, когда наушники меняли
+        профиль. Лира играет в свой выход по имени, поэтому общий выход и вход возвращаем как были."""
+        sink0, src0 = was
+        sink1, src1 = self._defaults()
+        back_sink = sink0 if sink0 and sink1 == AEC_SINK and sink0 != AEC_SINK else ""
+        back_src = src0 if src0 and src1 == AEC_SOURCE and src0 != AEC_SOURCE else ""
+        if back_sink or back_src:
+            self._set_defaults(back_sink, back_src)
+            log.info("Эхоподавление: звук компьютера по умолчанию оставлен прежним (%s)", ", ".join(x for x in (back_sink, back_src) if x))
 
     def setup(self, source_master="", sink_master=""):
         if MAC:
@@ -286,6 +327,15 @@ class EchoCancel:
                          "(в наушниках включите «Я в наушниках»)")
                 EchoCancel._said = True
             return False
+        was = self._defaults()
+        if "bluez" in (sink_master or was[0]).lower():
+            # №339: Bluetooth-наушники — эха нет, а модуль поверх них при смене профиля (микрофон наушников) оставлял
+            # компьютер без звука. Слушаем как в наушниках: можно перебивать, модуль не грузим
+            if not self.bt:
+                log.info("Звук — в Bluetooth-наушники (%s): эхоподавление не нужно, звук компьютера не трогаю", sink_master or was[0])
+            self.bt = True
+            return False
+        self.bt = False
         if _pulsectl_ok():
             try:
                 if pulse.has_source(AEC_SOURCE):
@@ -303,6 +353,7 @@ class EchoCancel:
                 except Exception:  # noqa: BLE001 — сервер не понял настройки усиления (AEC_ARGS): загружаем без них
                     self.module_id = str(pulse.load_module("module-echo-cancel", args))
                 self.active = True
+                self._keep_defaults(was)
                 log.info("Эхоподавление WebRTC включено (модуль %s)", self.module_id)
                 return True
             except Exception as e:  # noqa: BLE001
@@ -332,6 +383,7 @@ class EchoCancel:
             return False
         self.module_id = text.strip()
         self.active = True
+        self._keep_defaults(was)
         log.info("Эхоподавление WebRTC включено (модуль %s)", self.module_id)
         return True
 

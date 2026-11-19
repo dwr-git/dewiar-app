@@ -11,7 +11,7 @@ import updater as UP  # noqa: E402
 fails = 0
 def ok(c, m):
     global fails
-    print(("ok  " if c else "FAIL"), m)
+    print(("✅ " if c else "❌ ") + m)
     fails += not c
 
 class S:
