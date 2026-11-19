@@ -221,17 +221,29 @@ def seamless(win):
     _main(run)
 
 
+def _is_webview(v):
+    """WKWebView или его наследник: у pywebview класс называется WebKitHost (№900, 19.11: «отступ снят у 0» — по имени
+    класса с «WebView» его было не найти). Узнаём по умению выполнять JavaScript."""
+    if v is None:
+        return False
+    n = type(v).__name__
+    return "WebView" in n or "WebKit" in n or hasattr(v, "evaluateJavaScript_completionHandler_")
+
+
 def _webviews(win, root):
     """WKWebView окна: у pywebview (native.webview) и среди вложенных видов contentView."""
     out, seen = [], set()
 
     def add(v):
-        if v is not None and id(v) not in seen and "WebView" in type(v).__name__:
+        if _is_webview(v) and id(v) not in seen:
             seen.add(id(v)); out.append(v)
-    add(getattr(getattr(win, "native", None), "webview", None))
-    stack = [root] if root is not None else []
-    while stack and len(seen) < 50:
+    nat = getattr(win, "native", None)
+    add(getattr(nat, "webview", None))
+    add(getattr(getattr(nat, "native", None), "webview", None))
+    stack, visited = ([root] if root is not None else []), 0
+    while stack and visited < 400:
         v = stack.pop()
+        visited += 1
         add(v)
         try:
             stack.extend(list(v.subviews() or []))
@@ -254,6 +266,11 @@ def _no_insets(win, root):
                     getattr(wv, name)(arg); done = True
                 except Exception:  # noqa: BLE001
                     pass
+        try:                                                    # и рамка — во всё окно, под строку заголовка
+            if root is not None and hasattr(wv, "setFrame_") and wv.superview() is root:
+                wv.setFrame_(root.bounds())
+        except Exception:  # noqa: BLE001
+            pass
         if hasattr(wv, "setObscuredContentInsets_"):           # macOS 26+: открытый способ
             try:
                 import AppKit

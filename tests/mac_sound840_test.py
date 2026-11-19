@@ -75,5 +75,21 @@ ok(("auto", False) in _wv_calls and ("top", 0.0) in _wv_calls, f"№898: WebView
 _wv_calls.clear()
 ok(macui._no_insets(_ty.SimpleNamespace(native=_ty.SimpleNamespace(webview=WKWebView())), None) == 1 and _wv_calls,
    "№898: WebView pywebview (native.webview) — тоже")
+
+
+# №900 (19.11, 1.0.42: «проблема та же», журнал — «отступ страницы снят у 0»): у pywebview класс WebView — WebKitHost
+class WebKitHost:
+    def evaluateJavaScript_completionHandler_(self, *a): pass
+    def _setAutomaticallyAdjustsContentInsets_(self, v): _wv_calls.append(("host-auto", v))
+    def subviews(self): return []
+
+
+class Root:
+    def subviews(self): return [type("NSView", (), {"subviews": lambda self: [WebKitHost()]})()]
+
+
+_wv_calls.clear()
+ok(macui._no_insets(_ty.SimpleNamespace(native=None), Root()) == 1 and ("host-auto", False) in _wv_calls,
+   f"№900: WebView pywebview (WebKitHost) находится и в глубине окна: {_wv_calls}")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)
