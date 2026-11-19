@@ -188,10 +188,21 @@ def _day(t, now):
         m = re.search(r"\b(?:на\s+)?" + w + r"\b", t)
         if m:
             return today + timedelta(days=d), (m.start(), m.end())
-    m = re.search(r"\b(?:в|во|на)\s+(понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)\b", t)
-    if m:
-        wd = next(i for p, i in WEEKDAYS if m.group(1).startswith(p))
+    # «в понедельник», «в следующий понедельник», «в ближайшую пятницу», «в эту среду» (19.11, владелец: «в следующий
+    # понедельник в 13 часов напомни…» ставилось на завтра — день со словом между «в» и днём не узнавался); «в пятницу на
+    # следующей неделе» / «на следующей неделе в пятницу» — день той недели
+    m = re.search(r"\b(?:(?:в|во|на)\s+)?(?:(следующ\w*|ближайш\w*|эт[оуи]\w*)\s+)?"
+                  r"(понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)\b", t)
+    if m and (m.group(1) or re.match(r"(?:в|во|на)\s", t[m.start():])):
+        wd = next(i for p, i in WEEKDAYS if m.group(2).startswith(p))
+        nw = re.search(r"\b(?:на\s+)?следующей\s+неделе\b", t)
+        if nw:                                                 # день следующей календарной недели
+            d = today + timedelta(days=7 - today.weekday() + wd)
+            a, b = min(m.start(), nw.start()), max(m.end(), nw.end())
+            return d, (a, b) if t[a:b].count(" ") < 9 else (m.start(), m.end())
         delta = (wd - today.weekday()) % 7
+        if (m.group(1) or "").startswith("следующ") and delta == 0:
+            delta = 7                                          # «в следующий четверг» в четверг — через неделю
         return today + timedelta(days=delta), (m.start(), m.end())
     m = re.search(r"\b(\d{1,2})(?:-?го)?\s+(январ|феврал|марта?|апрел|мая|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*", t)
     if m:
@@ -386,6 +397,11 @@ def _restore_case(what, original):
     return " ".join(orig.get(w, w) if not w.isdigit() else w for w in what.split())
 
 
+LEFT_DAY_RX = re.compile(r"\b(?:понедельник|вторник|сред[уаы]?\b|четверг|пятниц|суббот|воскресень|следующ\w*\s+(?:недел|месяц|год)|"
+                         r"на\s+(?:этой|той|следующей)\s+неделе|через\s+(?:неделю|месяц|год)\b|(?:после)?завтра\b|сегодня\b|"
+                         r"\d{1,2}\s*(?:январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр))")
+
+
 def parse(text, now=None):
     """Просьба напомнить -> {"text", "at", "repeat", "kind"} или None (формат — в шапке файла).
     Час без части суток: для напоминаний «в 3», когда 3:00 уже прошло, а 15:00 нет, — 15:00; для повторов 1–6 — днём;
@@ -506,6 +522,10 @@ def parse(text, now=None):
             rep["days"] = days
         when = next_time(rep, now)                     # внутри окна — через интервал, вне — в начале следующего
     what = _restore_case(_clean_text(_cut(rest, spans)), text)
+    if LEFT_DAY_RX.search(what.lower().replace("ё", "е")):
+        # в «о чём напомнить» остались слова о дне, которые разбор не понял («через неделю в понедельник», «на следующей
+        # неделе») — не угадываем дату, решает модель (19.11: «в следующий понедельник» уходило на завтра)
+        return None
     if not what:
         what = {"alarm": "Будильник", "timer": "Таймер"}.get(kind, "Напоминание")
     what = what[:1].upper() + what[1:]
