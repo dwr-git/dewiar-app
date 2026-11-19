@@ -12,9 +12,35 @@ function msgApp(w) {
   w = String(w || "").toLowerCase();
   return /^(тел|тг|tele)/.test(w) ? "telegram" : /^(ват|вот|вац|whats)/.test(w) ? "whatsapp" : /^(вай|viber)/.test(w) ? "viber" : /^(вк|вконт)/.test(w) ? "vk" : "max";
 }
-function sendTo(app, text) {
-  const m = MESSENGERS[app] || MESSENGERS.max; text = String(text || "").trim();
+/* Номер контакта — в международный вид для ссылок мессенджеров: 8 916… и 916… (10 цифр) — Россия; иначе как записан.
+   -> цифры без «+» или "" — номер не годится (короткий, без кода страны) */
+function intlPhone(num) {
+  let d = String(num || "").replace(/[^\d+]/g, "");
+  if (/^\+/.test(d)) return d.slice(1).replace(/\D/g, "").length >= 10 ? d.slice(1).replace(/\D/g, "") : "";
+  d = d.replace(/\D/g, "");
+  if (/^8\d{10}$/.test(d)) return "7" + d.slice(1);
+  if (/^9\d{9}$/.test(d)) return "7" + d;
+  return d.length >= 11 ? d : "";
+}
+/* Идея №4 (план улучшений 19.11, п. 5: «пишет в Telegram и MAX от вашего имени — с подтверждением каждого сообщения»):
+   «напиши Ане в телеграм: опоздаю на 10 минут» — открываем чат именно с Аней (по номеру из контактов), текст уже в поле;
+   «Отправить» нажимает человек — это и есть подтверждение. Telegram — ссылкой tg://resolve?phone=…&text=…, WhatsApp —
+   wa.me; MAX, Viber, VK ссылок на чат по номеру не дают — как раньше: приложение с текстом, получателя выбирает человек.
+   -> строка для человека / модели или {ask} — в контактах несколько похожих */
+async function sendTo(app, text, who) {
+  const m = MESSENGERS[app] || MESSENGERS.max; text = String(text || "").trim(); who = String(who || "").trim();
   if (!text) return "Нечего отправлять — скажите текст сообщения.";
+  if (who && (app === "telegram" || app === "whatsapp") && D.openUrl) {
+    const rel = typeof relOf === "function" ? relOf(who) : null, known = rel && (S.relations || {})[rel];   // «маме» — как для звонка
+    let c = known && known.number ? { name: known.name || REL_RU[rel], number: known.number } : JSON.parse(D.contact(rel ? REL_RU[rel] : who) || "{}");
+    if (c.need && await needPerm(CONTACTS)) c = JSON.parse(D.contact(rel ? REL_RU[rel] : who) || "{}");
+    if ((c.alts || []).length) return `В контактах несколько похожих: ${[c.name, ...c.alts.map(x => x.name)].slice(0, 4).join(", ")}. Кому написать? Скажите имя целиком.`;
+    const ph = intlPhone(c.number);
+    if (ph) {
+      const url = app === "telegram" ? `tg://resolve?phone=${ph}&text=${encodeURIComponent(text)}` : `https://wa.me/${ph}?text=${encodeURIComponent(text)}`;
+      if (D.openUrl(url)) return `Открыл чат с «${c.name}» в ${m.name}, текст уже в поле — осталось проверить и нажать «Отправить».`;
+    }
+  }
   for (const p of m.pkgs) if (D.shareTo && D.shareTo(p, text)) return `Открыл ${m.name} с текстом — выберите, кому отправить.`;
   D.share(text); return `${m.name} на телефоне не нашёлся — открыл выбор приложения.`;
 }

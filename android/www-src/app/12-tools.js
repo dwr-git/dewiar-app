@@ -261,8 +261,8 @@ function toolSpecs() {
       { name: "close_read", description: "Последние сообщения от близких (и мои им): «что мне писали», «что ответила мама»; группа — «что ответили в группе Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.", parameters: O({ who: STR }) }] : []),
     { name: "app_help", description: "Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить близкого или друга, сканер, стили, напоминания на часах, синхронизация, данные. Вызывай ПЕРВЫМ, когда спрашивают про Dewiar и его функции («как…», «где…», «есть ли у тебя…», «что ты умеешь…»: семейный бюджет, видеоуроки, близкие, устройства), — не выдумывай меню и не говори «такого нет», не проверив. query — о чём спросили.", parameters: O({ query: STR }, ["query"]) },
     { name: "scan_code", description: "Открыть сканер кодов камерой: QR, Aztec, печать Dewiar, штрихкоды и Data Matrix товаров. «Отсканируй код», «прочитай QR», «проверь честный знак». Результат обработается сам.", parameters: O({}) },
-    { name: "send_message", description: "Отправить текст через мессенджер: app — max (по умолчанию), telegram, whatsapp, viber, vk; text — готовый текст сообщения. Откроется приложение, получателя выберет пользователь.",
-      parameters: O({ app: { type: "string", enum: ["max", "telegram", "whatsapp", "viber", "vk"] }, text: STR }, ["text"]) },
+    { name: "send_message", description: "Отправить текст через мессенджер: app — max (по умолчанию), telegram, whatsapp, viber, vk; text — готовый текст сообщения; to — кому (имя из контактов, если человек его назвал). Telegram и WhatsApp откроют чат с этим человеком, текст уже в поле; в остальных получателя выберет пользователь. Отправляет всегда сам пользователь кнопкой.",
+      parameters: O({ app: { type: "string", enum: ["max", "telegram", "whatsapp", "viber", "vk"] }, text: STR, to: STR }, ["text"]) },
   ];
   if (typeof D.handsState === "function") t.push(...HANDS_TOOLS);
   // №528: «Я уже работаю на актуальной версии» — не проверив. Версия и обновление — только этим действием
@@ -619,7 +619,7 @@ async function runTool(name, a) {
     case "send_message": {
       // «Напиши Андрею…», а Андрея нет в «Близких» — сообщение откроется в мессенджере (получателя выберет человек), и
       // модели — сказать об этом честно (экзамен: «Готово, открыла MAX» — как будто Андрей уже получил)
-      const r = sendTo(a.app || "max", a.text || "");
+      const r = await sendTo(a.app || "max", a.text || "", a.to || "");
       return typeof r === "string" ? r + notCloseNote(turnAsk) : r;
     }
     case "ask_knowledge": return await askKnowledge(a.question || "", a.base || "");

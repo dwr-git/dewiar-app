@@ -214,10 +214,54 @@ def seamless(win):
             if cv is not None and hasattr(nw, "frame"):        # страница — под строку заголовка, во всю высоту окна
                 f = nw.frame()
                 cv.setFrameSize_((f.size.width, f.size.height))
-            log(f"строка заголовка студии: прозрачная (маска {int(nw.styleMask())})")
+            n = _no_insets(win, cv)
+            log(f"строка заголовка студии: прозрачная (маска {int(nw.styleMask())}; отступ страницы снят у {n})")
         except Exception as e:  # noqa: BLE001 — старый macOS: остаётся обычная строка заголовка
             log(f"строка заголовка студии: {e}")
     _main(run)
+
+
+def _webviews(win, root):
+    """WKWebView окна: у pywebview (native.webview) и среди вложенных видов contentView."""
+    out, seen = [], set()
+
+    def add(v):
+        if v is not None and id(v) not in seen and "WebView" in type(v).__name__:
+            seen.add(id(v)); out.append(v)
+    add(getattr(getattr(win, "native", None), "webview", None))
+    stack = [root] if root is not None else []
+    while stack and len(seen) < 50:
+        v = stack.pop()
+        add(v)
+        try:
+            stack.extend(list(v.subviews() or []))
+        except Exception:  # noqa: BLE001
+            pass
+    return out
+
+
+def _no_insets(win, root):
+    """№898 (19.11, Mac mini, macOS 27, 1.0.40: «полоса в студии осталась той же», в журнале — «прозрачная»): строка
+    заголовка прозрачная, но WKWebView сам отодвигает страницу под строку заголовка (automaticallyAdjustsContentInsets,
+    на macOS 26+ — obscuredContentInsets) — и сверху видна серая подложка окна. Снимаем этот отступ: страница — от самого
+    верха, место светофору даёт html.mac-seam. -> сколько WebView поправили."""
+    n = 0
+    for wv in _webviews(win, root):
+        done = False
+        for name, arg in (("_setAutomaticallyAdjustsContentInsets_", False), ("_setTopContentInset_", 0.0)):
+            if hasattr(wv, name):
+                try:
+                    getattr(wv, name)(arg); done = True
+                except Exception:  # noqa: BLE001
+                    pass
+        if hasattr(wv, "setObscuredContentInsets_"):           # macOS 26+: открытый способ
+            try:
+                import AppKit
+                wv.setObscuredContentInsets_(AppKit.NSEdgeInsets(0, 0, 0, 0)); done = True
+            except Exception:  # noqa: BLE001
+                pass
+        n += done
+    return n
 
 
 def work_area(x=None, y=None):

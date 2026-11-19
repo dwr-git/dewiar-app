@@ -3915,8 +3915,12 @@ async function quick(text) {
         return { say: `Напомню ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}: ${what}.`, card: alarmCard(x) }; }
     }
   }
-  if ((m = text.trim().match(/^(?:напиши|отправь|скинь|перешли)(?: сообщение)?\s+(?:в|во)\s+(макс\S*|max|телеграм\S*|тг|телег\S*|ватсап\S*|вотсап\S*|вацап\S*|whatsapp|вайбер\S*|viber|вк|вконтакте)[\s:,—-]+([\s\S]+)$/i)))
-    return { say: sendTo(msgApp(m[1]), m[2].trim()) };
+  // «напиши в телеграм: …» и «напиши Ане в телеграм: …» (идея №4: получатель — из контактов, «Отправить» нажимает человек)
+  if ((m = text.trim().match(/^(?:напиши|отправь|скинь|перешли)(?: сообщение)?(?:\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+)?))?\s+(?:в|во)\s+(макс\S*|max|телеграм\S*|тг|телег\S*|ватсап\S*|вотсап\S*|вацап\S*|whatsapp|вайбер\S*|viber|вк|вконтакте)[\s:,—-]+([\s\S]+)$/i)))
+    // версия с «руками» (Управлять приложениями) и назван получатель — как раньше решает модель: сама откроет чат и
+    // напишет, а если «руки» выключились — подскажет включить (android_hands, №529)
+    if (!(m[1] && typeof D.handsState === "function" && D.handsState() !== "none"))
+      return { say: await sendTo(msgApp(m[2]), m[3].trim().replace(/^(?:что|чтобы)\s+/i, ""), m[1] || "") };
   if (relAsk && Date.now() - relAsk.at < 90000 && t.split(/\s+/).length <= 5 && !/^(?:нет|не надо|отмена|не звони)/.test(t)) {
     // ответ на «Как жена записана в контактах?» — звоним и запоминаем
     const rel = relAsk.rel; relAsk = null;
@@ -4695,8 +4699,8 @@ function toolSpecs() {
       { name: "close_read", description: "Последние сообщения от близких (и мои им): «что мне писали», «что ответила мама»; группа — «что ответили в группе Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.", parameters: O({ who: STR }) }] : []),
     { name: "app_help", description: "Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить близкого или друга, сканер, стили, напоминания на часах, синхронизация, данные. Вызывай ПЕРВЫМ, когда спрашивают про Dewiar и его функции («как…», «где…», «есть ли у тебя…», «что ты умеешь…»: семейный бюджет, видеоуроки, близкие, устройства), — не выдумывай меню и не говори «такого нет», не проверив. query — о чём спросили.", parameters: O({ query: STR }, ["query"]) },
     { name: "scan_code", description: "Открыть сканер кодов камерой: QR, Aztec, печать Dewiar, штрихкоды и Data Matrix товаров. «Отсканируй код», «прочитай QR», «проверь честный знак». Результат обработается сам.", parameters: O({}) },
-    { name: "send_message", description: "Отправить текст через мессенджер: app — max (по умолчанию), telegram, whatsapp, viber, vk; text — готовый текст сообщения. Откроется приложение, получателя выберет пользователь.",
-      parameters: O({ app: { type: "string", enum: ["max", "telegram", "whatsapp", "viber", "vk"] }, text: STR }, ["text"]) },
+    { name: "send_message", description: "Отправить текст через мессенджер: app — max (по умолчанию), telegram, whatsapp, viber, vk; text — готовый текст сообщения; to — кому (имя из контактов, если человек его назвал). Telegram и WhatsApp откроют чат с этим человеком, текст уже в поле; в остальных получателя выберет пользователь. Отправляет всегда сам пользователь кнопкой.",
+      parameters: O({ app: { type: "string", enum: ["max", "telegram", "whatsapp", "viber", "vk"] }, text: STR, to: STR }, ["text"]) },
   ];
   if (typeof D.handsState === "function") t.push(...HANDS_TOOLS);
   // №528: «Я уже работаю на актуальной версии» — не проверив. Версия и обновление — только этим действием
@@ -5053,7 +5057,7 @@ async function runTool(name, a) {
     case "send_message": {
       // «Напиши Андрею…», а Андрея нет в «Близких» — сообщение откроется в мессенджере (получателя выберет человек), и
       // модели — сказать об этом честно (экзамен: «Готово, открыла MAX» — как будто Андрей уже получил)
-      const r = sendTo(a.app || "max", a.text || "");
+      const r = await sendTo(a.app || "max", a.text || "", a.to || "");
       return typeof r === "string" ? r + notCloseNote(turnAsk) : r;
     }
     case "ask_knowledge": return await askKnowledge(a.question || "", a.base || "");
@@ -10091,9 +10095,35 @@ function msgApp(w) {
   w = String(w || "").toLowerCase();
   return /^(тел|тг|tele)/.test(w) ? "telegram" : /^(ват|вот|вац|whats)/.test(w) ? "whatsapp" : /^(вай|viber)/.test(w) ? "viber" : /^(вк|вконт)/.test(w) ? "vk" : "max";
 }
-function sendTo(app, text) {
-  const m = MESSENGERS[app] || MESSENGERS.max; text = String(text || "").trim();
+/* Номер контакта — в международный вид для ссылок мессенджеров: 8 916… и 916… (10 цифр) — Россия; иначе как записан.
+   -> цифры без «+» или "" — номер не годится (короткий, без кода страны) */
+function intlPhone(num) {
+  let d = String(num || "").replace(/[^\d+]/g, "");
+  if (/^\+/.test(d)) return d.slice(1).replace(/\D/g, "").length >= 10 ? d.slice(1).replace(/\D/g, "") : "";
+  d = d.replace(/\D/g, "");
+  if (/^8\d{10}$/.test(d)) return "7" + d.slice(1);
+  if (/^9\d{9}$/.test(d)) return "7" + d;
+  return d.length >= 11 ? d : "";
+}
+/* Идея №4 (план улучшений 19.11, п. 5: «пишет в Telegram и MAX от вашего имени — с подтверждением каждого сообщения»):
+   «напиши Ане в телеграм: опоздаю на 10 минут» — открываем чат именно с Аней (по номеру из контактов), текст уже в поле;
+   «Отправить» нажимает человек — это и есть подтверждение. Telegram — ссылкой tg://resolve?phone=…&text=…, WhatsApp —
+   wa.me; MAX, Viber, VK ссылок на чат по номеру не дают — как раньше: приложение с текстом, получателя выбирает человек.
+   -> строка для человека / модели или {ask} — в контактах несколько похожих */
+async function sendTo(app, text, who) {
+  const m = MESSENGERS[app] || MESSENGERS.max; text = String(text || "").trim(); who = String(who || "").trim();
   if (!text) return "Нечего отправлять — скажите текст сообщения.";
+  if (who && (app === "telegram" || app === "whatsapp") && D.openUrl) {
+    const rel = typeof relOf === "function" ? relOf(who) : null, known = rel && (S.relations || {})[rel];   // «маме» — как для звонка
+    let c = known && known.number ? { name: known.name || REL_RU[rel], number: known.number } : JSON.parse(D.contact(rel ? REL_RU[rel] : who) || "{}");
+    if (c.need && await needPerm(CONTACTS)) c = JSON.parse(D.contact(rel ? REL_RU[rel] : who) || "{}");
+    if ((c.alts || []).length) return `В контактах несколько похожих: ${[c.name, ...c.alts.map(x => x.name)].slice(0, 4).join(", ")}. Кому написать? Скажите имя целиком.`;
+    const ph = intlPhone(c.number);
+    if (ph) {
+      const url = app === "telegram" ? `tg://resolve?phone=${ph}&text=${encodeURIComponent(text)}` : `https://wa.me/${ph}?text=${encodeURIComponent(text)}`;
+      if (D.openUrl(url)) return `Открыл чат с «${c.name}» в ${m.name}, текст уже в поле — осталось проверить и нажать «Отправить».`;
+    }
+  }
   for (const p of m.pkgs) if (D.shareTo && D.shareTo(p, text)) return `Открыл ${m.name} с текстом — выберите, кому отправить.`;
   D.share(text); return `${m.name} на телефоне не нашёлся — открыл выбор приложения.`;
 }
@@ -12958,6 +12988,9 @@ const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы при
   // последний ответ — только свежий (до 20 минут): старый («С возвращением. В 15:00 встреча…» с утра) после каждого
   // запуска и обновления выглядел как новое сообщение (отчёты №52, №53). Он в истории разговора — там его и видно.
   else if (last && last.t && Date.now() - last.t < 20 * 60e3) showBot(last.content.slice(0, 400));
+  // «Первая минута»: первый запуск, где мозг уже есть (вход в веб-версии, код с компьютера, перенос) или заявка ждёт
+  // одобрения, — тоже со своим видом (пакет 19.11 15:31: «приветствие: другое»)
+  if (FS_ON && !(hLoad().first || {}).kind) fsMark("greet", S.join && !S.llm.base_url ? "wait" : "ready");
   const it = D.takeIntent(); if (it) { try { handleIntent(JSON.parse(it)); } catch (e) { } }
   welcomeArm(!!it);                                // открыли кнопкой помощника — сразу слушаем, не здороваемся
   if (S.llm.base_url && !it) needPerm(MIC);

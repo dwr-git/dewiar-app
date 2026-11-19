@@ -57,5 +57,23 @@ macui.seamless(_ty.SimpleNamespace(native=_ty.SimpleNamespace(window=_NS())))
 ok("transparent" in _calls and ("sep", 1) in _calls and ("full", (1200, 800)) in _calls,
    f"№879: окно берётся и у обёртки pywebview; без линии; страница во всю высоту: {_calls}")
 ok("win.events.loaded += lambda *a: (seamless(win)" in mac, "№879: ещё раз — когда страница загрузилась")
+# №898 (19.11, macOS 27, 1.0.40: «полоса осталась», журнал — «прозрачная»): WKWebView сам отодвигал страницу под строку
+# заголовка (automaticallyAdjustsContentInsets) — серую подложку окна было видно. Отступ снимаем у WebView окна
+_wv_calls = []
+
+
+class WKWebView:
+    def _setAutomaticallyAdjustsContentInsets_(self, v): _wv_calls.append(("auto", v))
+    def _setTopContentInset_(self, v): _wv_calls.append(("top", v))
+    def subviews(self): return []
+
+
+_calls.clear()
+_ns = _NS(); _ns.contentView = lambda: _ty.SimpleNamespace(setFrameSize_=lambda x: None, subviews=lambda: [WKWebView()])
+macui.seamless(_ty.SimpleNamespace(native=_ty.SimpleNamespace(window=_ns)))
+ok(("auto", False) in _wv_calls and ("top", 0.0) in _wv_calls, f"№898: WebView не отодвигает страницу под строку заголовка: {_wv_calls}")
+_wv_calls.clear()
+ok(macui._no_insets(_ty.SimpleNamespace(native=_ty.SimpleNamespace(webview=WKWebView())), None) == 1 and _wv_calls,
+   "№898: WebView pywebview (native.webview) — тоже")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)
