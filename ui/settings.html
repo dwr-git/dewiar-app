@@ -2613,7 +2613,7 @@
         <option value="any_speech">Любым звуком речи — мгновенно</option>
         <option value="wakeword">Только именем или «стоп», «хватит», «пауза»</option>
         <option value="off">Не перебивать</option></select></label>
-      <div class="switch slim" id="soft-aec-row"><div>Перебивать без наушников (проба)<span>Ассистент сам вычитает свой голос из микрофона — можно перебить его просто речью, без наушников и без «стоп». Пока проба: если начнёт перебивать сам себя, выключите.</span></div><label class="tg"><input type="checkbox" data-k="audio.soft_aec"><i></i></label></div>
+      <div class="switch slim" id="soft-aec-row"><div>Перебивать ответ голосом<span>Начните говорить — ассистент замолчит и выслушает, как живой собеседник. Свой голос он сам вычитает из микрофона, наушники не нужны. Если он перебивает сам себя — выключите.</span></div><label class="tg"><input type="checkbox" data-k="audio.soft_aec"><i></i></label></div>
       <label class="f">Говорить без имени после ответа, сек<input type="number" min="0" max="30" data-k="audio.follow_up_seconds"></label>
       <label class="f">Пауза, после которой фраза закончена, мс<input type="number" min="300" max="2000" step="50" data-k="audio.end_silence_ms"></label>
       <div class="switch slim"><div>Подстраиваться под мою манеру речи<span id="pause-learn">Если вы продолжаете говорить сразу после того, как ассистент решил, что фраза закончена, — он начнёт ждать дольше; со временем вернётся к обычной паузе.</span></div><label class="tg"><input type="checkbox" data-k="audio.end_silence_auto"><i></i></label></div>

@@ -14,7 +14,7 @@ import modules
 
 from acts_base import (
     art_page, _att_word, BRACKET_READ, CAPTURE_FOLDER, CONFIRM_NO, confirm_word, CONFIRM_YES, _CONFIRM_YES_RX,
-    DRAFT_KINDS, DRAFT_RX, GEN_IMG_RX, NOTE_ASK_RX, NOTE_TOOLS, _PIC, QUERY_TOOLS, ROUTE_MAX, ROUTINE_HEAD,
+    DRAFT_KINDS, DRAFT_RX, GEN_IMG_RX, NOTE_ASK_RX, NOTE_TOOLS, _PIC, QUERY_TOOLS, REMIND_ASK_RX, ROUTE_MAX, ROUTINE_HEAD,
     UPDATE_ASK_RX)  # noqa: F401 — прежние имена на месте
 from acts_confirm import ConfirmMixin
 from acts_quick import QuickMixin
@@ -91,6 +91,10 @@ class ToolsMixin(ConfirmMixin, QuickMixin, AlarmMixin, DevicesMixin, DayMixin):
         # рецензия 0.86 (№603): вызов, записанный текстом «[Вызов инструмента: …]», — не настоящий вызов модели; его можно
         # подсунуть. Только чтение — сразу, всё, что пишет людям, меняет данные или дом, — через «Выполнить?», всегда
         br_strict = bool(call.get("bracket")) and name not in BRACKET_READ
+        if br_strict and name == "set_reminder" and REMIND_ASK_RX.search(asked or ""):
+            # владелец 19.11: «попросил на завтра напомнить, а она зачем-то спросила разрешение». Напоминание — только себе:
+            # никому не пишет и ничего не стирает, а «напомни» человек сказал сам — это и есть разрешение
+            br_strict = False
         if br_strict:
             log.info("🛠 %s записан текстом — спрашиваю «Выполнить?»", name)
             need_confirm = True

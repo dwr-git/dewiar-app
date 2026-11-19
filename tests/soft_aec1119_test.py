@@ -113,7 +113,9 @@ ok(setup(True, headphones=True).soft_aec is None, "«Я в наушниках» 
 ok(setup(True, avail=False).soft_aec is None and not setup(True, avail=False).status["aec"], "нет библиотеки (Mac) — как раньше")
 
 html = (ROOT / "ui/settings.html").read_text(encoding="utf-8")
-ok('data-k="audio.soft_aec"' in html and "Перебивать без наушников (проба)" in html, "переключатель в «Звук и поведение»")
+ok('data-k="audio.soft_aec"' in html and "Перебивать ответ голосом" in html, "переключатель «Перебивать ответ голосом» в «Звук и поведение»")
+import settings as _S  # noqa: E402
+ok(_S.DEFAULTS["audio"]["soft_aec"] is True, "владелец 19.11 («работает хорошо… включай всем»): включено по умолчанию")
 ok("aec-audio-processing==" in (ROOT / "requirements-win.lock").read_text(encoding="utf-8"), "библиотека — в сборке Windows")
 src = (ROOT / "core/ears_listen.py").read_text(encoding="utf-8")
 ok("frame = sa.near(frame, now)" in src, "слух получает микрофон без своего голоса")

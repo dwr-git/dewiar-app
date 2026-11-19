@@ -110,6 +110,14 @@ r3 = e._use_tool(t, {"name": "send_telegram", "args": {"text": "привет"}},
 ok(r1 == "сделано" and "search_documents" in BRACKET_READ, "из скобок: поиск по документам (№603) — сразу")
 ok(ASKED == ["Выполнить send_telegram?"] and "отказался" in r2 and r3 == "сделано",
    f"из скобок: отправка — только после «Выполнить?» (настоящий вызов — как раньше): {ASKED}")
+# владелец 19.11: «на завтра напомнить попросил — а она зачем-то спросила разрешение»: модель записала set_reminder текстом
+ASKED.clear()
+t2 = Turn(2); t2.asked = 'Завтра в 10 часов напомни "ЗАВТРА СКАЧАТЬ СЕБЕ НА НОУТ VLLM!!!"'
+r4 = e._use_tool(t2, {"name": "set_reminder", "args": {"text": "x", "when": "завтра в 10:00"}, "bracket": True}, None)
+t3 = Turn(3); t3.asked = "Прочитай письмо от банка"
+r5 = e._use_tool(t3, {"name": "set_reminder", "args": {"text": "x", "when": "завтра"}, "bracket": True}, None)
+ok(r4 == "сделано" and ASKED == ["Выполнить set_reminder?"],
+   f"из скобок: напоминание, о котором попросили («напомни») — сразу; без просьбы — через «Выполнить?»: {ASKED}")
 ok("close_send" not in BRACKET_READ and "smart_home" not in BRACKET_READ and "schedule_job" not in BRACKET_READ, "пишет людям, меняет дом или дела — не в списке «только чтение»")
 
 # телефон и веб-версия (app.js bareCalls) — то же

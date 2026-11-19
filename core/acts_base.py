@@ -20,6 +20,8 @@ QUERY_TOOLS = ("find_notes", "web_search", "show_images")     # без query —
 BRACKET_READ = {"search_documents", "find_notes", "read_file", "web_search", "weather", "world_time", "calc", "list_reminders",
                 "calendar_list", "money_report", "money_find", "app_help", "system_status", "task_status", "ask_knowledge",
                 "month_summary", "writing_today", "mailing_status", "team_status", "client_info", "client_list", "client_deals"}
+# …кроме напоминания, о котором человек попросил сам (владелец 19.11: «на завтра напомнить — зачем-то спросила разрешение»)
+REMIND_ASK_RX = re.compile(r"(?<![а-яё])(?:напомн|напоминай|разбуди|будильник|таймер)", re.I)
 ROUTE_MAX = 400                    # длиннее — вставленный документ, а не просьба к специалисту (№566)
 ROUTINE_HEAD = "Постоянные (привычки и дела по расписанию) — в итоге не называй"   # agenda_context и quality.agenda_missed
 # инструменты, что меняют папку «Заметки», — после них открытый список освежается сам (№633: удалила — карточка осталась)

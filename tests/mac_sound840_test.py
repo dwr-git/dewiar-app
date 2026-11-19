@@ -91,5 +91,24 @@ class Root:
 _wv_calls.clear()
 ok(macui._no_insets(_ty.SimpleNamespace(native=None), Root()) == 1 and ("host-auto", False) in _wv_calls,
    f"№900: WebView pywebview (WebKitHost) находится и в глубине окна: {_wv_calls}")
+
+
+# №901 (19.11, macOS 27, 1.0.44: «та же»; отступ снят у 1): подложка строки заголовка — прячем (кнопки окна остаются),
+# в журнал — рамки окна, содержимого и WebView
+class _V:
+    def __init__(self, kids=()): self.kids, self.hidden = list(kids), False
+    def subviews(self): return self.kids
+    def setHidden_(self, v): self.hidden = v
+
+
+NSTitlebarBackgroundView = type("NSTitlebarBackgroundView", (_V,), {})
+NSTitlebarView = type("NSTitlebarView", (_V,), {})
+NSTitlebarContainerView = type("NSTitlebarContainerView", (_V,), {})
+_NSThemeCloseWidget = type("_NSThemeCloseWidget", (_V,), {})
+bg, close = NSTitlebarBackgroundView(), _NSThemeCloseWidget()
+frame_ = _V([_V(), NSTitlebarContainerView([NSTitlebarView([bg, close])])])
+win_ = _ty.SimpleNamespace(contentView=lambda: _ty.SimpleNamespace(superview=lambda: frame_))
+ok(macui._titlebar_backdrop(win_) == 1 and bg.hidden and not close.hidden, "№901: подложка строки заголовка скрыта, кнопки окна — на месте")
+ok("рамки" in macui._frames(object(), None) or "окно" in macui._frames(object(), None), "№901: рамки в журнал — без падения на чужом окне")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

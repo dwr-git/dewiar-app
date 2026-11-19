@@ -214,11 +214,69 @@ def seamless(win):
             if cv is not None and hasattr(nw, "frame"):        # страница — под строку заголовка, во всю высоту окна
                 f = nw.frame()
                 cv.setFrameSize_((f.size.width, f.size.height))
-            n = _no_insets(win, cv)
-            log(f"строка заголовка студии: прозрачная (маска {int(nw.styleMask())}; отступ страницы снят у {n})")
+            n = _no_insets(win, cv, nw.backgroundColor() if hasattr(nw, "backgroundColor") else None)
+            hid = _titlebar_backdrop(nw)
+            log(f"строка заголовка студии: прозрачная (маска {int(nw.styleMask())}; отступ страницы снят у {n}; "
+                f"подложек строки скрыто {hid}); {_frames(nw, win)}")
         except Exception as e:  # noqa: BLE001 — старый macOS: остаётся обычная строка заголовка
             log(f"строка заголовка студии: {e}")
     _main(run)
+
+
+def _rect(r):
+    try:
+        return f"{int(r.origin.x)},{int(r.origin.y)} {int(r.size.width)}×{int(r.size.height)}"
+    except Exception:  # noqa: BLE001
+        return "?"
+
+
+def _frames(nw, win):
+    """№901 (19.11, macOS 27, 1.0.44: «проблема та же», отступ снят у 1): что где лежит — окно, его содержимое, WebView и
+    вид над ними (строка заголовка), чтобы по следующему отчёту видеть причину, а не угадывать."""
+    try:
+        cv = nw.contentView()
+        out = [f"окно {_rect(nw.frame())}", f"содержимое {type(cv).__name__} {_rect(cv.frame())}"]
+        if hasattr(nw, "contentLayoutRect"):
+            out.append(f"без строки {_rect(nw.contentLayoutRect())}")
+        for wv in _webviews(win, cv)[:2]:
+            sup = wv.superview()
+            out.append(f"WebView {type(wv).__name__} {_rect(wv.frame())} в {type(sup).__name__ if sup is not None else '—'}")
+            if hasattr(wv, "safeAreaInsets"):
+                i = wv.safeAreaInsets()
+                out.append(f"safeArea сверху {int(getattr(i, 'top', 0))}")
+        top = cv.superview()
+        if top is not None:
+            out.append("над ним: " + ", ".join(f"{type(v).__name__} {_rect(v.frame())}" for v in list(top.subviews() or [])[:6]))
+        return "; ".join(out)
+    except Exception as e:  # noqa: BLE001
+        return f"рамки: {e}"
+
+
+def _titlebar_backdrop(nw):
+    """Подложка строки заголовка (NSTitlebarBackgroundView / …Decoration / размытие под ней на macOS 26+): прячем её — сами
+    кнопки окна остаются. -> сколько видов скрыли."""
+    n = 0
+    try:
+        top = nw.contentView().superview()
+        stack, seen = ([top] if top is not None else []), 0
+        while stack and seen < 300:
+            v = stack.pop()
+            seen += 1
+            name = type(v).__name__
+            if ("TitlebarBackground" in name or "TitlebarDecoration" in name) and hasattr(v, "setHidden_"):
+                v.setHidden_(True)
+                n += 1
+                continue
+            if name.startswith("NSTitlebar") or name in ("NSThemeFrame",) or "Titlebar" in name:
+                try:
+                    stack.extend(list(v.subviews() or []))
+                except Exception:  # noqa: BLE001
+                    pass
+            elif v is top:
+                stack.extend(list(v.subviews() or []))
+    except Exception:  # noqa: BLE001
+        pass
+    return n
 
 
 def _is_webview(v):
@@ -252,7 +310,7 @@ def _webviews(win, root):
     return out
 
 
-def _no_insets(win, root):
+def _no_insets(win, root, bg=None):
     """№898 (19.11, Mac mini, macOS 27, 1.0.40: «полоса в студии осталась той же», в журнале — «прозрачная»): строка
     заголовка прозрачная, но WKWebView сам отодвигает страницу под строку заголовка (automaticallyAdjustsContentInsets,
     на macOS 26+ — obscuredContentInsets) — и сверху видна серая подложка окна. Снимаем этот отступ: страница — от самого
@@ -267,8 +325,17 @@ def _no_insets(win, root):
                 except Exception:  # noqa: BLE001
                     pass
         try:                                                    # и рамка — во всё окно, под строку заголовка
-            if root is not None and hasattr(wv, "setFrame_") and wv.superview() is root:
-                wv.setFrame_(root.bounds())
+            sup = wv.superview() if hasattr(wv, "superview") else None
+            if sup is not None and wv is not root and hasattr(wv, "setFrame_"):
+                wv.setFrame_(sup.bounds())
+                if hasattr(wv, "setAutoresizingMask_"):
+                    wv.setAutoresizingMask_(2 | 16)             # тянется вместе с окном
+        except Exception:  # noqa: BLE001
+            pass
+        try:                                                    # что всё-таки видно над страницей — цвета страницы, не серое
+            import AppKit
+            if hasattr(wv, "setUnderPageBackgroundColor_"):    # фон окна (тёмный или светлый — как тема студии)
+                wv.setUnderPageBackgroundColor_(bg if bg is not None else AppKit.NSColor.windowBackgroundColor())
         except Exception:  # noqa: BLE001
             pass
         if hasattr(wv, "setObscuredContentInsets_"):           # macOS 26+: открытый способ
