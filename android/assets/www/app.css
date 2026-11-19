@@ -265,6 +265,11 @@ body.lite-ui .sheet { backdrop-filter: none; -webkit-backdrop-filter: none; back
 /* списки */
 .it { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--frost); box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 24px -18px rgba(0,0,0,.9); margin-bottom: 7px; }
 .it .tm { font: 600 17px/1 "Unbounded", sans-serif; color: #FFC978; min-width: 58px; }
+/* «Платежи» с компьютера во вкладке «Деньги» (№891): значок счёта, срок — цветом по статусу, оплачено — галочка */
+.it.pay .tm { font: 22px/1 sans-serif; min-width: 36px; text-align: center; }
+.it.pay.overdue small { color: #FF8FA8; font-weight: 600; } .it.pay.soon small { color: #FFC978; }
+.it.pay.paid { opacity: .72; } .it.pay .pok { color: var(--good); font-weight: 700; padding: 0 6px; }
+body.light .it.pay.overdue small { color: #b4234a; } body.light .it.pay.soon small { color: #a2650a; }
 .it .bd { flex: 1; min-width: 0; } .it .bd b { display: block; font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
 .it .bd small { color: var(--muted); font-size: 12.5px; }
 .it .x { width: 34px; height: 34px; border-radius: 50%; background: var(--frost-hi); display: grid; place-items: center; flex: none; }

@@ -536,6 +536,26 @@ def _core_call(token, cmd, timeout=4):
         ws.recv(timeout=timeout)
 
 
+def core_version(token, timeout=3):
+    """Версия ядра, которое сейчас отвечает на порту ("" — не узнали). Нужна, чтобы новые окна не прицепились к ядру
+    прежней версии: на Mac ядро живёт в своей сессии и переживает закрытие окон и замену Dewiar.app (№889, 19.11:
+    «в „Программах“ 1.0.34, а запускается 1.0.32»)."""
+    try:
+        from websockets.sync.client import connect
+        with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=timeout, close_timeout=1, max_size=None) as ws:
+            ws.send(json.dumps({"cmd": "hello", "token": token}))
+            d = json.loads(ws.recv(timeout=timeout))
+            return str((d.get("data") or {}).get("version") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def core_stale(token):
+    """Ядро на порту — другой версии, чем эти окна? -> его версия или "". Только настоящие номера (цифры через точки)."""
+    v = core_version(token)
+    return v if v and re.fullmatch(r"\d+(\.\d+)+", v) and v != UI_VERSION else ""
+
+
 CORE_PROC = []          # Windows: процесс ядра, запущенный этим интерфейсом (сторож видит, если он упал)
 CORE_LOG_AT = [0, 0.0]  # Windows: с какого места core.log и с какого времени (time.time) пишет последний запуск ядра
 CORE_ERR_RX = re.compile(r"\b(ERROR|CRITICAL)\b|Traceback|\b\w+(Error|Exception):|Ошибка")

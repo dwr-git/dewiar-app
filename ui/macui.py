@@ -82,9 +82,40 @@ def start_core():
     return p
 
 
+def stop_stale_core():
+    """Отвечает ядро прежней версии (окна заменили, а ядро в своей сессии осталось) — попросить выйти, не вышло за
+    ~10 с — снять процесс по порту. -> True, если порт освободился (№889)."""
+    from settings import ensure_token
+    old = A.core_stale(ensure_token())
+    if not old:
+        return False
+    log(f"ядро {old}, а окна {A.UI_VERSION} — перезапускаю ядро новой версией")
+    try:
+        A._core_call(ensure_token(), "quit")
+    except Exception:  # noqa: BLE001
+        pass
+    for _ in range(40):
+        if not A.core_alive():
+            return True
+        time.sleep(0.25)
+    try:
+        r = subprocess.run(["lsof", "-ti", f"tcp:{A.WS_PORT}", "-sTCP:LISTEN"], capture_output=True, text=True, timeout=5)
+        for pid in r.stdout.split():
+            if pid.isdigit() and int(pid) != os.getpid():
+                os.kill(int(pid), 15)
+    except Exception:  # noqa: BLE001
+        pass
+    for _ in range(20):
+        if not A.core_alive():
+            return True
+        time.sleep(0.25)
+    return not A.core_alive()
+
+
 def ensure_core():
-    """Ядро не отвечает на своём порту — запустить и подождать (первый запуск — несколько секунд)."""
-    if A.core_alive():
+    """Ядро не отвечает на своём порту — запустить и подождать (первый запуск — несколько секунд). Отвечает ядро другой
+    версии (осталось от прежнего Dewiar.app) — сначала остановить его (№889)."""
+    if A.core_alive() and not stop_stale_core():
         return
     start_core()
     for _ in range(60):

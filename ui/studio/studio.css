@@ -2397,6 +2397,8 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 .mm-row { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; }
 .mm-ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .mm-list { list-style: none; margin: 4px 0 0; padding: 0; max-height: 360px; overflow-y: auto; }
+/* №886 (19.11): подборки — список во всю высоту карточки (рядом «Ведущий» и «Как попросить» выше), а не 360 px и пустота */
+@media (min-width: 981px) { #mm-mine > .mm-panel .mm-list { flex: 1 1 0; min-height: 360px; max-height: none; } }
 .mm-list li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--line, rgba(127,127,127,.12)); }
 .mm-list li.cur .tt b { color: var(--accent); }
 .mm-list li.more { color: var(--muted); font-size: 13px; padding: 10px 4px; border: 0; }

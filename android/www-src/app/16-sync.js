@@ -9,11 +9,11 @@
    меняешь здесь — меняй и там. Дополнительные виды (soul, mind, diary, dayturn, taskreq, task, done) шлём, только если их знает сервер. */
 const MIND_MAX = 8000, MIND_CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g;
 const mindText = (d) => (d && typeof d.text === "string" && d.text.trim() && d.text.length <= MIND_MAX) ? d.text.replace(MIND_CTRL, "") : "";
-const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory", "safe", "client", "doc"];   // doc — «Мои файлы» с компьютера (0.98), только приходят   // client — «Клиенты» (clients.js), только зашифрованными   // safe — сейф шифром мастер-пароля (safe.js)
+const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory", "safe", "client", "doc", "bill", "pay"];   // bill, pay — «Платежи» с компьютера (№891, 1.0.38), только приходят   // doc — «Мои файлы» с компьютера (0.98), только приходят   // client — «Клиенты» (clients.js), только зашифрованными   // safe — сейф шифром мастер-пароля (safe.js)
 /* Сквозное шифрование синхронизации (S.sync.e2e, как core/sync.py и core/synckey.py): ключ 32 байта знают только свои
    устройства (pref sync_key; другим своим — конвертом ownShare), личные записи уходят {e2e: 1, c: seal(K, JSON)}.
    Открытыми — метка mind:e2e, задачи для облака (taskreq с cloud) и удаления. */
-const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory", "safe", "client", "doc"];
+const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory", "safe", "client", "doc", "bill", "pay"];
 function syncKeyGet() { try { const d = JSON.parse(prefGet("sync_key") || "null"); return d && d.k && DC() && DC().b64d(d.k).length === 32 ? d : null; } catch (e) { return null; } }
 function syncKeyAdopt(kb64, at) {
   let k; try { k = DC().b64d(String(kb64 || "")); } catch (e) { return false; }
@@ -288,6 +288,7 @@ const TASK_RU = { running: "в работе", waiting: "ждёт ответа", 
 function syncApply(it) {
   const d = it.data || {}, del = it.deleted;
   if (it.kind === "doc") { docApply(it.id, d, del); return false; }   // файлы ведёт компьютер: отсюда ни правок, ни удалений
+  if (it.kind === "bill" || it.kind === "pay") { payApply(it.kind, it.id, d, del); return false; }   // «Платежи» ведёт компьютер (№891)
   if (it.kind === "safe") return typeof safeApply === "function" ? safeApply(it) : false;
   if (it.kind === "persona") {                      // свой персонаж с компьютера или другого телефона
     const l = myPersonas().filter(x => x.id !== it.id);

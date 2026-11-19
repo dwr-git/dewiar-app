@@ -182,6 +182,8 @@
   #cap .bot { color: var(--ink); user-select: text; -webkit-user-select: text; white-space: pre-wrap; flex: 0 1 auto; min-height: 0;
               overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; margin-right: -8px; padding-right: 8px;
               scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+  #cap .bot p { margin: 0 0 .55em; } #cap .bot p:last-child { margin-bottom: 0; }
+  #cap .bot.long { line-height: 1.5; letter-spacing: .005em; }
   #cap .bot::-webkit-scrollbar { width: 4px; } #cap .bot::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 4px; }
   #cap .bot.ft { -webkit-mask-image: linear-gradient(transparent, #000 18px); mask-image: linear-gradient(transparent, #000 18px); }
   #cap .bot.fb { -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent); mask-image: linear-gradient(#000 calc(100% - 22px), transparent); }
@@ -914,11 +916,33 @@ function capText(t) {
   return String(t || "").replace(/```\s*mermaid[\s\S]*?(```|$)/g, " ⟨схема — «Открыть целиком»⟩ ").replace(/```[\s\S]*?(```|$)/g, (m) => window.DewiarRich && DewiarRich.isDiagram(m.replace(/^```\w*\n?/, "")) ? " ⟨схема — «Открыть целиком»⟩ " : " ⟨код⟩ ").replace(/`([^`\n]+)`/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/^\s*#{1,6}\s+/gm, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
+/* Длинный ответ — абзацами (владелец 19.11 про утреннюю сводку: «текста много, плотный, одной кашей»): пустые строки —
+   абзацы, а сплошной текст длиннее ~300 знаков делим по концам предложений (точка, ! ? … и дальше заглавная буква) на
+   абзацы по 2–3 предложения. Только вид: сам текст не меняется. */
+function capParas(t) {
+  const out = [];
+  for (const p of String(t).split(/\n[ \t]*\n/)) {
+    if (p.length < 300 || p.includes("\n")) { if (p.trim()) out.push(p); continue; }
+    let cur = "";
+    for (const s of p.split(/(?<=[.!?…])\s+(?=[«"(]?[А-ЯЁA-Z])/)) {
+      if (cur && (cur + " " + s).length > 240) { out.push(cur); cur = s; } else cur = cur ? cur + " " + s : s;
+    }
+    if (cur) out.push(cur);
+  }
+  return out.length ? out : [String(t)];
+}
+function capSet(text) {
+  const b = $("bot"), paras = capParas(text);
+  b.textContent = "";
+  if (paras.length < 2) b.textContent = text;
+  else paras.forEach((x) => { const e = document.createElement("p"); e.textContent = x; b.appendChild(e); });
+  b.classList.toggle("long", String(text).length > 360);
+}
 function showCap(you, bot, err) {
   if (you !== null) { $("you").textContent = you; $("media").innerHTML = ""; $("bot").scrollTop = 0; capScrolled = false; }
   $("you").style.display = $("you").textContent ? "" : "none";
   if (bot === WAIT) { $("bot").innerHTML = "<i></i>"; $("bot").classList.add("wait"); }
-  else if (bot !== null) { $("bot").classList.remove("wait"); $("bot").textContent = bot; }
+  else if (bot !== null) { $("bot").classList.remove("wait"); capSet(bot); }
   requestAnimationFrame(capFade);
   $("cap").classList.toggle("err", !!err);
   $("cap").classList.add("show");
@@ -1896,7 +1920,9 @@ async function addFiles(list) {
   for (const f of list) {
     try {
       if (IMG.test(f.type)) atts.push({ kind: "image", name: f.name || "картинка.png", url: await shrink(f) });
-      else if (f.size > MAXF) showErr(`«${f.name}» больше 11 МБ — положите его в папку ассистента`);
+      // №888 (19.11): «положите в папку ассистента» — непонятно, в какую и зачем; видео Лира пока не смотрит (№248)
+      else if (/^video\//.test(f.type) || /\.(mp4|mov|mkv|avi|webm)$/i.test(f.name)) showErr(`«${f.name}» — видео: смотреть видео Лира пока не умеет. Пришлите кадр (снимок экрана) или расскажите, что в нём`);
+      else if (f.size > MAXF) showErr(`«${f.name}» — ${(f.size / 1048576).toFixed(0)} МБ, а в разговор берём до 11 МБ. Перетащите его в «Облако Лиры» (до 25 МБ) или положите в папку: студия → «Мои файлы» → «Открыть папку» — Лира прочитает его оттуда`);
       else atts.push({ kind: "file", name: f.name, b64: await b64of(f), size: f.size });
     } catch (err) { showErr(err); }
   }

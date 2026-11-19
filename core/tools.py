@@ -738,7 +738,10 @@ class Toolbox:
         отложенные — списком в описании more_tools. text None — весь набор (большие задачи, проверки, справка)."""
         out = [{"name": n, "description": d, "parameters": p} for n, (d, p, *_rest) in TOOLS.items()
                if n != "more_tools" and self.policy(n)[0]]
-        if text is not None and (self.s.get("tools") or {}).get("slim", True) is not False:
+        kids = self.hooks.get("kids")
+        kid_on = kids is not None and kids.on()
+        # детский режим: набор и так маленький (KIDS_TOOLS) — целиком, без групп и more_tools (kids1027, 19.11)
+        if text is not None and not kid_on and (self.s.get("tools") or {}).get("slim", True) is not False:
             # порядок — ради кэша начала запроса («Голос без пауз»): ядро и more_tools (описание неизменное — все группы
             # человека) одинаковы у всех вопросов; подобранное — после, в порядке появления в разговоре; предложенное
             # группа остаётся 6 часов — набор в разговоре только растёт, и сервер не перечитывает разговор заново
@@ -763,8 +766,7 @@ class Toolbox:
             tail = [x for g in sorted(extra, key=lambda g: (first.get(g, now), g)) for x in extra[g]]
         else:
             tail = []
-        kids = self.hooks.get("kids")
-        if kids is not None and kids.on():
+        if kid_on:
             return out + tail                   # детский режим: ни навыков, ни подключённых MCP — только KIDS_TOOLS
         if self.skills and self.skills.enabled():
             out += [{"name": n, "description": d, "parameters": p} for n, (d, p) in SKILL_TOOLS.items()]

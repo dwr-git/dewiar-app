@@ -119,6 +119,7 @@ function turnContext(text) {
     t += ` Ближайшие дни: ${week}. Сколько дней до даты и какая дата ближе — считай calc days_until, не в уме.`;
   }
   if (isEnglish(text)) t += " " + EN_HINT;          // спросили по-английски — ответ по-английски (второй язык)
+  try { const pc = payContext(text); if (pc) t += " " + pc; } catch (e) { }   // №891: «Платежи» с компьютера — Лира на телефоне знает
   let mp = []; try { mp = memPick(text); } catch (e) { }
   return (rp ? rp.trim() + "\n\n" : "") + t + (n ? " " + n : "")
     + (mp.length ? "\n\nИз памяти о пользователе (подобрано к этому вопросу — используй, если к месту):\n- " + mp.join("\n- ") : "");

@@ -420,6 +420,55 @@ function jobShort(j) {
   if (t.length > 80) t = t.slice(0, 80).replace(/\s+\S*$/, "").replace(/[\s,;:—–-]+$/, "") + "…";
   return t || "Дело по расписанию";
 }
+/* ---------- «Платежи» с компьютера на телефоне (№891, 19.11: «на телефоне раздела платежей нет, и Лира о них не знает») ----------
+   Счета (bill) и оплаты (pay) приходят синхронизацией и только читаются: ведёт их компьютер (core/payments.py). Здесь — во
+   вкладке «Деньги» блоком «Платежи» (нового раздела нет) и справкой Лире, когда спрашивают про оплаты. Срок и статус — как
+   payments.status на компьютере: оплачено в этом периоде / просрочено / скоро (до 3 дней) / ждёт. */
+function payStore() { try { const x = JSON.parse(prefGet("pays") || "{}"); return { bills: x.bills || {}, pays: x.pays || {} }; } catch (e) { return { bills: {}, pays: {} }; } }
+function payApply(kind, id, d, del) {
+  const st = payStore(), box = kind === "bill" ? st.bills : st.pays;
+  if (del || !d || !Object.keys(d).length) delete box[id]; else box[id] = d;
+  prefSet("pays", JSON.stringify(st));
+}
+function payPeriod(b, now) { return b.kind === "yearly" ? String(now.getFullYear()) : `${now.getFullYear()}-${pad(now.getMonth() + 1)}`; }
+function payDue(b, now) {
+  const day = Math.max(1, Math.min(31, +b.day || 0)); if (!+b.day) return null;
+  const m = b.kind === "yearly" ? Math.max(1, Math.min(12, +b.month || 1)) - 1 : now.getMonth();
+  const last = new Date(now.getFullYear(), m + 1, 0).getDate();
+  return new Date(now.getFullYear(), m, Math.min(day, last));
+}
+function payRows(now) {
+  now = now || new Date();
+  const st = payStore(), pays = Object.values(st.pays);
+  return Object.entries(st.bills).filter(([, b]) => b && b.name && !b.archived).map(([id, b]) => {
+    const per = payPeriod(b, now), p = pays.filter(x => x.bill === id && x.period === per && x.status !== "unpaid").sort((a, c) => String(c.date).localeCompare(String(a.date)))[0];
+    const due = payDue(b, now), left = due ? Math.round((due - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5) : null;
+    const status = p ? "paid" : b.autopay ? "auto" : left === null ? "wait" : left < 0 ? "overdue" : left <= 3 ? "soon" : "wait";   // как payments.status
+    return { id, b, p, due, left, status };
+  }).sort((a, c) => ({ overdue: 0, soon: 1, wait: 2, auto: 3, paid: 4 })[a.status] - ({ overdue: 0, soon: 1, wait: 2, auto: 3, paid: 4 })[c.status] || ((a.due || 0) - (c.due || 0)));
+}
+function payDueText(r) {
+  if (r.status === "paid") return `оплачено ${r.p.amount ? +(+r.p.amount).toFixed(2) + " " : ""}${r.p.date ? "· " + String(r.p.date).split("-").reverse().slice(0, 2).join(".") : ""}`.trim();
+  if (r.status === "auto") return "автоплатёж";
+  if (!r.due) return "без срока";
+  const d = `до ${r.due.getDate()} ${MON[r.due.getMonth()]}`;
+  return r.status === "overdue" ? `просрочено — было ${d.slice(3)}` : r.left === 0 ? "срок сегодня" : r.left === 1 ? "срок завтра" : d;
+}
+function payHtml() {
+  const rows = payRows(); if (!rows.length) return "";
+  const left = rows.filter(r => r.status !== "paid" && r.status !== "auto").length;
+  return `<div class="bugh">Платежи · ${left ? "не оплачено " + left : "всё оплачено"}</div>` + rows.map(r => `<div class="it pay ${r.status}"><div class="tm" aria-hidden="true">${esc(r.b.icon || "🧾")}</div><div class="bd"><b>${esc(r.b.name)}</b><small>${esc(payDueText(r))}${r.b.amount && r.status !== "paid" ? " · обычно " + esc(String(r.b.amount)) : ""}</small></div>${r.status === "paid" ? `<span class="pok" aria-label="Оплачено">✓</span>` : ""}</div>`).join("")
+    + `<p class="hint" style="margin:6px 4px 10px">Платежи ведутся на компьютере: студия → «Платежи». Здесь видно, что оплачено и какие сроки.</p>`;
+}
+/* справка Лире: спросили про оплаты — что и когда платить (с компьютера) */
+const PAY_ASK = /платеж|платёж|оплат|заплатил|коммунал|квартплат|кредит|рассроч|сч[её]т(?:а|ов)? за|сроки? оплат|что (?:надо |нужно )?(?:платить|оплатить)|газ|свет за|интернет за|подписк/i;
+function payContext(text) {
+  if (!PAY_ASK.test(String(text || ""))) return "";
+  const rows = payRows(); if (!rows.length) return "";
+  return "Платежи человека (ведутся на компьютере, сюда приходят синхронизацией; менять — на компьютере, студия → «Платежи»): "
+    + rows.map(r => `${r.b.name} — ${payDueText(r)}`).join("; ") + ".";
+}
+
 function renderDay() {
   const box = $("#day-body"), dd = $("#day-date");
   if (dd) dd.textContent = dayDate();
@@ -476,6 +525,7 @@ function renderDay() {
     const r = moneyReport("month"), c = r.by[CUR] || Object.values(r.by)[0] || { inc: 0, exp: 0 }, cur = r.by[CUR] ? CUR : (Object.keys(r.by)[0] || CUR);
     const items = money().slice(-30).reverse();
     box.innerHTML = `<div class="sum"><div><b style="color:var(--good)">${+c.inc.toFixed(2)}</b><small>доходы</small></div><div><b style="color:#FF8FA8">${+c.exp.toFixed(2)}</b><small>расходы</small></div><div><b>${+(c.inc - c.exp).toFixed(2)}</b><small>остаток, ${cur}</small></div></div>`
+      + payHtml() + (payRows().length && items.length ? `<div class="bugh">Записи</div>` : "")
       + (items.length ? items.map(x => `<div class="it"><div class="tm" style="color:${x.kind === "income" ? "var(--good)" : "#FF8FA8"};font-size:15px">${x.kind === "income" ? "+" : "−"}${x.amount}</div><div class="bd"><b>${esc(x.note || x.category)}</b><small>${esc(x.category)} · ${esc(x.date)} · ${esc(x.currency)}</small></div><button class="x" data-id="${esc(x.id)}">${X_SVG}</button></div>`).join("")
       : `<div class="empty">Записей нет.<br>Скажите: «купил кофе за восемь пятьдесят».</div>`);
     $$(".x", box).forEach(b => b.onclick = () => { saveMoney(money().filter(x => x.id !== b.dataset.id)); try { famDelSpend(b.dataset.id); } catch (e) { } renderDay(); });
