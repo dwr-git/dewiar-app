@@ -225,13 +225,22 @@ class _Html(HTMLParser):
             self.count += 1
 
 
+# данные для разбора речи, а не интерфейс (1.0.50): «минуты:1 одной:1 двух:2…», «первого второго третьего…» — строчные
+# слова без знаков, пять и больше (или пары «слово:число»); их не переводят, и в словарь им незачем
+DATA_RX = re.compile(r"^(?:[а-яё_]+:\d+\s*){3,}$|^(?:[а-яё]+\s+){4,}[а-яё]+$")
+
+
+def ui_text(s):
+    return bool(CYR.search(s)) and not DATA_RX.match(s.strip())
+
+
 def count(path):
     src = Path(path).read_text(encoding="utf-8", errors="replace")
     if str(path).endswith(".html"):
         p = _Html()
         p.feed(src)
-        return p.count + sum(1 for s in js_strings("\n".join(p.script)) if CYR.search(s) and not covered(s))
-    return sum(1 for s in js_strings(src) if CYR.search(s) and not covered(s))
+        return p.count + sum(1 for s in js_strings("\n".join(p.script)) if ui_text(s) and not covered(s))
+    return sum(1 for s in js_strings(src) if ui_text(s) and not covered(s))
 
 
 def files():

@@ -1172,6 +1172,8 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .cl-ghead > div[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .cl-head b { display: block; font-size: 15px; } .cl-head span { font-size: 12px; color: var(--muted); }
 .cl-msgs { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; }
+/* 20.11 (владелец: «кверху примыкает грубовато»): сообщения у верхнего края ленты мягко растворяются, а не обрезаются */
+#ch-msgs { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px); mask-image: linear-gradient(to bottom, transparent 0, #000 22px); }
 .cl-m { align-self: flex-start; max-width: min(74%, 560px); padding: 9px 13px 6px; border-radius: 18px 18px 18px 6px; background: rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 6px; }
 .cl-m.out { align-self: flex-end; border-radius: 18px 18px 6px 18px; background: linear-gradient(135deg, rgba(102,126,234,.42), rgba(118,75,162,.42)); }
 .cl-m .tx { white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(14px * var(--dw-text, 1)); line-height: 1.5; }
@@ -1398,7 +1400,11 @@ dialog.anndlg { width: min(560px, calc(100% - 32px)); }
 /* текстовый режим и шаги хода (27.10): что сделано — под ответом, «Выполнить?» — над полем ввода */
 .ch-tm { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
 .ch-tm input { position: absolute; opacity: 0; pointer-events: none; }
-.ch-tm i { width: 32px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.14); position: relative; transition: background .2s; flex: none; }
+.ch-tm i { width: 32px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.14); position: relative; transition: background .2s; flex: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
+/* 20.11 (владелец: «переключатель смотрится как белый шарик, сам сливается с фоном»): в светлой теме дорожка видна */
+html.st-light .ch-tm i { background: rgba(20,30,60,.16); box-shadow: inset 0 0 0 1px rgba(20,30,60,.22); }
+html.st-light .ch-tm i::after { box-shadow: 0 1px 3px rgba(20,30,60,.35); }
 .ch-tm i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
 .ch-tm input:checked + i { background: var(--accent, #667EEA); } .ch-tm input:checked + i::after { transform: translateX(14px); }
 .ch-tm input:focus-visible + i { outline: 2px solid var(--accent, #667EEA); outline-offset: 2px; }
@@ -4009,6 +4015,35 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
   background: transparent; color: var(--muted); font: 600 11.5px Manrope, sans-serif; cursor: pointer; vertical-align: middle; }
 .ch-listen:hover, .ch-listen.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
 .ch-listen svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* «Читать» (20.11, studio/reader.js): кнопка рядом с «Прослушать»; ответ по центру — лист бумаги, крупно, листать ‹ › */
+.ch-read { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; padding: 2px 9px 2px 7px; border: 0; border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--ink); font: 600 11.5px Manrope, sans-serif; cursor: pointer; vertical-align: middle; }
+.ch-read:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.ch-read svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+#chr-ov { position: fixed; inset: 0; z-index: 900; display: none; align-items: center; justify-content: center; gap: 14px; padding: 28px 16px;
+  background: rgba(6,8,16,.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+#chr-ov.on { display: flex; animation: chr-in .18s ease-out; }
+@keyframes chr-in { from { opacity: 0; } to { opacity: 1; } }
+.chr-card { width: min(780px, 100%); max-height: 100%; display: flex; flex-direction: column; border-radius: 22px; overflow: hidden;
+  background: #151826; color: #E9ECF6; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6); }
+.chr-card header { display: flex; align-items: center; gap: 12px; padding: 14px 18px 12px 26px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.chr-q { flex: 1; min-width: 0; font-size: 12.5px; color: rgba(233,236,246,.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chr-n { font: 600 12px Manrope, sans-serif; color: rgba(233,236,246,.55); font-variant-numeric: tabular-nums; }
+.chr-size { display: inline-flex; gap: 2px; }
+.chr-size button, .chr-x { border: 0; background: transparent; color: inherit; font: 600 12.5px Manrope, sans-serif; padding: 5px 8px; border-radius: 8px; cursor: pointer; opacity: .75; }
+.chr-size button:hover, .chr-x:hover { opacity: 1; background: rgba(255,255,255,.08); }
+.chr-body { overflow-y: auto; padding: 26px 46px 40px; line-height: 1.72; letter-spacing: .005em; scrollbar-width: thin; }
+.chr-body.md { max-width: none; }
+.chr-body.md p { margin: 0 0 .95em; } .chr-body.md h3 { font-size: 1.12em; margin: 1.4em 0 .5em; }
+.chr-body.md li { margin: .3em 0; }
+.chr-nav { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; font-size: 28px; line-height: 1; color: #fff;
+  background: rgba(255,255,255,.12); cursor: pointer; }
+.chr-nav:hover { background: rgba(255,255,255,.22); } .chr-nav[hidden] { visibility: hidden; display: block; }
+html.st-light .chr-card { background: #FBFCFF; color: #1E2433; box-shadow: 0 30px 80px -20px rgba(20,30,60,.45); }
+html.st-light .chr-card header { border-bottom-color: rgba(20,30,60,.08); }
+html.st-light .chr-q, html.st-light .chr-n { color: rgba(30,36,51,.55); }
+html.st-light .chr-size button:hover, html.st-light .chr-x:hover { background: rgba(20,30,60,.07); }
+@media (max-width: 760px) { .chr-body { padding: 20px 22px 30px; } .chr-nav { position: absolute; bottom: 18px; } .chr-nav.prev { left: 18px; } .chr-nav.next { right: 18px; } }
 /* «Что нового» — все выпуски (идея №57): заголовок версии над её пунктами */
 .nwv { margin: 18px 0 6px; font-size: 14px; } .nwv:first-child { margin-top: 4px; } .nwv small { color: var(--muted); font-weight: 500; margin-left: 6px; }
 /* Своя модель персонажа на том же сервере (№403) */

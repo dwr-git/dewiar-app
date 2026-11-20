@@ -101,9 +101,10 @@ def build(trace_dir):
         tf = tr / (t + ".txt") if tr else None
         if tf and tf.is_file():
             traced += 1
+            d.add("trace:")                              # запись прогона есть (по ней видно, что JS проверка не запускала)
             got = {x.strip() for x in tf.read_text(encoding="utf-8", errors="replace").splitlines() if x.strip()}
-            fns[t] = {x[3:] for x in got if x.startswith("fn:")}
-            d |= {x for x in got if not x.startswith("fn:")}
+            fns[t] = {x[3:] for x in got if x.startswith("fn:")} | {x[5:] for x in got if x.startswith("jsfn:")}
+            d |= {x for x in got if not x.startswith(("fn:", "jsfn:"))}
         deps[t] = d
     idx = sorted({x for d in deps.values() for x in d})
     pos = {x: i for i, x in enumerate(idx)}
@@ -184,6 +185,8 @@ def hits(f, dep):
     if dep.startswith("dir:"):
         d = dep[4:].rstrip("/")
         return (f.rsplit("/", 1)[0] if "/" in f else ".") == d
+    if dep.startswith("jscov:"):                         # грузила этот скрипт в браузере или node
+        return f == dep[6:]
     return f == dep
 
 
@@ -373,6 +376,196 @@ def whatsnew_prepended(base):
     return old.returncode == 0 and isinstance(a, list) and isinstance(b, list) and len(b) > len(a) and b[len(b) - len(a):] == a
 
 
+# ---------- JS по функциям (20.11, владелец: «телефон — по функциям… да, давай сделаем») ----------
+# Телефон (app.js из частей www-src/app), виджет (hud.html), общие скрипты ui/assets и android/assets/www. Запись прогона
+# (tests/trace/sitecustomize.py) пишет, какие функции JS выполнились в браузере и node («jsfn:») и чьё покрытие снято
+# («jscov:<файл>»). Изменилась функция верхнего уровня — проверки, что её выполняли; константа — проверки функций, где
+# она названа; плюс проверки, что читают файл текстом и называют что-то из изменённых строк. Проверка без покрытия этого
+# файла — по-старому, по файлу. Код верхнего уровня (не функция и не константа), разметка и стили hud.html — по файлу.
+JS_FN = re.compile(r"^(?:android/assets/www/[\w.-]+\.js|android/www-src/app/[\w.-]+\.js|ui/assets/[\w.-]+\.js|ui/hud\.html)$")
+_JS_START = re.compile(r"^(?:(?:export\s+)?(?:async\s+)?function\s*\*?\s*([\w$]+)|class\s+([\w$]+)|(?:const|let|var)\s+([\w$]+|\{[^}]*\}|\[[^\]]*\]))")
+_JS_FNVAL = re.compile(r"=\s*(?:async\s+)?(?:function\b|\([^()]*\)\s*=>|[\w$]+\s*=>)")
+_JS_KW = set("""break case catch class const continue debugger default delete do else export extends finally for function if import
+in instanceof let new return super switch this throw try typeof var void while with yield async await true false null undefined
+document window length push slice split join replace trim String Number Object Array Math JSON Date Promise console style
+classList textContent innerHTML addEventListener querySelector querySelectorAll getElementById setTimeout clearTimeout""".split())
+
+
+def _js_lines(src, html):
+    """Строки, что относятся к скрипту: для .html — только внутри <script> без src; -> множество номеров строк (с 1)."""
+    lines = src.splitlines()
+    if not html:
+        return set(range(1, len(lines) + 1))
+    out, on = set(), False
+    for i, ln in enumerate(lines, 1):
+        low = ln.lower()
+        if on and "</script>" in low:
+            on = False
+            continue
+        if on:
+            out.add(i)
+        elif "<script" in low and "src=" not in low.split(">", 1)[0] and "</script>" not in low:
+            on = True
+    return out
+
+
+def _js_units(src, html=False):
+    """Исходник JS (или страница) -> [(начало, конец, имя, вид)]: вид "fn" — функция верхнего уровня (и const f = () =>),
+    "const" — константа или класс (имя — первое из объявленных), "stmt" — прочий код верхнего уровня. Граница — следующая
+    строка с начала строки (стиль проекта: тело с отступом). Многострочные /* … */ и строки-комментарии — не границы."""
+    lines = src.splitlines()
+    js = _js_lines(src, html)
+    starts, inc = [], False
+    for i, ln in enumerate(lines, 1):
+        if i not in js:
+            if starts and starts[-1][3] != "gap":
+                starts.append((i, "", "", "gap"))
+            continue
+        t = ln.strip()
+        if inc:
+            inc = "*/" not in t
+            continue
+        if t.startswith("/*") and "*/" not in t:
+            inc = True
+            continue
+        if not ln or ln[0] in " \t}])" or not t or t.startswith(("//", "/*", "*")):
+            continue
+        m = _JS_START.match(ln)
+        if m and (m.group(1) or m.group(2)):
+            starts.append((i, m.group(1) or m.group(2), "fn" if m.group(1) else "const", ""))
+        elif m:
+            names = re.findall(r"[\w$]+", m.group(3)) if m.group(3)[0] in "{[" else [m.group(3)]
+            kind = "fn" if len(names) == 1 and _JS_FNVAL.search(ln[m.end():m.end() + 80]) else "const"
+            starts.append((i, ",".join(names), kind, ""))
+        else:
+            starts.append((i, "", "stmt", ""))
+    out = []
+    for k, (a, nm, kind, gap) in enumerate(starts):
+        if gap:
+            continue
+        b = (starts[k + 1][0] - 1) if k + 1 < len(starts) else len(lines)
+        out.append((a, b, nm, kind))
+    return out
+
+
+def _js_comment(t):
+    t = t.strip()
+    return not t or t.startswith(("//", "/*", "*")) and not re.search(r"\*/\s*\S", t)
+
+
+def js_changed(f, base):
+    """Изменение JS -> ({функции верхнего уровня}, {константы}, {строки изменений}, причина отказа или "")."""
+    html = f.endswith(".html")
+    if not (ROOT / f).is_file():
+        return set(), set(), [], "файл удалён"
+    old = subprocess.run(["git", "show", f"{base}:{f}"], cwd=ROOT, capture_output=True, text=True)
+    if old.returncode:
+        return set(), set(), [], "новый файл"
+    new_src = (ROOT / f).read_text(encoding="utf-8")
+    old_lines, new_lines = _hunks(f, base)
+    fns, consts, text = set(), set(), []
+    for lines, src in ((old_lines, old.stdout), (new_lines, new_src)):
+        units, body, js = _js_units(src, html), src.splitlines(), _js_lines(src, html)
+        for ln in lines:
+            if ln < 1 or ln > len(body):
+                continue
+            if _js_comment(body[ln - 1]):
+                continue                                   # пустая строка и комментарий ничего не меняют
+            if ln not in js:
+                return set(), set(), [], f"разметка или стили (строка {ln})"
+            u = next((x for x in units if x[0] <= ln <= x[1]), None)
+            if u is None or u[3] == "stmt":
+                return set(), set(), [], f"код верхнего уровня (строка {ln})"
+            (fns if u[3] == "fn" else consts).update(u[2].split(","))
+            text.append(body[ln - 1])
+    return fns, consts, text, ""
+
+
+_JSIDX = {}
+
+
+def _js_name_index(f):
+    """Файл JS -> (имя -> {функции верхнего уровня, где оно названо}, имя -> {константы, собранные с ним},
+    {имена в коде верхнего уровня})."""
+    if f in _JSIDX:
+        return _JSIDX[f]
+    src = (ROOT / f).read_text(encoding="utf-8")
+    body = src.splitlines()
+    by, cby, stmt = {}, {}, set()
+    for a, b, nm, kind in _js_units(src, f.endswith(".html")):
+        words = set(re.findall(r"[A-Za-z_$][\w$]*", "\n".join(body[a - 1:b])))
+        if kind == "stmt":
+            stmt |= words
+        for w in words:
+            if kind == "fn":
+                by.setdefault(w, set()).add(nm)
+            elif kind == "const":
+                cby.setdefault(w, set()).update(nm.split(","))
+    _JSIDX[f] = (by, cby, stmt)
+    return by, cby, stmt
+
+
+def js_pick(f, base, deps, fnmap, have, ch):
+    """Изменение JS-файла -> (проверки, пояснение) или (None, причина — тогда по файлу)."""
+    key = f
+    if f.startswith("android/www-src/app/"):
+        if "android/assets/www/app.js" not in ch:
+            return None, "часть изменена, а app.js не собран"
+        key = "android/assets/www/app.js"           # части собраны в app.js: функции те же, покрытие записано по нему
+    if not any("jscov:" + key in d for d in deps.values()):
+        return None, "в карте нет покрытия JS этого файла"
+    fns, consts, text, fail = js_changed(f, base)
+    if fail:
+        return None, fail
+    by, cby, stmt = _js_name_index(f)
+    units, todo, seen, every = set(fns), set(consts), set(), False
+    while todo:                                         # константа -> функции, где она названа (и константы из неё)
+        nm = todo.pop()
+        seen.add(nm)
+        units |= by.get(nm, set())
+        todo |= cby.get(nm, set()) - seen
+        every |= nm in stmt                             # названа в коде верхнего уровня — он идёт у всех, кто грузит файл
+    keys = {f"{key}::{u}" for u in units}
+    texts = {}
+
+    def src(t):
+        if t not in texts:
+            texts[t] = (ROOT / "tests" / t).read_text(encoding="utf-8", errors="replace")
+        return texts[t]
+    toks = _tokens(text) | fns | seen
+    common = {w for w in toks if sum(1 for t in have if w in src(t)) > 20}   # слово есть в десятках проверок — не отличает
+    toks -= common - fns - seen
+    rx = re.compile(r"(?<![\w$])(?:" + "|".join(re.escape(t) for t in sorted(toks, key=len, reverse=True)) + r")(?![\w$])") if toks else None
+    out = set()
+    for t, d in deps.items():
+        if t not in have or not (any(hits(f, x) or hits(key, x) for x in d) or "jscov:" + key in d):
+            continue
+        if "jscov:" + key not in d:
+            if ("trace:" in d and not any(x.startswith("jscov:") for x in d) and rx
+                    and not re.search(r"\bnode\b|playwright|chromium|vm\.|eval\(", src(t))):
+                if rx.search(src(t)):                   # JS не запускала вовсе — читает текст: нужна, если называет изменённое
+                    out.add(t)
+                continue
+            out.add(t)                                  # покрытия этого файла у проверки нет — осторожно, по файлу
+        elif every or fnmap.get(t, set()) & keys:
+            out.add(t)
+        elif rx and (key in d or (f != key and ("www-src" in src(t) or f.rsplit("/", 1)[-1] in src(t)))) and rx.search(src(t)):
+            out.add(t)                                  # читает исходник текстом и называет изменённое
+    short = sorted(units)
+    return out, (f"{len(out)} по функциям JS ({', '.join(short[:6])}{' …' if len(short) > 6 else ''}"
+                 + (f"; константы: {', '.join(sorted(seen)[:4])}" if seen else "") + (" — в коде верхнего уровня: все, кто грузит" if every else "") + ")")
+
+
+def _tokens(lines):
+    """Отличительные слова изменённых строк: имена (от 4 знаков) и слова в кавычках — по ним проверки, что читают
+    исходник текстом («'ACT_CUE' in app»)."""
+    out = set()
+    for ln in lines:
+        for w in re.findall(r"[A-Za-z_$][\w$-]{3,}|[А-Яа-яЁё][А-Яа-яЁё-]{4,}", ln):
+            if w not in _JS_KW:
+                out.add(w)
+    return out
+
 def pick(base=None, verbose=True):
     """-> ("ALL", причина) или (список проверок, пояснения)."""
     if not MAP.is_file():
@@ -447,6 +640,13 @@ def pick(base=None, verbose=True):
                            + (f"; имена: {', '.join(sorted(seen_n)[:4])}" if seen_n else "") + ")")
                 continue
             why.append(f"{f}: по файлу — {fail}")
+        if JS_FN.match(f) and fnmap:
+            ts, note = js_pick(f, base or last_tag(), deps, fnmap, have, ch)
+            if ts is not None:
+                chosen.update(ts)
+                why.append(f"{f}: {note}")
+                continue
+            why.append(f"{f}: по файлу — {note}")
         m = re.match(r"^ui/studio/([\w-]+)\.(?:js|css)$", f)
         if m and (ROOT / f).is_file():
             # страница студии: её проверки (называют страницу) и проверки студии целиком — контраст, темы, переводы,

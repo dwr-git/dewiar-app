@@ -43,6 +43,6 @@ st = src[src.index("    def _system_stable("):src.index("    def _slim_prompt(")
 ok("if not self._slim_prompt(with_tools):" in st and "self._privacy_rule()" in st, "«Ваши данные» в подсказке — только без облегчения")
 ok("self.skills.prompt_lean() if (lean or self._slim_prompt(with_tools)) else self.skills.prompt()" in st, "навыки — именами при облегчении")
 tc = src[src.index("    def _turn_context("):]
-ok("PRIVACY_ASK_RX.search(text)" in tc[:6000] and "self.skills.hint_for(text)" in tc[:6000], "справка к вопросу: подходящие навыки и «Ваши данные» — по вопросу")
+ok("PRIVACY_ASK_RX.search(text)" in tc[:6000] and "self.skills.hint_for(ask_core(text))" in tc[:6000], "справка к вопросу: подходящие навыки (по самой просьбе, без вставки — 1.0.49) и «Ваши данные» — по вопросу")
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -10,8 +10,12 @@ import sys
 
 _FILE = os.environ.get("DEWIAR_TRACE_FILE")
 _ROOT = os.environ.get("DEWIAR_TRACE_ROOT")
+# вторая копия записи в том же процессе (проверка записи запускает её внутри прогона с записью: две папки tests/trace в
+# PYTHONPATH) — ничего не ставит и никого не зовёт: иначе копии бесконечно вызывали бы друг друга как «прежний sitecustomize»
+_AGAIN = bool(getattr(sys, "_dewiar_trace", False))
+sys._dewiar_trace = True
 
-if _FILE and _ROOT:
+if _FILE and _ROOT and not _AGAIN:
     _root = os.path.realpath(_ROOT) + os.sep
     _seen = set()
     _busy = [False]
@@ -141,14 +145,202 @@ if _FILE and _ROOT:
 
     sys.addaudithook(_src_hook)
 
-# прежний sitecustomize (у системы он может быть свой) — выполнить, как будто нас нет
+    # Какие функции JS выполнились (20.11, владелец: «телефон — по функциям… да, давай сделаем»): телефон (app.js),
+    # виджет (hud.html), студия — в браузере проверки (Chromium через Playwright: точное покрытие V8 по CDP) и в node
+    # (NODE_V8_COVERAGE). «jsfn:android/assets/www/app.js::notesRender» — функция с именем выполнилась; «jscov:<файл>» —
+    # покрытие этого файла снято целиком (без этой метки выбор по файлу — по-старому, все проверки, что его грузят).
+    def _js_tail(parts):
+        """Хвост пути -> единственный файл проекта (.js, .html) с самым длинным совпадающим хвостом или ""."""
+        parts = [x for x in parts if x]
+        if not parts:
+            return ""
+        idx = _js_tail.__dict__.setdefault("idx", {})
+        if not idx:
+            _busy[0] = True                                   # свой обход — не зависимость проверки
+            try:
+                for dp, dn, fn in os.walk(_root):
+                    dn[:] = [d for d in dn if d not in (".git", "node_modules", "tests", "__pycache__", "build")]
+                    for f in fn:
+                        if f.endswith((".js", ".html")):
+                            idx.setdefault(f, []).append(os.path.relpath(os.path.join(dp, f), _root).replace(os.sep, "/"))
+            finally:
+                _busy[0] = False
+        cands = idx.get(parts[-1], [])
+        for k in range(len(parts), 0, -1):
+            tail = "/".join(parts[-k:])
+            m = [c for c in cands if c == tail or c.endswith("/" + tail)]
+            if len(m) == 1:
+                return m[0]
+        return ""
+
+    def _js_rel(url):
+        """file:///…/ui/hud.html или http://127.0.0.1:8123/assets/www/app.js -> путь в проекте или ""."""
+        try:
+            from urllib.parse import unquote, urlparse
+            u = urlparse(url or "")
+            if u.scheme == "file":
+                q = os.path.normpath(unquote(u.path))
+                if not q.startswith(_root) and os.path.realpath(q).startswith(_root):
+                    q = os.path.realpath(q)
+                if q.startswith(_root):
+                    r = os.path.relpath(q, _root).replace(os.sep, "/")
+                    return "" if r.startswith(("tests/", "..")) else r
+                same = _js_rel.__dict__.setdefault("same", {})   # копия файла проекта (телефон собирается во временную
+                if q not in same:                                # папку: www_assemble.sh) — тот же файл, байт в байт
+                    same[q] = ""
+                    tail = _js_tail(q.split(os.sep))
+                    if tail:
+                        try:
+                            _busy[0] = True
+                            with open(q, "rb") as a, open(os.path.join(_root, tail), "rb") as b:
+                                if a.read() == b.read():
+                                    same[q] = tail
+                        except OSError:
+                            pass
+                        finally:
+                            _busy[0] = False
+                return same[q]
+            if u.scheme in ("http", "https") and u.hostname in ("127.0.0.1", "localhost") and u.path.endswith((".js", ".html", "/")):
+                parts = [x for x in unquote(u.path).split("/") if x] or ["index.html"]
+                if u.path.endswith("/"):
+                    parts.append("index.html")
+                return _js_tail(parts)
+        except Exception:  # noqa: BLE001
+            pass
+        return ""
+
+    def _js_note(result):
+        """Ответ V8 (Profiler.takePreciseCoverage или файл NODE_V8_COVERAGE) -> записи jsfn:/jscov:."""
+        for sc in result or ():
+            rel = _js_rel(sc.get("url", ""))
+            if not rel:
+                continue
+            _note("jscov:" + rel)
+            for fn in sc.get("functions", ()):
+                nm = fn.get("functionName") or ""
+                rg = fn.get("ranges") or ()
+                if nm and rg and rg[0].get("count", 0) > 0:
+                    _note(f"jsfn:{rel}::{nm}")
+
+    _pages = []
+
+    def _cov_start(page):
+        try:
+            if page.context.browser and page.context.browser.browser_type.name != "chromium":
+                return page
+            s = page.context.new_cdp_session(page)
+            s.send("Profiler.enable")
+            s.send("Profiler.startPreciseCoverage", {"callCount": False, "detailed": False})
+            _pages.append((page, s))
+        except Exception:  # noqa: BLE001
+            pass
+        return page
+
+    def _cov_take(page=None):
+        for pg, s in list(_pages):
+            if page is not None and pg is not page:
+                continue
+            try:
+                _js_note(s.send("Profiler.takePreciseCoverage").get("result"))
+            except Exception:  # noqa: BLE001 — страница уже закрыта: что успели снять раньше — то и есть
+                pass
+            if page is None:
+                _pages.remove((pg, s))
+
+    def _patch_playwright(g=None, cm=None):
+        if g is not None and not getattr(g, "_dw_cov", False):
+            g._dw_cov = True
+            for cls in (g.Browser, g.BrowserContext):
+                _orig = cls.new_page
+                def _np(self, *a, _o=_orig, **k):
+                    return _cov_start(_o(self, *a, **k))
+                cls.new_page = _np
+            for name in ("goto", "reload", "set_content", "close"):           # перед уходом со страницы — снять
+                _orig = getattr(g.Page, name)
+                def _pm(self, *a, _o=_orig, **k):
+                    _cov_take(self)
+                    return _o(self, *a, **k)
+                setattr(g.Page, name, _pm)
+            for cls in (g.Browser, g.BrowserContext):
+                _orig = cls.close
+                def _cl(self, *a, _o=_orig, **k):
+                    _cov_take()
+                    return _o(self, *a, **k)
+                cls.close = _cl
+        if cm is not None and not getattr(cm, "_dw_cov", False):
+            cm._dw_cov = True
+            _orig = cm.PlaywrightContextManager.__exit__
+            def _ex(self, *a, _o=_orig):
+                _cov_take()
+                return _o(self, *a)
+            cm.PlaywrightContextManager.__exit__ = _ex
+
+    class _PwFinder:
+        """После загрузки модулей Playwright — подменить создание и закрытие страниц (сама проверка не меняется)."""
+        WANT = ("playwright.sync_api._generated", "playwright.sync_api._context_manager")
+
+        def find_spec(self, name, path=None, target=None):
+            if name not in self.WANT:
+                return None
+            import importlib.machinery
+            spec = importlib.machinery.PathFinder.find_spec(name, path)
+            if spec is None or spec.loader is None:
+                return spec
+            inner = spec.loader
+
+            class _L:
+                def __getattr__(self, k):                   # get_source и прочее — как у настоящего загрузчика
+                    return getattr(inner, k)
+
+                def create_module(self, s):
+                    return inner.create_module(s)
+
+                def exec_module(self, m):
+                    inner.exec_module(m)
+                    try:
+                        _patch_playwright(m if name.endswith("_generated") else None, m if name.endswith("_context_manager") else None)
+                    except Exception:  # noqa: BLE001
+                        pass
+            spec.loader = _L()
+            return spec
+
+    sys.meta_path.insert(0, _PwFinder())
+
+    # node: каждый запуск node из этой проверки пишет покрытие в свою папку; разбирает её процесс, который её завёл
+    if not os.environ.get("NODE_V8_COVERAGE"):
+        import atexit
+        import tempfile
+        _ncov = tempfile.mkdtemp(prefix="dw-nodecov-")
+        os.environ["NODE_V8_COVERAGE"] = _ncov
+        _owner = os.getpid()
+
+        def _node_cov():
+            if os.getpid() != _owner:
+                return
+            import json
+            import shutil
+            try:
+                for f in os.listdir(_ncov):
+                    if f.endswith(".json"):
+                        try:
+                            with open(os.path.join(_ncov, f), encoding="utf-8") as fh:
+                                _js_note(json.load(fh).get("result"))
+                        except (OSError, ValueError):
+                            pass
+            finally:
+                shutil.rmtree(_ncov, ignore_errors=True)
+        atexit.register(_node_cov)
+
+# прежний sitecustomize (у системы он может быть свой) — выполнить, как будто нас нет; другие копии записи — пропустить
 _here = os.path.dirname(os.path.abspath(__file__))
-for _d in sys.path:
+for _d in ([] if _AGAIN else sys.path):
     try:
         _p = os.path.join(_d or os.getcwd(), "sitecustomize.py")
         if os.path.abspath(_d or os.getcwd()) != _here and os.path.isfile(_p):
             with open(_p, encoding="utf-8") as _fh:
-                exec(compile(_fh.read(), _p, "exec"), {"__file__": _p, "__name__": "sitecustomize", "__builtins__": __builtins__})
+                if "_dewiar_trace" in (_src := _fh.read()):
+                    continue                        # такая же запись из другой папки — уже стоим мы
+                exec(compile(_src, _p, "exec"), {"__file__": _p, "__name__": "sitecustomize", "__builtins__": __builtins__})
             break
     except Exception:  # noqa: BLE001
         break

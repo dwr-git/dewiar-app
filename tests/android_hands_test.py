@@ -104,7 +104,7 @@ with sync_playwright() as p:
     ok(url.endswith("/dwrapp/Dewiar-0.9.52-hands.apk") and "расширенная версия" in card2, f"в основной сборке — «Скачать версию с «руками»» из описания выпуска: {url}")
     pg.evaluate("""() => { window._u = ""; window.http = async () => ({ body: "{}" }); document.querySelector('#hands-dl').click(); }""")
     pg.wait_for_timeout(300)
-    ok(pg.evaluate("window._u").endswith("/download.php"), "файла с руками ещё нет — страница «Скачать», а не мёртвая ссылка")
+    ok(pg.evaluate("window._u").endswith("/dwrapp/download"), "файла с руками ещё нет (короткий адрес, 1.0.49) — страница «Скачать», а не мёртвая ссылка")
     ok(not errors, f"без ошибок страницы {errors[:2]}")
     b.close()
 print("ALL OK" if not fails else f"ошибок: {len(fails)}")
