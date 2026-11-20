@@ -247,11 +247,30 @@ async function updateSay(install) {
     return `Есть новая версия ${a.version} — обновляю. Всё ваше сохранится.`;
   } catch (e) { return "Не получилось проверить обновление — нет связи с dewiar.pro. Попробуйте чуть позже."; }
 }
+/* Ритм обновлений (1.0.53, владелец 20.11: «обновлений несколько раз в день — некоторых уже не радует; напоминать раз в
+   2–3 дня, вручную — сразу»): сама предлагаю не раньше чем через 2 дня после того, как встала нынешняя версия, плюс своя
+   случайная добавка телефона до суток. «Важное исправление» (urgent в latest.json) и «Проверить» в «О приложении» — сразу. */
+const UPD_EVERY = 2 * 86400000, UPD_JIT = 86400000;
+function updDue(cur) {
+  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now() }; saveS(); }
+  if (typeof S.updJit !== "number") { S.updJit = Math.random() * UPD_JIT; saveS(); }
+  return S.updSince.at + UPD_EVERY + S.updJit;
+}
 async function checkUpdate(manual) {
   const r = $("#upd-res");
   try {
+    const inf = JSON.parse(D.info() || "{}");
+    if (inf.store) {                                   // сборка для магазинов (RuStore, Google Play): обновляет магазин
+      if (manual && r) updRender("Обновления приходят через магазин приложений, откуда вы установили Dewiar.");
+      return false;
+    }
+    const cur = inf.version || "0", due = updDue(cur);
     const d = JSON.parse((await http("GET", UPD_URL, { timeout: 10000 })).body || "{}"), a = d.android;
-    const newer = a && cmpVer(a.version, JSON.parse(D.info() || "{}").version || "0") > 0;
+    const newer = a && cmpVer(a.version, cur) > 0;
+    if (newer && !manual && !a.urgent && Date.now() < due) {
+      plog("info", `⬆ есть ${a.version} — предложу через ${Math.max(1, Math.round((due - Date.now()) / 3600000))} ч (обновления раз в 2–3 дня)`);
+      return false;
+    }
     const hands = typeof D.handsState === "function" && D.handsState() !== "none";     // стоит версия с «руками» — и обновляем её
     if (newer && hands && !a.hands_apk) {
       // отчёт 835 (17.11): «скачиваю версию с руками, приходит обновление — и руки слетают; после каждого обновления

@@ -51,6 +51,10 @@ class TeamError(Exception):
     pass
 
 
+DUR_WORDS = (("одн", 1), ("один", 1), ("дв", 2), ("тр", 3), ("четыр", 4), ("пят", 5), ("шест", 6), ("сем", 7), ("десят", 10),
+             ("пол", 0))
+
+
 def due_parse(phrase, now=None):
     """«до четверга 15:00», «на пятницу», «завтра к 12», «27 ноября» -> (datetime | None, остаток текста).
     Разбор — общий с напоминаниями (when.parse); без часа срок — конец рабочего дня, 18:00."""
@@ -59,6 +63,23 @@ def due_parse(phrase, now=None):
     if not p:
         return None, ""
     now = (now or datetime.now()).replace(microsecond=0)
+    # №934 (20.11): «в течении 30 дней» — «не поняла срок». Срок длительностью: «в течение / за / через N дней, недель,
+    # месяцев», «в течение недели / месяца» — к концу рабочего дня последнего дня (18:00), как сроки без часа
+    m = re.fullmatch(r"(?i)(?:в\s+течени[еяи]|в\s+пределах|за|через|не\s+позже,?\s+чем\s+через)\s+(?:([0-9]+|[а-яё]+)\s+)?"
+                     r"(дн\w*|день|сут\w*|недел\w*|месяц\w*)", p.replace("ё", "е"))
+    if m:
+        w = (m.group(1) or "").lower()
+        n = int(w) if w.isdigit() else next((v for k, v in DUR_WORDS if w.startswith(k)), None) if w else 1
+        unit = m.group(2).lower()
+        if n and not (not w and unit[:2] in ("дн", "де")):       # «в течение дня» — сегодня до 23:59 (ниже)
+            if unit.startswith("месяц"):
+                y, mo = divmod(now.month - 1 + n, 12)
+                import calendar
+                day = min(now.day, calendar.monthrange(now.year + y, mo + 1)[1])
+                at = now.replace(year=now.year + y, month=mo + 1, day=day)
+            else:
+                at = now + timedelta(days=n * (7 if unit.startswith("недел") else 1))
+            return at.replace(hour=18, minute=0, second=0), ""
     # 30.10 (владелец: «ставлю поручение — что ни пиши, не понимает срок»: «сегодня до 24 часов»). Сроки по-людски:
     # «до конца дня», «до полуночи», «до 24 часов» — сегодня 23:59; «до 18», «к 18 часам», «до 18 часов» — в 18:00;
     # «до вечера» — 18:00, «до обеда» — 13:00, «до утра» — 9:00, «в течение часа / дня»; «сегодня» вечером — до 23:59.

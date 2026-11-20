@@ -369,6 +369,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.cloud.on_low = lambda c: self.chat.notify(low_text(c))
         from cloud import gift_month_text
         self.cloud.on_gift = lambda g: self.push(self._g("Подарок месяца"), gift_month_text(g, self._ui_lang()), telegram=False)
+        from cloud import paid_text
+        self.cloud.on_paid = lambda pl, c: self.push(self._g("Счёт пополнен"), paid_text(pl, c, self._ui_lang()), telegram=False)
         self.cloud.on_key_gone = self._cloud_key_gone
         self.toolbox.hooks["calendars"] = self.calendars
         self.toolbox.hooks["dewiar_web"] = self._dewiar_web          # поиск и страницы через сервер Dewiar, если сеть режет

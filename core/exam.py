@@ -185,7 +185,7 @@ class Core:
             "tasks": {"auto_run": True, "self_check": True},
             # --scene («Ум Лиры», шаг 1): сцена разговора; следующий шаг идёт сразу — ждём дописанную сцену до 30 с
             "llm": {"active": "exam", "profiles": {"exam": self.profile}, "lean_prompt": self.lean,
-                    **({"scene": True, "scene_wait": 30} if self.scene else {})}}, ensure_ascii=False), encoding="utf-8")
+                    **({"scene": True, "scene_wait": 30} if self.scene else {"scene": False, "scene_on": False})}}, ensure_ascii=False), encoding="utf-8")
         env = dict(os.environ, DEWIAR_CONFIG_DIR=str(cfg), DEWIAR_STATE_DIR=str(st), DEWIAR_WORKSPACE_DIR=str(ws),
                    DEWIAR_PORT=str(self.port), DEWIAR_ASSUME_AEC="1")
         env.pop("DEWIAR_PROMPTER_WAV", None)

@@ -74,7 +74,7 @@ class PromptMixin:
             turns = int(self.s.get("llm", "history_turns") or 0)
             if turns > 0 and self.conv.needs_fold(self.history, turns):
                 threading.Thread(target=self._conv_fold, args=(turns,), name="conv-fold", daemon=True).start()
-            if self.s.get("llm", "scene") and self.conv.scene_due(self.history):   # «Ум Лиры», шаг 1 — за переключателем
+            if self._scene_on() and self.conv.scene_due(self.history):   # «Ум Лиры», шаг 1 — за переключателем
                 threading.Thread(target=self._conv_scene, name="conv-scene", daemon=True).start()
         except Exception:  # noqa: BLE001
             log.exception("разговор: запомнить")
@@ -91,6 +91,21 @@ class PromptMixin:
         if self.conv.fold(lambda: self.history, turns, ask):
             self.emit("conversation", **self.conv.public(self.history))
 
+    def _scene_on(self):
+        """Сцена разговора включена? llm.scene True (экзамен --scene, проба) — да; llm.scene_on True / False — как сказано;
+        None (по умолчанию с 1.0.54) — у облака Dewiar да: замер владельца 20.11 — судья 10 против 8,6, по смыслу 8 из 8 против
+        7 из 8, ничего не просело; пишет её лёгкий мозг облака (X-Dewiar-Bg), главный не нагружается. Своя модель и ключ
+        сервиса — второй запрос за их счёт: только по выбору. (llm.scene=False сохранён у всех прежним умолчанием — не выбор.)"""
+        if self.s.get("llm", "scene") is True:
+            return True
+        v = self.s.get("llm", "scene_on")
+        if v is None:
+            try:
+                return bool((self.s.active_llm() or {}).get("cloud"))
+            except Exception:  # noqa: BLE001
+                return False
+        return bool(v)
+
     def _conv_scene(self):
         """Сцена разговора (llm.scene): пишет активная модель коротким запросом в фоне, по свежей истории."""
         prof = self.s.active_llm()
@@ -99,7 +114,8 @@ class PromptMixin:
 
         def ask(system, messages):
             from llm import stream_chat
-            return "".join(stream_chat(dict(prof, max_tokens=500), system, messages))
+            # облако Dewiar: сцену пишет лёгкий мозг (X-Dewiar-Bg), главный занят разговорами — сцена не стоит в их очереди
+            return "".join(stream_chat(dict(prof, max_tokens=500, _bg=True), system, messages))
         self.conv.scene_update(list(self.history), ask)
 
     def _conv_archive(self, name, text):
@@ -494,7 +510,7 @@ class PromptMixin:
                 out += " " + my
         try:
             note = self.conv.turn_note()
-            if self.s.get("llm", "scene"):                       # «Ум Лиры», шаг 1: сцена — в справку, не в системную подсказку
+            if self._scene_on():                                 # «Ум Лиры», шаг 1: сцена — в справку, не в системную подсказку
                 self.conv.scene_wait(float(self.s.get("llm", "scene_wait") or 0))
                 note = (note + " " + self.conv.scene_note()).strip()
         except Exception:  # noqa: BLE001

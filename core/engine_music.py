@@ -244,9 +244,12 @@ class MusicMixin:
         except Exception:  # noqa: BLE001
             items = []
         # 13.11: «по будням, кроме пятницы, в 17:50» (4 дня) — тоже привычка; раньше считали с 5 дней
+        # 20.11 (владелец, снова: «рассказывает о напоминаниях, которые каждый день — бред»; «А — пора выключать комп и бежать
+        # на автобус» по двум дням недели прошла в итог): привычка — повторяющееся два и больше дней в неделю. Раз в неделю
+        # (планёрка в понедельник) — событие недели, о нём в планах на завтра сказать можно; раз в месяц — тоже
         hs = [x for x in items if (x.get("kind") != "job" or weekly) and x.get("repeat")
               and ((x["repeat"].get("kind") in ("daily", "interval"))
-                   or (x["repeat"].get("kind") == "weekly" and (weekly or len(x["repeat"].get("days") or []) >= 3)))]
+                   or (x["repeat"].get("kind") == "weekly" and (weekly or len(x["repeat"].get("days") or []) >= 2)))]
         return {str(x.get("id")) for x in hs if x.get("id")}, {x.get("text", "").strip() for x in hs if x.get("text", "").strip()}
 
     def _habit_pred(self, weekly=False):
@@ -310,7 +313,9 @@ class MusicMixin:
         return (f"\n\n{what}" + (" (" + "; ".join(f"«{h[:60]}»" for h in habits) + ")" if habits else "")
                 + f" и сами дела по расписанию (утренняя сводка, этот итог) — не события: не упоминай их ни в сделанном, ни в "
                 f"оставшемся, ни {when}, и не говори, что их пропустил(а). Говори только о разовых делах, встречах, отметках "
-                "«сделано» не по привычкам и тратах. Если разовых дел впереди нет — так и скажи одной фразой."
+                "«сделано» не по привычкам и тратах. Если разовых дел впереди нет — так и скажи одной фразой. Сделанное — дела "
+                "пользователя, не твои: «ты проверил», не «проверила». Только факты из данных: без догадок («ужин позади»), "
+                "без серий, «всего дел» и достижений."
                 + (f" Если, кроме привычек, сказать нечего — ответь ровно одним словом: {JOB_SILENT}." if silent else ""))
 
     JOB_RETRY_MIN = (5, 15)            # дело не удалось (модель или сеть) — ещё попытки через столько минут
@@ -335,6 +340,13 @@ class MusicMixin:
         while time.monotonic() < end and (self.turn is not None or self.state in ("speaking", "thinking") or self.alarm):
             time.sleep(1.0)
         title = MusicMixin.job_name(item)
+        if self._eve_done_today(item):
+            log.info("🗓 «%s»: итог дня уже подвели при возвращении — второй раз не повторяю", title)
+            try:
+                self.reminders.update(item.get("id"), {"last_run": datetime.now().isoformat(timespec="seconds"), "last_ok": True, "last_error": ""})
+            except Exception:  # noqa: BLE001
+                pass
+            return
         prompt = self._job_prompt(item)
         log.info("🗓 По расписанию: %s%s", title, f" (попытка {attempt + 1})" if attempt else "")
         bot = self._bot_for(item.get("deliver"))
@@ -373,6 +385,9 @@ class MusicMixin:
         elif ok and not item.get("brief"):
             self.emit("heard", text=f"🗓 {title}")
             self.announce(text)                          # в окно и голосом, с сигналом — как напоминание
+        if ok and not item.get("brief") and not MusicMixin._week_job(item) and (
+                item.get("preset") == "evening" or SUMMARY_JOB_RX.search(str(item.get("text") or ""))):
+            self._eve_said = datetime.now().date()       # итог сегодня подведён — «С возвращением» его не повторит
         if ok is None and ev.is_set():
             return                                       # ход перебили (человек заговорил) — не сбой и не повтор
         try:
@@ -994,6 +1009,37 @@ class MusicMixin:
                and lo <= x["time"] <= hi and not x.get("done")]
         return sorted(out)
 
+    def _eve_job_pending(self, now=None):
+        """Сегодня ещё будет (или опоздал и выполнится) «Итог дня» по расписанию: дело-итог (не недели), не на паузе, сегодня
+        не выполнялось, время — уже прошло или в ближайшие 3 часа."""
+        now = now or datetime.now()
+        try:
+            items = list(self.reminders.items)
+        except Exception:  # noqa: BLE001
+            return False
+        for x in items:
+            if x.get("kind") != "job" or x.get("paused") or x.get("brief") or MusicMixin._week_job(x):
+                continue
+            if not (x.get("preset") == "evening" or SUMMARY_JOB_RX.search(str(x.get("text") or ""))):
+                continue
+            if str(x.get("last_run") or "")[:10] == now.date().isoformat():
+                continue
+            try:
+                at = datetime.fromisoformat(str(x.get("at") or ""))
+            except ValueError:
+                continue
+            if at.date() == now.date() and at <= now + timedelta(hours=3):
+                return True
+        return False
+
+    def _eve_done_today(self, item):
+        """Дело — «Итог дня», а итог сегодня уже подвели при возвращении — второй раз не подводим (20.11)."""
+        if item.get("brief") or MusicMixin._week_job(item):
+            return False
+        if not (item.get("preset") == "evening" or SUMMARY_JOB_RX.search(str(item.get("text") or ""))):
+            return False
+        return getattr(self, "_eve_said", None) == datetime.now().date()
+
     def _welcome_back(self, gone, wait=3.0):
         """Человек вернулся после gone секунд. Молчим, если: выключено, микрофон выключен, созвон, звенит будильник,
         идёт разговор, виджет спрятали и с тех пор не звали, нет модели. Иначе — presence.plan решает, есть ли что
@@ -1041,8 +1087,13 @@ class MusicMixin:
                 care_line, care_ids = self.care.context()
         except Exception:  # noqa: BLE001
             care_line, care_ids = "", []
+        # итог дня — один: впереди (или опоздал и вот-вот выполнится) «Итог дня» по расписанию — при возвращении его не
+        # подводим и сводку дня вечером не даём (владелец 20.11: включил компьютер в 21:32 — итог «С возвращением», а через
+        # минуту опоздавший «Итог дня» повторил его)
+        eve_job = self._eve_job_pending()
         p = presence.plan(gone, datetime.now() - timedelta(seconds=gone), tasks, upcoming, last, dstat=done,
-                          eve_said=getattr(self, "_eve_said", None), news=news_fact, care=care_line)
+                          eve_said=datetime.now().date() if eve_job else getattr(self, "_eve_said", None),
+                          day_brief=not eve_job, news=news_fact, care=care_line)
         if not p:
             log.info("👋 вернулись через %s — сказать нечего, молчим", presence._hm(gone))
             return False

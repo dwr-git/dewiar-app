@@ -11,7 +11,7 @@ from answer_rules import (
     crash_blocks, _CRASH_RX, DATE_ASK_RX, device_os, DISK_ASK_RX, facts_shown, honest_rest, IDEA_RULE, INFO_TOOLS, told,
     JOB_ASK_RX, LAW_CODE_RX, LAW_REF_RX, law_unsourced, model_label, _MONTH_NOM, _MONTH_RX, month_year_wrong,
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
-    PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, REPEAT_RX, shown_q, SONGS_ASK_RX,
+    PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, ack_again, REPEAT_RX, shown_q, SONGS_ASK_RX,
     SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT)  # noqa: F401 — прежние имена на месте
 from answer_prompt import PromptMixin, prompt_parts
 from answer_models import ModelsMixin
@@ -356,6 +356,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             msgs = self._messages(text, images, prof)
             if prof.get("cloud") and prof.get("net") and not images and not self._net_closed() and self._net_rules_ok():
                 prof = dict(prof, _net_turn=True)       # «Сеть Лиры»: заголовок — только к основному ходу разговора (llm._headers)
+            if prof.get("cloud") and not images and not getattr(turn, "typed", False) and not getattr(turn, "raw", False) and not getattr(turn, "via", None):
+                # сказано голосом (владелец 20.11, скорость голоса): облако отдаёт простой вопрос лёгкому мозгу целиком —
+                # первое слово ~0,5 с вместо ~7 с у главного; сложное и поручения решает сайт (lite_simple) — как раньше
+                prof = dict(prof, _voice=True)
             from llm import wants_think
             if prof.get("think") not in ("on", "off") and self.s.get("llm", "think_auto") is not False and wants_think(think_ask(text, getattr(turn, "raw", False))):
                 # сложная просьба — модель думает (дольше, но стих с рифмой, а расчёт со смыслом); лимит — с запасом на размышления
@@ -390,6 +394,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     # владелец 11.11, 21:00: «Итог дня» — «Дела: итог», «Деньги: отчёт», а потом навык «Проверка договора»
                     # (contract-check) — и ни слова итога. Итогу навыки плагинов не нужны
                     specs = [x for x in specs if x.get("name") != "use_skill"]
+            if getattr(turn, "greet", False):
+                # «С возвращением» — по готовым фактам, без инструментов (владелец 20.11: вечером позвала done_report — и в итог
+                # попали «обед с картой», «серия» и «всего 65 дел»; поручение «без инструментов» модель не держала)
+                specs = []
             mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(prof))
             if mode in ("native", "prompt"):
                 prof = dict(prof, tools_mode=mode)
@@ -748,6 +756,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 # №435 (31.10, на телефоне и так же здесь): итог сказан до действия и повторён после — начало следующего
                 # шага придерживаем, пока не ясно, не повтор ли это сказанного (repeat_head); повтор не говорим и не пишем
                 probe, probing, muted = "", bool(step and _rep_norm(turn.full)), False
+                ack_seen = not probing
                 for kind, val in events:
                     if t_ev is None:
                         t_ev = time.monotonic()
@@ -765,6 +774,16 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         continue
                     if probing:
                         probe += val
+                        if not ack_seen:                # второе «Записала.» после действия — срезать, остальное сказать
+                            cut = ack_again(turn.full, probe)
+                            if cut is None:
+                                continue
+                            ack_seen = True
+                            if cut:
+                                log.info("🔁 Второе подтверждение после действия — не повторяю: %s", probe[:cut].strip())
+                                probe = probe[cut:]
+                                if not probe:
+                                    continue
                         rep = repeat_head(turn.full, probe)
                         if rep is None:
                             continue
@@ -790,6 +809,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     for s_ in split.feed(codef.feed(val)):         # код и команды вслух не читаем
                         say(s_)
                 self._usage_note(prof, (t_ev or time.monotonic()) - t_step, turn)
+                if probing and probe and not ack_seen and ack_again(turn.full, probe, fin=True):
+                    probe = probe[ack_again(turn.full, probe, fin=True):]       # «Записала.» и всё — уже сказано
                 if probing and probe and not repeat_head(turn.full, probe, fin=True):   # короткий новый хвост — не терять
                     turn.full += probe
                     step_text += probe
@@ -803,6 +824,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         log.info("✋ Модель отказалась («нет доступа»), не попробовав %s", "дело по расписанию — прошу завести"
                                  if watch else "поиск — прошу поискать")
                         held.clear()                           # отговорка так и не прозвучала
+                        self.day_miss("refusal", turn.asked or text, step_text)
                         sentences.put("Секунду — настрою." if watch else "Секунду — посмотрю в интернете.")
                         msgs = msgs + [{"role": "assistant", "content": step_text}, {"role": "user", "content": WATCH_NUDGE if watch else REFUSAL_NUDGE}]
                         turn.full = ""
@@ -834,6 +856,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         continue
                     if want_task or (nudged < 2 and promised):
                         nudged += 1
+                        if nudged == 1:
+                            self.day_miss("task" if want_task else "fake_call" if faked else "promise", turn.asked or text, step_text)
                         log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else
                                  f"написала вызов «{faked}» текстом" if faked else "только пообещала", " (ещё раз)" if nudged > 1 else "")
                         retract(drop=bool(faked))                    # текст с выдуманным вызовом — не в ответ

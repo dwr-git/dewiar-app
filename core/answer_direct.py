@@ -395,6 +395,8 @@ class DirectMixin:
         prev = next((m.get("content") for m in reversed(self.history[:-1]) if m.get("role") == "assistant" and m.get("content")), "")
         if not prev:
             return
+        if hasattr(self, "day_miss"):
+            self.day_miss("correction", said, prev)         # «Ум Лиры», шаг 3 — замер: человек поправил
 
         def run():
             from llm import stream_chat

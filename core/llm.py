@@ -342,6 +342,10 @@ def _headers(p):
     # перевод итога задачи, бот персонажа, экзамен) идут тем же профилем, но без флага — в сеть никогда (рецензия 04.11)
     if p.get("cloud") and p.get("net") and p.get("_net_turn"):
         h["X-Dewiar-Net"] = "1"
+    if p.get("cloud") and p.get("_voice"):
+        h["X-Dewiar-Voice"] = "1"        # сказано голосом: простой вопрос — лёгкому мозгу (sitechat.php lite_share)
+    if p.get("cloud") and p.get("_bg"):
+        h["X-Dewiar-Bg"] = "1"           # служебное в фоне (сцена разговора): лёгкому мозгу, если он есть (sitechat.php lite_pick)
     return h
 
 

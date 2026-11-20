@@ -1669,7 +1669,8 @@ function dictMore(t, cut) {
 }
 /* Сказанное голосом — с тем, что прикреплено в поле ввода (фото, файл): прикрепили скриншот и сказали «сохрани в
    заметки …» — он уходит вместе с фразой и попадает в заметку (отзыв 11.10: фото так и висело над полем). */
-function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : {}); }
+// voice — сказано голосом (1.0.53, владелец 20.11 «скорость голоса»): облако отдаёт простой вопрос лёгкому мозгу (X-Dewiar-Voice)
+function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : { voice: true }); }
 const dictTake = (t) => { const all = ((dict ? dict + " " : "") + (t || "")).trim(); dict = ""; return all; };
 function sttStall(why) {
   if (!sttActive) return;
@@ -1703,7 +1704,10 @@ N.on("stt_end", e => {
   sttGuard(sttVia === "server" ? 60000 : 8000, "end");          // запись уходит на сервер — при слабом интернете это не мгновенно
   if (sttVia === "server" && !String($("#you").textContent || "").trim()) showYou(trL("распознаю…"));
 });
-N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); });
+/* №366 (20.11): запись для сервера (своя, Speech.listenServer) шлёт уровень каждые 50 мс, а частичного текста у неё нет —
+   сторож «нет событий 15 с» срабатывал посреди удержания кнопки: запись отменялась, голосовое пропадало целиком. Уровень от
+   своей записи — знак, что она жива: сторож заводится заново (у распознавания телефона — только частичный текст, как было). */
+N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); else if (sttVia === "server" && sttActive) sttGuard(15000, "silent"); });
 N.on("stt_partial", e => { if (!sttMine(e)) return; heardPartial = e.text; showYou((dict ? dict + " " : "") + e.text); sttAlive(); });
 N.on("stt_result", e => {
   if (!sttMine(e)) return;
@@ -2650,6 +2654,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   // idle — сколько поток может молчать: программа (make_app) — целый HTML в одном вызове, и сервер модели нередко отдаёт
   // вызов целиком в конце (экзамен 0.9.18: «Сделай программу: 3D-модель атома» — 322 с и «сервер замолчал посреди ответа»)
   const hdr = llmHeaders(); if (opt.net && netHeaderOk()) hdr["X-Dewiar-Net"] = "1";
+  if (opt.voice && S.llm.cloud) hdr["X-Dewiar-Voice"] = "1";   // сказано голосом: простой вопрос — лёгкому мозгу (сайт решает сам)
   const r = await http("POST", url, { headers: hdr, body, stream: true, timeout: 180000, signal, idle: opt.idle || 75000,
     onChunk: (chunk) => { if (err) return; buf += chunk; const parts = buf.split("\n"); buf = parts.pop(); try { parts.forEach(line); } catch (e) { err = e; } } });
   if (buf) { try { line(buf); } catch (e) { err = err || e; } }
@@ -3101,7 +3106,7 @@ async function ask(text, opts = {}) {
     const round1 = async (tools) => {
       for (let tries = 0; ; tries++) {
         try {
-          const r = await llmStream(msgs, tools, (p) => { if (turnAbort === ctl) sink.push(p); }, ctl.signal, Object.assign({ net: netOk }, deep ? { think: true } : {}, longGen ? { idle: 300000 } : {}));
+          const r = await llmStream(msgs, tools, (p) => { if (turnAbort === ctl) sink.push(p); }, ctl.signal, Object.assign({ net: netOk, voice: !!opts.voice }, deep ? { think: true } : {}, longGen ? { idle: 300000 } : {}));
           if (S.llm.cloud && !String(r.text || "").trim() && !r.calls.length && !r.finish && !ctl.signal.aborted)
             throw Object.assign(new Error("связь оборвалась — ответ пришёл пустым"), { net: true });
           if (tries) netHealed(tries);                 // повтор помог — это не сбой для разработчика (пакет 22.10, №189)
@@ -9606,7 +9611,7 @@ async function cloudBalance(force) {
   if (prev && ((cloudInfo.low && !prev.low) || (cloudInfo.empty && !prev.empty)))          // один раз, когда стало мало; site — общий счёт с сайтом (вход аккаунтом)
     D.notify(cloudInfo.site ? (cloudInfo.empty ? "На счёте dewiar.pro закончились ИИ-талеры" : `На счёте dewiar.pro: ${cloudInfo.balance_text || cloudInfo.balance + " тал."}`)
       : cloudInfo.empty ? "Заряд Dewiar Облака закончился" : `Заряд Dewiar Облака: ${cloudInfo.percent}%`, cloudInfo.site ? "Пополнить — в личном кабинете на сайте" : "Настройки → Мозг → Пополнить");
-  giftNote(cloudInfo); balBadge(cloudInfo); payWarnCheck(cloudInfo);
+  giftNote(cloudInfo); paidNote(cloudInfo); balBadge(cloudInfo); payWarnCheck(cloudInfo);
   return cloudInfo;
 }
 /* Подарок месяца пришёл (1.0.48, владелец 20.11: «при начислении сообщать… и что если не потратят, сгорит») — один раз
@@ -9617,6 +9622,18 @@ function giftNote(c) {
   S.giftSeen = g.until; saveS();
   const u = new Date(g.until + "T12:00:00"), when = isNaN(u) ? "конца месяца" : u.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
   D.notify("Подарок месяца: " + String(+g.amount).replace(".", ",") + " талера", `Тратится первым; что не потратите до ${when}, сгорит — тогда же придёт новый.`);
+}
+/* Счёт пополнили (1.0.53, владелец 20.11: «как подарочные — и когда просто пополняет») — один тихий уведомлением: деньги
+   дошли, сколько теперь. Первое знакомство (после обновления) — только запомнить: старое пополнение не новость. */
+function paidNote(c) {
+  if (!c || !("paid_last" in c)) return;
+  const pl = c.paid_last, seen = S.paidSeen;
+  if (!pl || !pl.ts) { if (seen === undefined) { S.paidSeen = 0; saveS(); } return; }
+  if (seen === pl.ts) return;
+  S.paidSeen = pl.ts; saveS();
+  if (seen === undefined || Date.now() / 1000 - pl.ts > 3 * 86400) return;
+  const n = (x) => String(Math.round(+x * 100) / 100).replace(".", ",");
+  D.notify("Счёт пополнен: +" + n(pl.amount) + " тал.", "Теперь на счёте " + n(c.balance) + " тал." + (+c.turns > 0 ? ` — это примерно ${c.turns} ответов.` : ""));
 }
 /* Ключ Dewiar удалили или перевыпустили на сайте, а вход в аккаунт есть — не мучаем человека ошибкой: думаем по аккаунту. */
 const keyGone = (m) => /ключ dewiar не найден|invalid_api_key|ключ отозван/i.test(String(m || ""));
@@ -10445,11 +10462,30 @@ async function updateSay(install) {
     return `Есть новая версия ${a.version} — обновляю. Всё ваше сохранится.`;
   } catch (e) { return "Не получилось проверить обновление — нет связи с dewiar.pro. Попробуйте чуть позже."; }
 }
+/* Ритм обновлений (1.0.53, владелец 20.11: «обновлений несколько раз в день — некоторых уже не радует; напоминать раз в
+   2–3 дня, вручную — сразу»): сама предлагаю не раньше чем через 2 дня после того, как встала нынешняя версия, плюс своя
+   случайная добавка телефона до суток. «Важное исправление» (urgent в latest.json) и «Проверить» в «О приложении» — сразу. */
+const UPD_EVERY = 2 * 86400000, UPD_JIT = 86400000;
+function updDue(cur) {
+  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now() }; saveS(); }
+  if (typeof S.updJit !== "number") { S.updJit = Math.random() * UPD_JIT; saveS(); }
+  return S.updSince.at + UPD_EVERY + S.updJit;
+}
 async function checkUpdate(manual) {
   const r = $("#upd-res");
   try {
+    const inf = JSON.parse(D.info() || "{}");
+    if (inf.store) {                                   // сборка для магазинов (RuStore, Google Play): обновляет магазин
+      if (manual && r) updRender("Обновления приходят через магазин приложений, откуда вы установили Dewiar.");
+      return false;
+    }
+    const cur = inf.version || "0", due = updDue(cur);
     const d = JSON.parse((await http("GET", UPD_URL, { timeout: 10000 })).body || "{}"), a = d.android;
-    const newer = a && cmpVer(a.version, JSON.parse(D.info() || "{}").version || "0") > 0;
+    const newer = a && cmpVer(a.version, cur) > 0;
+    if (newer && !manual && !a.urgent && Date.now() < due) {
+      plog("info", `⬆ есть ${a.version} — предложу через ${Math.max(1, Math.round((due - Date.now()) / 3600000))} ч (обновления раз в 2–3 дня)`);
+      return false;
+    }
     const hands = typeof D.handsState === "function" && D.handsState() !== "none";     // стоит версия с «руками» — и обновляем её
     if (newer && hands && !a.hands_apk) {
       // отчёт 835 (17.11): «скачиваю версию с руками, приходит обновление — и руки слетают; после каждого обновления

@@ -38,8 +38,18 @@ public final class Bridge {
             if (f.exists()) crash = Net.readAll(new FileInputStream(f));
             return new JSONObject().put("version", BuildInfo.VERSION).put("sdk", Build.VERSION.SDK_INT)
                     .put("android", Build.VERSION.RELEASE).put("device", Build.MANUFACTURER + " " + Build.MODEL)
-                    .put("recognizer", Speech.systemAvailable(a)).put("tts", a.tts.ready()).put("crash", crash).put("aid", joinAid()).toString();
+                    .put("recognizer", Speech.systemAvailable(a)).put("tts", a.tts.ready()).put("crash", crash).put("aid", joinAid())
+                    .put("store", store()).toString();
         } catch (Exception e) { return "{}"; }
+    }
+
+    /** Сборка для магазинов (Dewiar-X-store.apk, build_apk.sh): метка pro.dewiar.store в манифесте — обновляет магазин,
+     *  приложение само обновлений не ищет (в этой сборке нет и разрешения ставить пакеты). */
+    private boolean store() {
+        try {
+            android.content.pm.ApplicationInfo ai = a.getPackageManager().getApplicationInfo(a.getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
+            return ai.metaData != null && ai.metaData.get("pro.dewiar.store") != null;
+        } catch (Exception e) { return false; }
     }
 
     /** 0.82.1 (владелец 04.11: «Забыть ключ» и переустановка давали новый подарок): номер этого телефона для сайта — хэш

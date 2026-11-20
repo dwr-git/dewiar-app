@@ -80,7 +80,8 @@ function dictMore(t, cut) {
 }
 /* Сказанное голосом — с тем, что прикреплено в поле ввода (фото, файл): прикрепили скриншот и сказали «сохрани в
    заметки …» — он уходит вместе с фразой и попадает в заметку (отзыв 11.10: фото так и висело над полем). */
-function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : {}); }
+// voice — сказано голосом (1.0.53, владелец 20.11 «скорость голоса»): облако отдаёт простой вопрос лёгкому мозгу (X-Dewiar-Voice)
+function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : { voice: true }); }
 const dictTake = (t) => { const all = ((dict ? dict + " " : "") + (t || "")).trim(); dict = ""; return all; };
 function sttStall(why) {
   if (!sttActive) return;
@@ -114,7 +115,10 @@ N.on("stt_end", e => {
   sttGuard(sttVia === "server" ? 60000 : 8000, "end");          // запись уходит на сервер — при слабом интернете это не мгновенно
   if (sttVia === "server" && !String($("#you").textContent || "").trim()) showYou(trL("распознаю…"));
 });
-N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); });
+/* №366 (20.11): запись для сервера (своя, Speech.listenServer) шлёт уровень каждые 50 мс, а частичного текста у неё нет —
+   сторож «нет событий 15 с» срабатывал посреди удержания кнопки: запись отменялась, голосовое пропадало целиком. Уровень от
+   своей записи — знак, что она жива: сторож заводится заново (у распознавания телефона — только частичный текст, как было). */
+N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); else if (sttVia === "server" && sttActive) sttGuard(15000, "silent"); });
 N.on("stt_partial", e => { if (!sttMine(e)) return; heardPartial = e.text; showYou((dict ? dict + " " : "") + e.text); sttAlive(); });
 N.on("stt_result", e => {
   if (!sttMine(e)) return;

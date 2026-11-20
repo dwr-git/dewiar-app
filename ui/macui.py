@@ -356,6 +356,39 @@ def _webviews(win, root):
     return out
 
 
+_POCKET_LOG = []
+
+
+def _no_pocket(wv):
+    """№933 (20.11, macOS 27, 1.0.51: «мимо, последняя версия тоже не решила»): отступ снят, подложка в цвет страницы
+    (rgb 38,42,49), а полоса под светофором — нейтрально-серая, не наша. С macOS 26 WKWebView рисует под строкой заголовка
+    «карман» (scroll pocket / edge effect) — затемнение края прокрутки. Прячем его тем, что есть у этой версии WebKit
+    (имена с pocket / edge effect: «…Hidden_» — да, «…Enabled_» — нет), и пишем в журнал, что нашлось и что сработало."""
+    import re as _re
+    found, did = [], []
+    try:
+        names = [n for n in dir(wv) if _re.search(r"pocket|edgeeffect", n, _re.I)]
+    except Exception:  # noqa: BLE001
+        names = []
+    for n in names:
+        if not n.endswith("_") or not n.startswith(("set", "_set")):
+            found.append(n)
+            continue
+        arg = True if _re.search(r"hidden_$", n, _re.I) else False if _re.search(r"(?:enabled|visible|shows?\w*)_$", n, _re.I) else None
+        if arg is None:
+            found.append(n)
+            continue
+        try:
+            getattr(wv, n)(arg)
+            did.append(f"{n}({arg})")
+        except Exception as e:  # noqa: BLE001
+            found.append(f"{n}: {e}")
+    if not _POCKET_LOG:                                         # в журнал — один раз за запуск
+        _POCKET_LOG.append(1)
+        log("строка заголовка студии: карман WebView — " + (", ".join(did) if did else "прятать нечем")
+            + ("; ещё: " + ", ".join(found[:12]) if found else ""))
+
+
 def _no_insets(win, root, bg=None):
     """№898 (19.11, Mac mini, macOS 27, 1.0.40: «полоса в студии осталась той же», в журнале — «прозрачная»): строка
     заголовка прозрачная, но WKWebView сам отодвигает страницу под строку заголовка (automaticallyAdjustsContentInsets,
@@ -390,6 +423,7 @@ def _no_insets(win, root, bg=None):
                 wv.setObscuredContentInsets_(AppKit.NSEdgeInsets(0, 0, 0, 0)); done = True
             except Exception:  # noqa: BLE001
                 pass
+        _no_pocket(wv)
         n += done
     return n
 

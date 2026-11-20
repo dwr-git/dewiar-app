@@ -274,6 +274,34 @@ class HealthMixin:
         t.start()
         t.join(timeout=4)                                # выход не ждёт дольше: нет связи — так нет
 
+    DAY_MISS_KEEP = 7 * 86400
+
+    def day_miss(self, kind, ask, said=""):
+        """«Ум Лиры», шаг 3 — сначала замер: промах хода (promise — пообещала и не сделала, fake_call — написала вызов
+        текстом, task — не запустила задачу, refusal — «нет доступа», не попробовав, correction — человек поправил) — в пульс
+        (miss_<kind>) и в журнал промахов STATE_DIR/misses.jsonl (7 дней; просьба и сказанное — по 160 знаков). Из него ночью
+        будут «Уроки дня»; сейчас — сколько их и каких."""
+        self.health_count("miss_" + str(kind))
+        try:
+            import json as _json
+            from pathlib import Path
+            f = Path(STATE_DIR) / "misses.jsonl"
+            now = time.time()
+            rows = []
+            if f.exists():
+                for ln in f.read_text(encoding="utf-8").splitlines()[-400:]:
+                    try:
+                        r = _json.loads(ln)
+                    except ValueError:
+                        continue
+                    if now - float(r.get("t") or 0) < self.DAY_MISS_KEEP:
+                        rows.append(ln)
+            rows.append(_json.dumps({"t": int(now), "kind": kind, "ask": str(ask or "")[:160], "said": str(said or "")[:160]},
+                                    ensure_ascii=False))
+            f.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            log.debug("журнал промахов", exc_info=True)
+
     def health_count(self, what, n=1):
         """Счётчик для пульса: turns — ответы, net_ok / net_fail — удачные и неудачные запросы к модели, rude / refused —
         грубость к помощнику и его отказы (boundaries.py; только числа)."""
@@ -438,7 +466,8 @@ class HealthMixin:
                 "turns": h.get("turns", 0), "net_ok": h.get("net_ok", 0), "net_fail": h.get("net_fail", 0), "errors": h.get("errors", 0),
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
                 "problems": [{"sig": k, "text": mask_personal(v["text"]), "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
-                "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}, "first": h.get("first") or {}}
+                "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}, "first": h.get("first") or {},
+                "misses": {k[5:]: v for k, v in h.items() if k.startswith("miss_") and isinstance(v, int)}}   # «Ум Лиры», шаг 3: замер
 
     def _lat_how(self):
         """Чем думает ассистент — для разбивки задержки голоса (dewiar, local, cloud…)."""

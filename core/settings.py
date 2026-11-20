@@ -126,7 +126,8 @@ DEFAULTS = {
         "history_turns": 8,
         "key_fallback": True,       # сервис по ключу (Gemini, Kimi…) не ответил — мозг Dewiar (15.11, «Кто чем думает»)
         "own_fallback": False,      # своя модель не отвечает — мозг Dewiar (по согласию; engine_answer._own_fallback)
-        "scene": False,             # «Ум Лиры», шаг 1: сцена разговора в справке к вопросу (conversation.py) — проба
+        "scene": False,             # «Ум Лиры», шаг 1: проба сцены разговора (экзамен --scene) — True включает всегда
+        "scene_on": None,           # сцена разговора в справке к вопросу (conversation.py): None — у облака Dewiar да (1.0.54)
         "scene_wait": 0,            # сек.: ждать дописанную сцену перед ответом (экзамен; людям — 0, голос не ждёт)
         "lean_prompt": False,       # проба: короткая инструкция — навыки только именами, описания — к подходящему вопросу
         "think_auto": True,         # сложная просьба (стих, расчёт, анализ, план, код) — модель думает перед ответом (llm.wants_think)
@@ -249,7 +250,7 @@ DEFAULTS = {
     "calendars": {"items": [], "remind_minutes": 10},   # календари по ссылке iCal (Google, Яндекс…), напомнить за N минут
     "cloud": {"key": "", "url": "", "account": False, "stt_ok": False, "tts_ok": False,
               "net_share": True, "net_pub": "",   # «Сеть Лиры»: пускать общие вопросы на узлы людей; ключ сети (доверие при первом использовании)
-              "join": {}, "gift_seen": ""},     # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
+              "join": {}, "gift_seen": "", "paid_seen": None},     # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
     "kids": {"on": False},   # детский режим (kids.py): ребёнок, время, что можно; PIN — в STATE_DIR/kids.json
     "net": {"proxy": "", "dewiar": False, "web_via": True,   # прокси для серверов Dewiar, если провайдер блокирует dewiar.pro: свой (socks5://… или http://…) или «Использовать прокси Dewiar»
             "dewiar_secret": "", "dewiar_at": 0,                # прокси, выданный dewiar.pro, и когда получен (обновляется раз в 6 часов, engine_brain.py)

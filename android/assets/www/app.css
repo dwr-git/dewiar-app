@@ -2110,6 +2110,34 @@ body.tab-wide.pane #stage { display: flex; flex-direction: column; padding: 0 16
 body.tab-wide.pane #stage #talk { max-width: none; width: 100%; }
 body.tab-wide.pane #stage #orbwrap { width: min(28vw, 30vh, 260px); }
 
+/* широкий экран и веб-версия на компьютере (владелец 20.11: «блок сообщений урезанный и кривой… середину и сообщения
+   ограничить максимальную шириной, привести к порядку»). Полоса «облик слева, ответ справа» считала ширину от окна, а не
+   от области правее меню: на мониторе 1900 точек ответу оставалось 270. Теперь всё — одной полосой до 1040 точек по центру
+   области разговора: верхние кнопки, облик с ответом и поле ввода с кнопками; ответ — во всю свою колонку. */
+:root { --bandw: 1040px; --bandpad: max(24px, calc((100vw - var(--railw) - var(--bandw)) / 2)); }
+@media (orientation: landscape) and (min-width: 700px) {
+  body.tab #stage { padding: 0 var(--bandpad); grid-template-columns: minmax(200px, 340px) minmax(0, 1fr); column-gap: 48px; }
+  body.tab #stage.quiet { grid-template-columns: minmax(0, 1fr) 0px; column-gap: 0; }
+  body.tab #stage.quiet.tries { grid-template-columns: minmax(200px, 340px) minmax(0, 1fr); column-gap: 48px; }
+  /* поля под тень: колонка ответа прокручивается (overflow) и обрезала светлые тени пузыря и кнопок по краям (владелец 20.11:
+     «тени светлые по бокам режутся») — ответ отступает от краёв колонки на ширину тени */
+  body.tab #stage #talk { max-width: 720px; padding: 18px 22px 26px; }
+  body.tab #bar { padding-left: var(--bandpad); padding-right: var(--bandpad); }
+  body.tab #top { padding-left: calc(var(--bandpad) - 12px); padding-right: calc(var(--bandpad) - 12px); }
+}
+/* раздел открыт рядом: разговор — колонкой до 680 точек по центру оставшегося места, поле ввода — той же ширины */
+body.tab-wide.pane { --bandpad: max(18px, calc((100vw - var(--railw) - var(--panew) - 24px - 760px) / 2)); }
+body.tab-wide.pane #stage #talk { max-width: 720px; margin: 0 auto; padding: 18px 22px 26px; }
+body.tab-wide.pane #bar { padding-left: var(--bandpad); padding-right: var(--bandpad); }
+body.tab-wide.pane #top { right: calc(var(--panew) + 24px); padding-left: 12px; padding-right: 12px; }
+/* прокрутка меню и разделов — тонкая и полупрозрачная, в цвет страницы (владелец: «скролл слева грубый и не в цвет») */
+body.tab #rail, body.tab .sheet { scrollbar-width: thin; scrollbar-color: rgba(128,132,150,.35) transparent; }
+body.tab #rail::-webkit-scrollbar, body.tab .sheet::-webkit-scrollbar { width: 8px; }
+body.tab #rail::-webkit-scrollbar-track, body.tab .sheet::-webkit-scrollbar-track { background: transparent; }
+body.tab #rail::-webkit-scrollbar-thumb, body.tab .sheet::-webkit-scrollbar-thumb { background: rgba(128,132,150,.28); border-radius: 8px;
+  border: 2px solid transparent; background-clip: padding-box; }
+@media (hover: hover) { body.tab #rail::-webkit-scrollbar-thumb:hover, body.tab .sheet::-webkit-scrollbar-thumb:hover { background-color: rgba(128,132,150,.5); } }
+
 /* ---------- «Клиенты» и «Сделки» (clients.js, 0.9.32): список, карточка, доска сделок ---------- */
 #sh-clients input:not([type=range]), #sh-clients select, #sh-clients textarea { min-width: 0; padding: 11px 13px; border-radius: 13px; border: 0; background: var(--field); outline: none; }
 body.neu #sh-clients input:not([type=range]), body.neu #sh-clients select, body.neu #sh-clients textarea { box-shadow: var(--press); }

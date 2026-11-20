@@ -374,7 +374,7 @@ async function cloudBalance(force) {
   if (prev && ((cloudInfo.low && !prev.low) || (cloudInfo.empty && !prev.empty)))          // один раз, когда стало мало; site — общий счёт с сайтом (вход аккаунтом)
     D.notify(cloudInfo.site ? (cloudInfo.empty ? "На счёте dewiar.pro закончились ИИ-талеры" : `На счёте dewiar.pro: ${cloudInfo.balance_text || cloudInfo.balance + " тал."}`)
       : cloudInfo.empty ? "Заряд Dewiar Облака закончился" : `Заряд Dewiar Облака: ${cloudInfo.percent}%`, cloudInfo.site ? "Пополнить — в личном кабинете на сайте" : "Настройки → Мозг → Пополнить");
-  giftNote(cloudInfo); balBadge(cloudInfo); payWarnCheck(cloudInfo);
+  giftNote(cloudInfo); paidNote(cloudInfo); balBadge(cloudInfo); payWarnCheck(cloudInfo);
   return cloudInfo;
 }
 /* Подарок месяца пришёл (1.0.48, владелец 20.11: «при начислении сообщать… и что если не потратят, сгорит») — один раз
@@ -385,6 +385,18 @@ function giftNote(c) {
   S.giftSeen = g.until; saveS();
   const u = new Date(g.until + "T12:00:00"), when = isNaN(u) ? "конца месяца" : u.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
   D.notify("Подарок месяца: " + String(+g.amount).replace(".", ",") + " талера", `Тратится первым; что не потратите до ${when}, сгорит — тогда же придёт новый.`);
+}
+/* Счёт пополнили (1.0.53, владелец 20.11: «как подарочные — и когда просто пополняет») — один тихий уведомлением: деньги
+   дошли, сколько теперь. Первое знакомство (после обновления) — только запомнить: старое пополнение не новость. */
+function paidNote(c) {
+  if (!c || !("paid_last" in c)) return;
+  const pl = c.paid_last, seen = S.paidSeen;
+  if (!pl || !pl.ts) { if (seen === undefined) { S.paidSeen = 0; saveS(); } return; }
+  if (seen === pl.ts) return;
+  S.paidSeen = pl.ts; saveS();
+  if (seen === undefined || Date.now() / 1000 - pl.ts > 3 * 86400) return;
+  const n = (x) => String(Math.round(+x * 100) / 100).replace(".", ",");
+  D.notify("Счёт пополнен: +" + n(pl.amount) + " тал.", "Теперь на счёте " + n(c.balance) + " тал." + (+c.turns > 0 ? ` — это примерно ${c.turns} ответов.` : ""));
 }
 /* Ключ Dewiar удалили или перевыпустили на сайте, а вход в аккаунт есть — не мучаем человека ошибкой: думаем по аккаунту. */
 const keyGone = (m) => /ключ dewiar не найден|invalid_api_key|ключ отозван/i.test(String(m || ""));

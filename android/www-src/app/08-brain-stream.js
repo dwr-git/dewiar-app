@@ -193,6 +193,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   // idle — сколько поток может молчать: программа (make_app) — целый HTML в одном вызове, и сервер модели нередко отдаёт
   // вызов целиком в конце (экзамен 0.9.18: «Сделай программу: 3D-модель атома» — 322 с и «сервер замолчал посреди ответа»)
   const hdr = llmHeaders(); if (opt.net && netHeaderOk()) hdr["X-Dewiar-Net"] = "1";
+  if (opt.voice && S.llm.cloud) hdr["X-Dewiar-Voice"] = "1";   // сказано голосом: простой вопрос — лёгкому мозгу (сайт решает сам)
   const r = await http("POST", url, { headers: hdr, body, stream: true, timeout: 180000, signal, idle: opt.idle || 75000,
     onChunk: (chunk) => { if (err) return; buf += chunk; const parts = buf.split("\n"); buf = parts.pop(); try { parts.forEach(line); } catch (e) { err = e; } } });
   if (buf) { try { line(buf); } catch (e) { err = err || e; } }

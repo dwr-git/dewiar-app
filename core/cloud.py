@@ -96,6 +96,20 @@ MONTHS_GEN = ("января", "февраля", "марта", "апреля", "�
               "декабря")
 
 
+def _num(x):
+    return f"{round(float(x or 0), 2):g}"
+
+
+def paid_text(pl, info, lang="ru"):
+    """Счёт пополнен (1.0.53, владелец 20.11: «как подарочные талеры — и когда пользователь просто пополняет»): одна тихая
+    строка — деньги дошли, сколько теперь и на сколько ответов. pl — balance.paid_last {ts, amount}; info — заряд целиком."""
+    amt, bal, turns = _num(pl.get("amount")), _num(info.get("balance")), int(info.get("turns") or 0)
+    if lang == "en":
+        return f"Top-up received: +{amt} talers. Balance: {bal}" + (f" — about {turns} answers." if turns else ".")
+    amt, bal = amt.replace(".", ","), bal.replace(".", ",")
+    return f"Счёт пополнен: +{amt} тал. Теперь на счёте {bal} тал." + (f" — это примерно {turns} ответов." if turns else "")
+
+
 def gift_month_text(g, lang="ru"):
     """Подарок месяца пришёл (1.0.31 — на сайте, 1.0.48 — сказать человеку; владелец 20.11: «при начислении сообщать…
     и о том, что если не потратят, оно сгорит»). g — balance.gift: amount, left, until (ГГГГ-ММ-ДД)."""
@@ -286,6 +300,7 @@ class Cloud:
         self._stop = threading.Event()
         self.on_low = None              # (info) -> None: заряд стал «мало» или кончился — напомнить в мессенджер
         self.on_gift = None             # (gift) -> None: пришёл подарок месяца — сказать один раз (1.0.48)
+        self.on_paid = None             # (paid_last, info) -> None: счёт пополнили — сказать один раз (1.0.53)
         self.on_key_gone = None         # () -> None: ключ dw- удалили на сайте — перейти на аккаунт, если вошли (engine_brain)
 
     # ---------- ключ ----------
@@ -371,6 +386,21 @@ class Cloud:
                 self.on_gift(g)
             except Exception:  # noqa: BLE001
                 log.exception("облако: подарок месяца")
+        # счёт пополнили (на сайте, автопополнением, с другого устройства) — один раз, тихо; самое первое знакомство с
+        # пополнением (после обновления программы) — только запомнить: старое пополнение не новость
+        pl = info.get("paid_last") if isinstance(info.get("paid_last"), dict) else None
+        if pl and pl.get("ts"):
+            seen = self.s.get("cloud", "paid_seen")
+            if seen != pl["ts"]:
+                self.s.update({"cloud": {"paid_seen": pl["ts"]}})
+                if seen is not None and time.time() - float(pl["ts"]) < 3 * 86400 and self.on_paid \
+                        and self.s.get("llm", "active") == PROFILE_ID:
+                    try:
+                        self.on_paid(pl, info)
+                    except Exception:  # noqa: BLE001
+                        log.exception("облако: пополнение")
+        elif self.s.get("cloud", "paid_seen") is None and "paid_last" in info:
+            self.s.update({"cloud": {"paid_seen": 0}})           # пополнений не было — следующее уже новость
 
     # ---------- расход, пополнение, модели, распознавание ----------
     def usage(self):

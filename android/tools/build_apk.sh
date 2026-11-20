@@ -28,20 +28,28 @@ bash "$HERE/tools/www_assemble.sh" "$B/assets/www"             # интерфе�
 # Две сборки из одного кода, одной подписью (ставятся друг поверх друга, данные сохраняются):
 #   Dewiar-X.Y.Z.apk        — основная, без службы специальных возможностей: Android и Play Защита ставят её без
 #                             блокировок (приложение не из магазина со службой спец. возможностей — «опасное»);
-#   Dewiar-X.Y.Z-hands.apk  — с «руками» (Hands.java) для тех, кто хочет управление другими приложениями.
-python3 - "$HERE/AndroidManifest.xml" "$B/AndroidManifest-base.xml" <<'PY'
+#   Dewiar-X.Y.Z-hands.apk  — с «руками» (Hands.java) для тех, кто хочет управление другими приложениями;
+#   Dewiar-X.Y.Z-store.apk  — для магазинов (RuStore, Google Play; владелец 20.11): как основная, но без самообновления
+#                             (REQUEST_INSTALL_PACKAGES и UpdateProvider) — обновляет магазин; приложение знает это по
+#                             метке pro.dewiar.store в манифесте (Bridge.info → store) и само обновлений не ищет.
+python3 - "$HERE/AndroidManifest.xml" "$B/AndroidManifest-base.xml" "$B/AndroidManifest-store.xml" <<'PY'
 import re, sys
 t = open(sys.argv[1], encoding="utf-8").read()
 t2 = re.sub(r'\s*<service android:name="\.Hands".*?</service>', "", t, flags=re.S)
 assert t2 != t, "в манифесте не нашлась служба .Hands"
 open(sys.argv[2], "w", encoding="utf-8").write(t2)
+t3 = re.sub(r'\s*<uses-permission android:name="android\.permission\.REQUEST_INSTALL_PACKAGES"/>', "", t2)
+t3 = re.sub(r'\s*<provider android:name="\.UpdateProvider"[^>]*/>', "", t3)
+assert "REQUEST_INSTALL_PACKAGES" not in t3 and "UpdateProvider" not in t3, "сборка для магазинов: самообновление не убралось"
+t3 = t3.replace("</application>", '    <meta-data android:name="pro.dewiar.store" android:value="1"/>\n    </application>', 1)
+open(sys.argv[3], "w", encoding="utf-8").write(t3)
 PY
-for V in hands base; do
-  M="$HERE/AndroidManifest.xml"; [ "$V" = base ] && M="$B/AndroidManifest-base.xml"
+for V in hands base store; do
+  M="$HERE/AndroidManifest.xml"; [ "$V" = base ] && M="$B/AndroidManifest-base.xml"; [ "$V" = store ] && M="$B/AndroidManifest-store.xml"
   "$BT/aapt2" link -I "$FR" --manifest "$M" --java "$B/gen" -A "$B/assets" -o "$B/base-$V.apk" \
     --min-sdk-version 24 --target-sdk-version 35 --version-code "$CODE" --version-name "$VER" "$B/res.zip"
 done
-python3 "$HERE/tools/fgs_type.py" "$B/base-hands.apk" "$B/base-base.apk"   # тип службы CloseLive — remoteMessaging (см. сам файл)
+python3 "$HERE/tools/fgs_type.py" "$B/base-hands.apk" "$B/base-base.apk" "$B/base-store.apk"   # тип службы CloseLive — remoteMessaging (см. сам файл)
 cp "$B/base-hands.apk" "$B/base.apk"                    # R.java — из полной сборки (в ней есть все ресурсы)
 javac -nowarn -Xlint:-options -encoding UTF-8 -source 8 -target 8 -bootclasspath "$AJ" -d "$B/classes" \
   $(find "$HERE/src" "$B/gen" -name "*.java") 2>&1 | grep -v "JAVA_TOOL_OPTIONS" | tee "$B/javac.log" || true
@@ -52,10 +60,10 @@ if [ -n "$CHECK" ]; then
   [ -s "$B/classes.dex" ] || { echo "dex не собрался" >&2; exit 1; }
   echo "сборка проходит: ресурсы, манифест, Java и dex — без подписи, APK не создан"; exit 0
 fi
-for V in base hands; do
+for V in base hands store; do
   cp "$B/base-$V.apk" "$B/u.apk"; (cd "$B" && zip -q u.apk classes.dex)
   "$BT/zipalign" -f -p 4 "$B/u.apk" "$B/a.apk"
-  APK="$OUT/Dewiar-$VER.apk"; [ "$V" = hands ] && APK="$OUT/Dewiar-$VER-hands.apk"
+  APK="$OUT/Dewiar-$VER.apk"; [ "$V" = hands ] && APK="$OUT/Dewiar-$VER-hands.apk"; [ "$V" = store ] && APK="$OUT/Dewiar-$VER-store.apk"
   "$BT/apksigner" sign --ks "$KS" --ks-pass "pass:$KP" --ks-key-alias dewiar --out "$APK" "$B/a.apk" 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
   "$BT/apksigner" verify "$APK" >/dev/null 2>&1 || { echo "подпись $APK не прошла проверку" >&2; exit 1; }   # неподписанный файл в выпуск не уходит
   ls -la "$APK"

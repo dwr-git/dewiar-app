@@ -179,7 +179,7 @@ async function ask(text, opts = {}) {
     const round1 = async (tools) => {
       for (let tries = 0; ; tries++) {
         try {
-          const r = await llmStream(msgs, tools, (p) => { if (turnAbort === ctl) sink.push(p); }, ctl.signal, Object.assign({ net: netOk }, deep ? { think: true } : {}, longGen ? { idle: 300000 } : {}));
+          const r = await llmStream(msgs, tools, (p) => { if (turnAbort === ctl) sink.push(p); }, ctl.signal, Object.assign({ net: netOk, voice: !!opts.voice }, deep ? { think: true } : {}, longGen ? { idle: 300000 } : {}));
           if (S.llm.cloud && !String(r.text || "").trim() && !r.calls.length && !r.finish && !ctl.signal.aborted)
             throw Object.assign(new Error("связь оборвалась — ответ пришёл пустым"), { net: true });
           if (tries) netHealed(tries);                 // повтор помог — это не сбой для разработчика (пакет 22.10, №189)
