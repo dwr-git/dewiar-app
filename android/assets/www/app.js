@@ -2825,6 +2825,21 @@ function turnTime(stage) {
   }
 }
 const CALC_TURN = /посчитай|подсчитай|рассчитай|вычисли|сколько\s+(?:ещё\s+|еще\s+)?(?:дней|минут|часов|недель|месяцев|лет|будет|процент)|через\s+сколько|сколько\s+осталось/i;
+/* Голос во время долгого действия (владелец 20.11, как на компьютере — core/act_cue.py): действие идёт дольше ~2,5 с,
+   а Лира ещё ничего не сказала — одна короткая фраза о том, что она делает. Только для действий, которые бывают долгими;
+   с подтверждением и говорящие сами — без фразы; текстовый режим и Telegram молчат сами (say). */
+const ACT_CUE_MS = 2500;
+const ACT_CUE = { web_search: "Ищу в интернете…", read_webpage: "Читаю страницу…", world_news: "Смотрю новости…",
+  ask_knowledge: "Смотрю в знаниях…", find_notes: "Смотрю заметки…", recall: "Вспоминаю…", pc_documents: "Смотрю документы на компьютере…",
+  weather: "Смотрю погоду…", calendar_list: "Смотрю календарь…", show_images: "Ищу картинки…", money_report: "Считаю…",
+  month_summary: "Считаю…", client_list: "Смотрю клиентов…", route: "Строю маршрут…" };
+function actCueArm(name, ctl, sink) {
+  const p = ACT_CUE[name]; if (!p) return;
+  setTimeout(() => {
+    if (ctl.signal.aborted || turnAbort !== ctl || !busy || sink.text().trim()) return;
+    plog("info", `🗣 «${name}» идёт дольше ${ACT_CUE_MS / 1000} с — «${p}»`); say(p);
+  }, ACT_CUE_MS);
+}
 function sentenceSink() {
   let pending = "", shown = "", first = true, raw = "", inCode = false;
   // блоки ``` … ``` (код, схемы) вслух не читаем: они приходят кусками, поэтому граница блока ищется в потоке;
@@ -2995,6 +3010,7 @@ async function ask(text, opts = {}) {
   plog("info", `❓ ${clip(text)} → ${S.llm.cloud ? "Dewiar Облако" : (S.llm.name || S.llm.model || "модель")}`);
   const ctl = turnAbort = new AbortController();
   const sink = sentenceSink();
+  let cueArmed = false;                          // голос во время долгого действия (actCueArm) — один раз за ход
   if (!opts.hidden && CALC_TURN.test(text)) sink.holdNums(true);   // просят посчитать — числа до calc придерживаем
   if (!opts.hidden && !D.web && UPD_SELF_RX.test(text)) sink.holdAll(true);   // про версию приложения — сначала убедиться, что проверила
   const rudeNow = !opts.hidden && isRude(text);
@@ -3186,6 +3202,7 @@ async function ask(text, opts = {}) {
         if (once.has(key)) { msgs.push({ role: "tool", tool_call_id: c.id, name: c.name, content: "(то же самое уже сделано этим ответом — не повторяй)" }); continue; }
         once.add(key);
         ranTools = true;
+        if (!cueArmed && !opts.hidden) { cueArmed = true; actCueArm(c.name, ctl, sink); }
         try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
         plog("info", `🔧 ${c.name} → ${clip(String((res && res.text) || res || "").split("\n")[0], 90)}`);   // что сделано — видно в отчёте (№56)
         if (c.name === "calendar_add" && /^Записано/.test(String(res))) called.add("calendar_write");   // правда записано, а не только спросили
@@ -4568,7 +4585,7 @@ const HANDS_TOOLS = [
     parameters: O({ action: { type: "string", enum: ["back", "home", "recents", "notifications", "dewiar"] } }, ["action"]) },
 ];
 const HANDS_SET = new Set(HANDS_TOOLS.map(t => t.name));
-const HANDS_PAGE = "https://dewiar.pro/dwrapp/download.php";
+const HANDS_PAGE = "https://dewiar.pro/dwrapp/download";
 /* №818 (17.11, Олег: «скачать версию с руками — ссылка не работает», ERR_TOO_MANY_REDIRECTS): постоянного файла
    Dewiar-hands.apk на сайте может не быть (его кладёт «Опубликовать», когда загружены оба APK) — тогда сайт уводил по кругу.
    Берём файл из описания выпуска (latest.json, то же, что обновление); нет его — страница «Скачать» и честная подсказка. */
@@ -9296,7 +9313,7 @@ function contactCardHtml(ask) {
   return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
     <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">
     <div class="row2" style="margin-top:10px"><button class="btn p" id="ct-go" style="flex:1">Сохранить</button>${ask ? `<button class="btn" id="ct-x">Не сейчас</button>` : ""}</div>
-    <p class="hint" style="margin:10px 0 0">Контакт видит только команда Dewiar; удалить — «Настройки» → «Сообщить о проблеме» со словами «Мои данные». <a href="${siteUrl("dwrapp/privacy.php")}">Политика конфиденциальности</a></p></div>`;
+    <p class="hint" style="margin:10px 0 0">Контакт видит только команда Dewiar; удалить — «Настройки» → «Сообщить о проблеме» со словами «Мои данные». <a href="${siteUrl("dwrapp/privacy")}">Политика конфиденциальности</a></p></div>`;
 }
 function contactWire() {
   const go = $("#ct-go"); if (!go) return;
@@ -10748,9 +10765,21 @@ async function addAttach(f) {
 }
 function renderAtts() {
   const box = $("#atts");
-  box.innerHTML = attached.map((a, i) => `<div class="at">${a.kind === "image" ? `<img src="${a.url}" alt="">` : `<span>${esc(a.name)}</span>`}<button data-i="${i}" title="Убрать">${X_SVG}</button></div>`).join("");
-  $$("button", box).forEach(b => b.onclick = () => { attached.splice(+b.dataset.i, 1); renderAtts(); });
+  box.innerHTML = attached.map((a, i) => `<div class="at${a.pasted ? " pasted" : ""}" data-i="${i}">${a.kind === "image" ? `<img src="${a.url}" alt="">` : `<span>${esc(a.name)}</span>`}<button data-i="${i}" title="Убрать">${X_SVG}</button></div>`).join("");
+  $$("button", box).forEach(b => b.onclick = (ev) => { ev.stopPropagation(); attached.splice(+b.dataset.i, 1); renderAtts(); });
+  $$(".at.pasted", box).forEach(d => d.onclick = () => {      // нажатие — вставленный текст обратно в поле
+    const a = attached[+d.dataset.i], t = $("#typed"); attached.splice(+d.dataset.i, 1);
+    t.value = a.text + (t.value.trim() ? "\n\n" + t.value : ""); typedGrow(); renderAtts(); t.focus(); });
 }
+/* Длинная вставка — вложением (№918, владелец 20.11), как на компьютере: поле — для вопроса, модель получает текст целиком. */
+const PASTE_AS_FILE = 2000;
+$("#typed").addEventListener("paste", (e) => {
+  const txt = e.clipboardData && e.clipboardData.getData("text");
+  if (!txt || txt.length <= PASTE_AS_FILE || attached.length >= ATT_MAX) return;
+  e.preventDefault();
+  attached.push({ kind: "text", name: "Вставленный текст", text: txt.slice(0, ATT_TEXT), cut: txt.length > ATT_TEXT, pasted: true });
+  renderAtts(); $("#typebox").classList.add("on");
+});
 $("#b-att").onclick = () => $("#att-file").click();
 $("#att-file").onchange = async (e) => {
   for (const f of Array.from(e.target.files || [])) await addAttach(f);
@@ -11469,9 +11498,9 @@ function scanResult(txt, format) {
   plog("info", "📷 код (" + (format || "?") + "): " + clip(t, 80));
   if (wkIsLink(t)) return wkLink(t);                      // печать «Работы» от руководителя (work.js)
   if (/^dewiar:\/\/home\?/.test(t)) return homeClaimFlow(t);     // «Дома по Wi-Fi» с экрана компьютера
-  if (/^dewiar:\/\/pair|download\.php\?(?:.*&)?pair=\d{6}/.test(t)) return devClaimFlow(t);   // «Подключить ещё устройство» (devices.js)
+  if (/^dewiar:\/\/pair|download(?:\.php)?\?(?:.*&)?pair=\d{6}/.test(t)) return devClaimFlow(t);   // «Подключить ещё устройство» (devices.js)
   if (/^dewiar:\/\/close|[?&]close=/.test(t)) return clAcceptLink(t);
-  if (/^dewiar:\/\/ref|download\.php\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }
+  if (/^dewiar:\/\/ref|download(?:\.php)?\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }
   if (/^dewiar:/.test(t)) return handleIntent({ action: "link", url: t });
   if (/^https?:\/\//i.test(t)) {
     const er = ereceiptHost(t);
@@ -11502,7 +11531,7 @@ function scanResult(txt, format) {
 }
 /* Руководство (data/guide.json → guide.js при сборке): тот же поиск, что на сайте и в core/guide.py — основа слова
    против начала слов раздела; на телефоне разделы про телефон — выше. */
-const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
+const GUIDE_URL = "https://dewiar.pro/dwrapp/guide";
 function guideFind(query, n = 2) {
   const norm = (t) => String(t || "").toLowerCase().replace(/ё/g, "е"), split = (t) => norm(t).split(/[^a-zа-я0-9]+/).filter(Boolean);
   const STOP = new Set("как мне мой моя мои что где это для или при на в с и а не по из у о к ли же бы то можно хочу надо нужно сделать чтобы dewiar девиар лира приложение".split(" "));
@@ -13055,7 +13084,7 @@ addEventListener("pagehide", welcomeSeen);
 setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока открыто — «последний раз видели» свежее
 
 /* 1.0.29: согласие одной строкой — в первой карточке, где человек и так нажимает «Подключить» (Политика и Условия на сайте) */
-const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы принимаете <a href="${siteUrl("dwrapp/terms.php")}">Условия</a> и <a href="${siteUrl("dwrapp/privacy.php")}">Политику конфиденциальности</a>.</p>`;
+const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы принимаете <a href="${siteUrl("dwrapp/terms")}">Условия</a> и <a href="${siteUrl("dwrapp/privacy")}">Политику конфиденциальности</a>.</p>`;
 (function boot() {
   applyPersona(); setState("idle"); quietCheck();
   const last = history.filter(m => m.role === "assistant").slice(-1)[0];

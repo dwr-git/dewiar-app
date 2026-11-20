@@ -1439,6 +1439,8 @@ dialog.anndlg { width: min(560px, calc(100% - 32px)); }
 .ch-atts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px; }
 .ch-atts:empty { display: none; }
 .ch-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 260px; padding: 4px 4px 4px 4px; border-radius: 12px; background: rgba(255,255,255,.08); font-size: 12.5px; margin-top: 10px; }
+.ch-chip.pasted { cursor: pointer; }
+.ch-chip.pasted:hover { background: rgba(255,255,255,.14); }
 .ch-chip img { width: 34px; height: 34px; object-fit: cover; border-radius: 8px; }
 .ch-chip i { font-style: normal; font-size: 10.5px; font-weight: 700; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: rgba(255,255,255,.1); }
 .ch-chip b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }

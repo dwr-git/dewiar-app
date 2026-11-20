@@ -435,6 +435,8 @@
   .ab.send { color: #D6E4F0; }
   #atts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   #atts:empty { display: none; }
+  .att.pasted { cursor: pointer; }
+  .att.pasted:hover { background: rgba(255,255,255,.14); }
   .att { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 3px; border-radius: 10px; background: rgba(255,255,255,.08); font-size: 11.5px; color: var(--ink); }
   .att img, .att .ic { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; flex: none; }
   .att .ic { display: grid; place-items: center; background: rgba(139,140,247,.25); font-size: 9.5px; font-weight: 600; letter-spacing: .02em; }
@@ -498,6 +500,9 @@
   /* блокнот открыт (владелец 19.11: «справа остаются видны джойстик, чашка… дизайн был бы чище»): на виду — только его кнопка,
      остальные — при наведении на виджет */
   #corner.pinned .btn:not(.on) { opacity: 0; transition: opacity .2s; }
+  /* 20.11 (владелец: «активная сдвигалась вправо — без этого отступа»): кнопка открытого листа — у самого края; остальные
+     появляются при наведении слева от неё, и она сама не прыгает */
+  #corner.pinned .btn.on { order: 99; }
   #card:hover #corner.pinned .btn, #corner.pinned:focus-within .btn { opacity: 1; }
   #corner-l.lo { opacity: 1; }
   #b-lo[hidden], #b-watch[hidden], #b-tm[hidden] { display: none; }
@@ -607,6 +612,17 @@
   body.light #rd-body h4 { color: var(--muted); }
   body.light .md .h { color: var(--ink); }
   body.light .md code { background: rgba(20,30,60,.07); }
+  /* «Ответ целиком» — живее, как в блокноте (владелец 20.11: «чтение бледное, текст единообразный»): подзаголовки, главное
+     и пункты списка — своими цветами; в тёмной и светлой теме */
+  #rd-body .md { font-size: 13.5px; line-height: 1.55; }
+  #rd-body .md .h { font-size: 14.5px; color: #8FB4FF; margin: 14px 0 6px; letter-spacing: .01em; }
+  #rd-body .md b { color: #FFE58A; font-weight: 650; }
+  #rd-body .md li::marker { color: #6FF0E1; } #rd-body .md ol li::marker { color: #6FD6FF; font-weight: 700; }
+  #rd-body .md code { color: #D8B4FE; background: rgba(168,85,247,.16); }
+  body.light #rd-body .md .h { color: #2B55C9; }
+  body.light #rd-body .md b { color: #C2386F; }
+  body.light #rd-body .md li::marker { color: #13998D; } body.light #rd-body .md ol li::marker { color: #1D72B8; }
+  body.light #rd-body .md code { color: #7A2FC2; background: #EFE4FF; }
   body.light pre { background: rgba(20,30,60,.06); }
   body.light pre .cp { background: rgba(20,30,60,.08); } body.light pre .cp:hover { background: rgba(20,30,60,.14); }
   body.light .steps .sd { color: #3c4a64; } body.light .steps li.run::before { background: #6f8bb3; }
@@ -1914,10 +1930,23 @@ function shrink(file) {
 const b64of = (file) => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result);
   r.onerror = () => bad(new Error(`«${file.name}» не прочитался${r.error && r.error.name ? " (" + r.error.name + ")" : ""} — возможно, это папка, файл в облаке или занят другой программой`));
   r.readAsDataURL(file); });
+/* Длинная вставка — вложением (владелец 20.11: «вставил текст на 21000 символов… удобнее, если большое — превращается в
+   файл»): поле остаётся для вопроса, модель получает текст целиком (как файл). Нажатие на карточку — текст обратно в поле. */
+const PASTE_AS_FILE = 2000;
+async function addPasted(txt) {
+  const f = new File([txt], "Вставленный текст.txt", { type: "text/plain" });
+  atts.push({ kind: "file", name: f.name, b64: await b64of(f), size: f.size, pasted: txt });
+  renderAtts(); fitAsk();
+}
+function unPaste(i) {
+  const a = atts[i], t = $("askin"); atts.splice(i, 1);
+  t.value = a.pasted + (t.value.trim() ? "\n\n" + t.value : ""); renderAtts(); fitAsk(); t.focus();
+}
 function renderAtts() {
   const box = $("atts"); box.innerHTML = "";
   atts.forEach((a, i) => {
     const d = document.createElement("div"); d.className = "att";
+    if (a.pasted) { d.classList.add("pasted"); d.title = `${a.pasted.length.toLocaleString("ru-RU")} симв. — нажмите, чтобы вернуть текст в поле`; d.onclick = () => unPaste(i); }
     const ext = (a.name.split(".").pop() || "").slice(0, 4).toUpperCase();
     d.innerHTML = a.kind === "image" ? `<img alt=""><span></span><button title="Убрать">×</button>` : `<i class="ic"></i><span></span><button title="Убрать">×</button>`;
     if (a.kind === "image") d.querySelector("img").src = a.url; else d.querySelector(".ic").textContent = ext || "ФАЙЛ";
@@ -1960,6 +1989,8 @@ $("askin").addEventListener("paste", (e) => {
   const items = [...(e.clipboardData.items || [])];
   const files = items.filter(x => x.kind === "file").map(x => x.getAsFile()).filter(Boolean);
   if (files.length) { e.preventDefault(); addFiles(files); return; }
+  const txt = e.clipboardData.getData("text");
+  if (txt && txt.length > PASTE_AS_FILE) { e.preventDefault(); addPasted(txt); return; }
   if (!e.clipboardData.getData("text")) { e.preventDefault(); pasteImage(true); }      // текста нет — значит, картинка
 });
 document.addEventListener("keydown", (e) => {          // Ctrl+V мимо поля вопроса — открыть поле с картинкой из буфера
@@ -1974,7 +2005,7 @@ function sendAsk() {
   const label = q || atts.map(a => a.name).join(", ");
   tlReset(label);
   const kept = atts;
-  core.sendLater("say", { text: q, images, files }).catch(e => {   // не дошло — вопрос обратно в поле (№200)
+  core.sendLater("say", { text: q, images, files, typed: true }).catch(e => {   // не дошло — вопрос обратно в поле (№200)
     if (!$("askin").value.trim()) { $("askin").value = q; atts = kept; renderAtts(); fitAsk(); }
     showErr(new Error(errText(e) + " — вопрос вернул в поле, отправьте ещё раз"));
   });
@@ -2014,7 +2045,8 @@ function mdLite(t) {
   const parts = String(t || "").split(/```/);
   return parts.map((p, i) => {
     if (i % 2) { const code = p.replace(/^[\w+-]*\n/, ""); return `<pre><button class="cp">Копировать</button><code>${escR(code.replace(/\n$/, ""))}</code></pre>`; }
-    let h = escR(p).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+    let h = escR(p).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/(^|[\s(«])\*([^*\s][^*\n]*?)\*(?=[\s.,;:!?)»]|$)/gm, "$1<i>$2</i>");   // *курсив*
     const out = []; let list = null, num = 0;          // num — номер первого пункта нумерованного списка (0 — точки)
     const close = () => { if (list) out.push(num ? `<ol start="${num}">${list.join("")}</ol>` : `<ul>${list.join("")}</ul>`); list = null; };
     for (const line of h.split("\n")) {
@@ -2063,6 +2095,7 @@ $("rd-x").onclick = () => $("reader").classList.remove("on");
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("reader").classList.contains("on")) $("reader").classList.remove("on"); });
 core.on("heard", e => { if (e.text) tlReset(e.text); })
     .on("answer", e => { TL.answer = e.text || ""; moreBtn(); })
+    .on("read_open", () => { if (!$("reader").classList.contains("on")) openReader(); })   // большой разбор — читать с экрана
     .on("confirm", e => { TL.steps.push({ name: "_confirm", title: "Спрашиваю разрешение", detail: e.text || "", status: "run" }); moreBtn(); })
     .on("confirm_done", e => { const c = [...TL.steps].reverse().find(x => x.name === "_confirm" && x.status === "run");
       if (c) { c.status = e.ok ? "done" : "declined"; c.title = e.ok ? "Разрешили" : "Не разрешили"; moreBtn(); } })

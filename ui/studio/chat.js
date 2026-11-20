@@ -319,9 +319,21 @@ async function chatAddFiles(list) {
   chAtts = chAtts.slice(0, 10);
   chatAttsRender();
 }
+/* Длинная вставка — вложением (№918, владелец 20.11: «вставил текст на 21000 символов… удобнее, если большое — превращается
+   в файл»), как в виджете: поле — для вопроса, модель получает текст целиком; нажатие на карточку — текст обратно в поле. */
+const PASTE_AS_FILE = 2000;
+async function chatAddPasted(txt) {
+  const f = new File([txt], "Вставленный текст.txt", { type: "text/plain" });
+  chAtts.push({ kind: "file", name: f.name, b64: await chatB64(f), size: f.size, pasted: txt });
+  chAtts = chAtts.slice(0, 10); chatAttsRender();
+}
+const pasteTitle = (a) => `${a.pasted.length.toLocaleString("ru-RU")} симв. — нажмите, чтобы вернуть текст в поле`;
 function chatAttsRender() {
-  $("#ch-atts").innerHTML = chAtts.map((a, i) => `<span class="ch-chip">${a.kind === "image" ? `<img src="${escH(a.url)}" alt="">` : `<i>${escH((a.name.split(".").pop() || "").slice(0, 4).toUpperCase())}</i>`}<b>${escH(a.name)}</b><button data-i="${i}" title="Убрать" aria-label="Убрать">✕</button></span>`).join("");
-  $$("#ch-atts button").forEach(b => b.onclick = () => { chAtts.splice(+b.dataset.i, 1); chatAttsRender(); });
+  $("#ch-atts").innerHTML = chAtts.map((a, i) => `<span class="ch-chip${a.pasted ? " pasted" : ""}"${a.pasted ? ` data-p="${i}" title="${escH(pasteTitle(a))}"` : ""}>${a.kind === "image" ? `<img src="${escH(a.url)}" alt="">` : `<i>${escH((a.name.split(".").pop() || "").slice(0, 4).toUpperCase())}</i>`}<b>${escH(a.name)}</b><button data-i="${i}" title="Убрать" aria-label="Убрать">✕</button></span>`).join("");
+  $$("#ch-atts button").forEach(b => b.onclick = (ev) => { ev.stopPropagation(); chAtts.splice(+b.dataset.i, 1); chatAttsRender(); });
+  $$("#ch-atts .ch-chip.pasted").forEach(c => c.onclick = () => {
+    const a = chAtts[+c.dataset.p], t = $("#ch-text"); chAtts.splice(+c.dataset.p, 1);
+    t.value = a.pasted + (t.value.trim() ? "\n\n" + t.value : ""); t.dispatchEvent(new Event("input")); chatAttsRender(); t.focus(); });
   chatGoSync();
 }
 function chatSend() {
@@ -330,7 +342,7 @@ function chatSend() {
   const atts = chAtts;
   t.value = ""; t.style.height = ""; chAtts = []; chatAttsRender(); $("#ch-res").textContent = "";
   if (!core.connected) $("#ch-res").textContent = "Нет связи с ядром — сообщение не потеряется: отправлю, как только ядро вернётся";
-  core.sendLater("say", { text: q, files }).then(() => { if (/отправлю, как только/.test($("#ch-res").textContent)) $("#ch-res").textContent = ""; })
+  core.sendLater("say", { text: q, files, typed: true }).then(() => { if (/отправлю, как только/.test($("#ch-res").textContent)) $("#ch-res").textContent = ""; })
     .catch(e => {   // не дошло — текст обратно в поле, набирать заново не нужно (№200)
       if (!t.value.trim()) { t.value = q; t.dispatchEvent(new Event("input")); }
       if (!chAtts.length) { chAtts = atts; chatAttsRender(); }
@@ -341,6 +353,8 @@ $("#ch-file").onchange = (e) => { chatAddFiles([...e.target.files]); e.target.va
 $("#ch-text").addEventListener("paste", (e) => {
   const files = [...(e.clipboardData && e.clipboardData.items || [])].filter(x => x.kind === "file").map(x => x.getAsFile()).filter(Boolean);
   if (files.length) { e.preventDefault(); chatAddFiles(files); return; }
+  const txt = e.clipboardData && e.clipboardData.getData("text");
+  if (txt && txt.length > PASTE_AS_FILE) { e.preventDefault(); chatAddPasted(txt); return; }
   // WebKitGTK часто не отдаёт странице картинку из буфера — спрашиваем окно (Api.clipboard_image, как в виджете)
   if (e.clipboardData && !e.clipboardData.getData("text")) { e.preventDefault(); chatClipImage(); }
 });

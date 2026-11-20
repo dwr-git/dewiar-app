@@ -156,6 +156,7 @@
   "done_undo",
   "drive_add_path",
   "drive_open",
+  "drive_path",
   "drive_remove",
   "drive_status",
   "drive_sync",

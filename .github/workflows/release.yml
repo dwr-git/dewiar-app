@@ -155,7 +155,7 @@ jobs:
             echo
             echo "## Скачать — Dewiar $V · телефон $PH"
             echo
-            echo "Проще всего — страница **[dewiar.pro/dwrapp/download.php](https://dewiar.pro/dwrapp/download.php)**: сама узнаёт устройство и даёт свежую версию."
+            echo "Проще всего — страница **[dewiar.pro/dwrapp/download](https://dewiar.pro/dwrapp/download)**: сама узнаёт устройство и даёт свежую версию."
             echo
             echo "| Где | Файл этой версии | Всегда самая свежая |"
             echo "|---|---|---|"

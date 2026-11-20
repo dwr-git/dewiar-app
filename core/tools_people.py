@@ -24,7 +24,17 @@ def t_close_send(a, ctx):
             return (f"Отправлено {it['to']}: у каждого участника (и у тебя) встанет напоминание на {w['at'].strftime('%d.%m %H:%M')}."
                     " Скажи коротко, что напомнишь всем.")
         it = c.send(a.get("to") or "", a.get("text") or "", files)
-    except (CloseError, OSError) as e:
+    except CloseError as e:
+        msg = str(e)
+        if msg.startswith("Не нашла"):
+            # экзамен 20.11 (Б12): «Сергею Петрову, почта sp@…» — модель писала через «Близкие» (почта не подключена),
+            # получала «не нашла» и не отдавала даже текст. Человек не из «Близких» — письмо или готовый текст
+            m = ctx.get("mail")
+            msg += (" Если это не человек из «Близких», а адрес почты — отправь письмом (send_email)." if m and m.configured()
+                    else " Почта не подключена (подключить — студия → «Подключение» → «Почта»): скажи это одной фразой и "
+                         "дай готовый текст целиком в ответе — человек отправит сам.")
+        raise ToolError(msg) from e
+    except OSError as e:
         raise ToolError(str(e)) from e
     to = it.get("to") or c.person(a.get("to") or "")["name"]          # группа («Группы своих») — «в группу «Семья»»
     return f"Отправлено {to}" + (f" (файлов: {len(it.get('f') or [])})" if it.get("f") else "") + ". Скажи коротко, что отправила."

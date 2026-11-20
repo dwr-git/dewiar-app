@@ -535,6 +535,44 @@ def migrate_templates():
         log.warning("Перенос персонажей в шаблоны не удался: %s", e)
 
 
+
+AVATAR_MAX_BYTES = 96 * 1024     # больше — уменьшаем: портрет в интерфейсе не крупнее ~200 точек
+AVATAR_SIDE = 384                # с запасом на экраны с высокой плотностью
+
+
+def _avatar_small(path, size):
+    """Картинка персонажа как data-URL. Своё фото до 6 МБ раньше уходило целиком — в каждое «hello» окну и в каждую
+    рассылку персонажей: у людей с несколькими фото ответ ядра был ~5 МБ (Mac, №908: предел websockets 1 МБ — виджет
+    не запоминал место). Крупное — уменьшенной копией (сторона AVATAR_SIDE, WebP с прозрачностью или JPEG); не вышло
+    (нет Pillow, битый файл, анимация) — как было."""
+    mime = {".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}.get(path.suffix.lower(), "image/jpeg")
+    raw = path.read_bytes()
+    if size > AVATAR_MAX_BYTES and path.suffix.lower() != ".gif":
+        try:
+            import io
+            from PIL import Image
+            with Image.open(io.BytesIO(raw)) as im:
+                im.thumbnail((AVATAR_SIDE, AVATAR_SIDE))
+                out = io.BytesIO()
+                alpha = im.mode in ("RGBA", "LA", "P")
+                try:
+                    im.convert("RGBA" if alpha else "RGB").save(out, "WEBP", quality=82)
+                    small, smime = out.getvalue(), "image/webp"
+                except Exception:  # noqa: BLE001 — Pillow без WebP
+                    out = io.BytesIO()
+                    if alpha:
+                        im.convert("RGBA").save(out, "PNG", optimize=True)
+                        small, smime = out.getvalue(), "image/png"
+                    else:
+                        im.convert("RGB").save(out, "JPEG", quality=85)
+                        small, smime = out.getvalue(), "image/jpeg"
+            if 0 < len(small) < len(raw):
+                raw, mime = small, smime
+        except Exception as e:  # noqa: BLE001
+            log.debug("портрет %s не уменьшился: %s", path.name, e)
+    return f"data:{mime};base64," + base64.b64encode(raw).decode()
+
+
 class Personas:
     def __init__(self):
         self._lock = threading.RLock()
@@ -636,8 +674,17 @@ class Personas:
                          if (AVATARS_DIR / f"{p.get('id')}{ext}").exists()), None)    # портрет из комплекта
         if path is None:
             return ""
-        mime = {".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}.get(path.suffix, "image/jpeg")
-        return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
+        try:
+            st = path.stat()
+        except OSError:
+            return ""
+        key = (str(path), st.st_mtime_ns, st.st_size)
+        memo = self.__dict__.setdefault("_avatar_memo", {})
+        if key not in memo:
+            if len(memo) > 64:
+                memo.clear()
+            memo[key] = _avatar_small(path, st.st_size)
+        return memo[key]
 
     def save(self, p: dict) -> str:
         """Создать или изменить персонажа -> id. Новому персонажу id делается из имени (с суффиксом -2, -3… при совпадении).

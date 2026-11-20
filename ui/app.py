@@ -249,7 +249,17 @@ def composited_x11():
         from gi.repository import Gdk, Gtk
         Gtk.init_check([])
         scr = Gdk.Screen.get_default()
-        return bool(scr is not None and scr.is_composited() and scr.get_rgba_visual() is not None)
+        if scr is None or scr.get_rgba_visual() is None:
+            return False
+        if scr.is_composited():
+            return True
+        # №915 (KDE Plasma 6.8 на Wayland): окна идут через XWayland, а KWin не объявляет X-клиентам, что он композитор, —
+        # GTK отвечал «не композитор», виджет становился сплошным, а форма X Shape там не применяется: тёмный квадрат.
+        # Под Wayland окна XWayland с альфа-каналом всегда смешивает сам композитор Wayland — прозрачность работает
+        if os.environ.get("WAYLAND_DISPLAY"):
+            _ui_log("виджет: XWayland без объявленного композитора (KDE Plasma 6?) — прозрачное окно, композитор Wayland")
+            return True
+        return False
     except Exception:  # noqa: BLE001
         return False
 

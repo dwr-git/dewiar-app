@@ -645,9 +645,9 @@ function scanResult(txt, format) {
   plog("info", "📷 код (" + (format || "?") + "): " + clip(t, 80));
   if (wkIsLink(t)) return wkLink(t);                      // печать «Работы» от руководителя (work.js)
   if (/^dewiar:\/\/home\?/.test(t)) return homeClaimFlow(t);     // «Дома по Wi-Fi» с экрана компьютера
-  if (/^dewiar:\/\/pair|download\.php\?(?:.*&)?pair=\d{6}/.test(t)) return devClaimFlow(t);   // «Подключить ещё устройство» (devices.js)
+  if (/^dewiar:\/\/pair|download(?:\.php)?\?(?:.*&)?pair=\d{6}/.test(t)) return devClaimFlow(t);   // «Подключить ещё устройство» (devices.js)
   if (/^dewiar:\/\/close|[?&]close=/.test(t)) return clAcceptLink(t);
-  if (/^dewiar:\/\/ref|download\.php\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }
+  if (/^dewiar:\/\/ref|download(?:\.php)?\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }
   if (/^dewiar:/.test(t)) return handleIntent({ action: "link", url: t });
   if (/^https?:\/\//i.test(t)) {
     const er = ereceiptHost(t);
@@ -678,7 +678,7 @@ function scanResult(txt, format) {
 }
 /* Руководство (data/guide.json → guide.js при сборке): тот же поиск, что на сайте и в core/guide.py — основа слова
    против начала слов раздела; на телефоне разделы про телефон — выше. */
-const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
+const GUIDE_URL = "https://dewiar.pro/dwrapp/guide";
 function guideFind(query, n = 2) {
   const norm = (t) => String(t || "").toLowerCase().replace(/ё/g, "е"), split = (t) => norm(t).split(/[^a-zа-я0-9]+/).filter(Boolean);
   const STOP = new Set("как мне мой моя мои что где это для или при на в с и а не по из у о к ли же бы то можно хочу надо нужно сделать чтобы dewiar девиар лира приложение".split(" "));

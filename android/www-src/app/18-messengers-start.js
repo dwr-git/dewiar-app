@@ -575,9 +575,21 @@ async function addAttach(f) {
 }
 function renderAtts() {
   const box = $("#atts");
-  box.innerHTML = attached.map((a, i) => `<div class="at">${a.kind === "image" ? `<img src="${a.url}" alt="">` : `<span>${esc(a.name)}</span>`}<button data-i="${i}" title="Убрать">${X_SVG}</button></div>`).join("");
-  $$("button", box).forEach(b => b.onclick = () => { attached.splice(+b.dataset.i, 1); renderAtts(); });
+  box.innerHTML = attached.map((a, i) => `<div class="at${a.pasted ? " pasted" : ""}" data-i="${i}">${a.kind === "image" ? `<img src="${a.url}" alt="">` : `<span>${esc(a.name)}</span>`}<button data-i="${i}" title="Убрать">${X_SVG}</button></div>`).join("");
+  $$("button", box).forEach(b => b.onclick = (ev) => { ev.stopPropagation(); attached.splice(+b.dataset.i, 1); renderAtts(); });
+  $$(".at.pasted", box).forEach(d => d.onclick = () => {      // нажатие — вставленный текст обратно в поле
+    const a = attached[+d.dataset.i], t = $("#typed"); attached.splice(+d.dataset.i, 1);
+    t.value = a.text + (t.value.trim() ? "\n\n" + t.value : ""); typedGrow(); renderAtts(); t.focus(); });
 }
+/* Длинная вставка — вложением (№918, владелец 20.11), как на компьютере: поле — для вопроса, модель получает текст целиком. */
+const PASTE_AS_FILE = 2000;
+$("#typed").addEventListener("paste", (e) => {
+  const txt = e.clipboardData && e.clipboardData.getData("text");
+  if (!txt || txt.length <= PASTE_AS_FILE || attached.length >= ATT_MAX) return;
+  e.preventDefault();
+  attached.push({ kind: "text", name: "Вставленный текст", text: txt.slice(0, ATT_TEXT), cut: txt.length > ATT_TEXT, pasted: true });
+  renderAtts(); $("#typebox").classList.add("on");
+});
 $("#b-att").onclick = () => $("#att-file").click();
 $("#att-file").onchange = async (e) => {
   for (const f of Array.from(e.target.files || [])) await addAttach(f);

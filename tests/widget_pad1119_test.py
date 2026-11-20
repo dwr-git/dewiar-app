@@ -30,6 +30,8 @@ with sync_playwright() as p:
     pg.evaluate("() => { document.getElementById('card').style.width = '200px'; padMark(true, 'notes'); }"); pg.mouse.move(415, 595); pg.wait_for_timeout(400)
     vis = pg.evaluate("[...document.querySelectorAll('#corner .btn')].filter(x => !x.hidden).map(x => [x.id, getComputedStyle(x).opacity])")
     ok(all(o == "0" for i, o in vis if i != "b-pad") and any(i == "b-pad" and o != "0" for i, o in vis), f"видна только кнопка блокнота: {vis}")
+    xs = pg.evaluate("() => { const c = document.getElementById('corner').getBoundingClientRect(), b = document.getElementById('b-pad').getBoundingClientRect(); return [c.right, b.right]; }")
+    ok(abs(xs[0] - xs[1]) < 2, f"кнопка открытого блокнота — у правого края, без пустого места (владелец 20.11): {xs}")
     pg.evaluate("() => padMark(false)"); pg.wait_for_timeout(300)
     ok(not pg.evaluate("document.getElementById('corner').classList.contains('pinned')"), "блокнот закрыт — угол как раньше")
     pg.evaluate("() => padMark(true, 'notes')"); pg.hover("#card"); pg.wait_for_timeout(400)

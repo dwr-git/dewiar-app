@@ -368,7 +368,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from cloud import low_text
         self.cloud.on_low = lambda c: self.chat.notify(low_text(c))
         from cloud import gift_month_text
-        self.cloud.on_gift = lambda g: self.push("Подарок месяца", gift_month_text(g), telegram=False)
+        self.cloud.on_gift = lambda g: self.push(self._g("Подарок месяца"), gift_month_text(g, self._ui_lang()), telegram=False)
         self.cloud.on_key_gone = self._cloud_key_gone
         self.toolbox.hooks["calendars"] = self.calendars
         self.toolbox.hooks["dewiar_web"] = self._dewiar_web          # поиск и страницы через сервер Dewiar, если сеть режет
@@ -932,6 +932,14 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
                 self.bridge.broadcast({"type": "chat", "item": item})
         except Exception as e:  # noqa: BLE001
             log.debug("чат: %s", e)
+
+    def _ui_lang(self):
+        """Язык программы: "ru", "en"… (ui.lang, «как в системе» — по системе)."""
+        try:
+            import i18n
+            return i18n.resolve(self.s.get("ui", "lang"))
+        except Exception:  # noqa: BLE001
+            return "ru"
 
     def _g(self, text):
         """«Выключил музыку» → «Выключила музыку» у Лиры, Эвы и других героинь (только речь самого ассистента); программа

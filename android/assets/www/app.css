@@ -194,6 +194,7 @@ body.typing #bar { padding-top: 6px; padding-bottom: calc(10px + var(--safe-b));
 #atts .at { position: relative; flex: none; height: 64px; border-radius: 14px; background: var(--field); display: flex; align-items: center; overflow: hidden; }
 #atts .at img { height: 64px; width: 64px; object-fit: cover; display: block; }
 #atts .at span { padding: 0 34px 0 12px; font-size: 13px; max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#atts .at.pasted { cursor: pointer; }
 #atts .at button { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; }
 #atts .at button svg { width: 13px; height: 13px; stroke-width: 2.4; }
 #card .attshow { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }

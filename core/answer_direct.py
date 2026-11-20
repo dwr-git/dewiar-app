@@ -174,7 +174,7 @@ class DirectMixin:
         if self.radio.playing:
             threading.Thread(target=self._media_stop_word, args=(word,), daemon=True).start()
             return
-        uid = self.utt_id
+        uid = getattr(self, "utt_id", 0)
         last = getattr(self, "_idle_utt_last", None)
         if not in_speech and last and last[2] == uid and now - last[1] < 2.5:
             self._media_stop_check(word, last[0])        # фраза уже кончилась — звук есть
@@ -184,7 +184,7 @@ class DirectMixin:
     def _media_stop_utt(self, pcm, now):
         """Конец любой фразы: запомнить её (для «стоп», которое быстрый слух дослышит чуть позже) и, если по ней ждёт
         решение «стоп» для чужой музыки, — отдать на проверку."""
-        uid = self.utt_id
+        uid = getattr(self, "utt_id", 0)
         self._idle_utt_last = (pcm, now, uid)
         cand = getattr(self, "_media_stop_cand", None)
         if cand and cand[2] == uid and now - cand[1] < 4:

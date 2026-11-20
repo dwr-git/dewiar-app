@@ -89,7 +89,7 @@ function contactCardHtml(ask) {
   return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
     <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">
     <div class="row2" style="margin-top:10px"><button class="btn p" id="ct-go" style="flex:1">Сохранить</button>${ask ? `<button class="btn" id="ct-x">Не сейчас</button>` : ""}</div>
-    <p class="hint" style="margin:10px 0 0">Контакт видит только команда Dewiar; удалить — «Настройки» → «Сообщить о проблеме» со словами «Мои данные». <a href="${siteUrl("dwrapp/privacy.php")}">Политика конфиденциальности</a></p></div>`;
+    <p class="hint" style="margin:10px 0 0">Контакт видит только команда Dewiar; удалить — «Настройки» → «Сообщить о проблеме» со словами «Мои данные». <a href="${siteUrl("dwrapp/privacy")}">Политика конфиденциальности</a></p></div>`;
 }
 function contactWire() {
   const go = $("#ct-go"); if (!go) return;

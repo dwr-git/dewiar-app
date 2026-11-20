@@ -58,7 +58,7 @@ const HANDS_TOOLS = [
     parameters: O({ action: { type: "string", enum: ["back", "home", "recents", "notifications", "dewiar"] } }, ["action"]) },
 ];
 const HANDS_SET = new Set(HANDS_TOOLS.map(t => t.name));
-const HANDS_PAGE = "https://dewiar.pro/dwrapp/download.php";
+const HANDS_PAGE = "https://dewiar.pro/dwrapp/download";
 /* №818 (17.11, Олег: «скачать версию с руками — ссылка не работает», ERR_TOO_MANY_REDIRECTS): постоянного файла
    Dewiar-hands.apk на сайте может не быть (его кладёт «Опубликовать», когда загружены оба APK) — тогда сайт уводил по кругу.
    Берём файл из описания выпуска (latest.json, то же, что обновление); нет его — страница «Скачать» и честная подсказка. */

@@ -13,13 +13,13 @@
 <a href="https://github.com/dwr-git/dewiar-app/releases/latest/download/dewiar-assistant_all.deb"><img src="https://img.shields.io/badge/Ubuntu-%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-764ba2?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu — скачать"></a>
 <a href="https://dewiar.pro/dwrapp/Dewiar.apk"><img src="https://img.shields.io/badge/Android-%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-3ddc84?style=for-the-badge&logo=android&logoColor=white" alt="Android — скачать"></a>
 <a href="https://dewiar.pro/dwrapp/web/"><img src="https://img.shields.io/badge/%D0%92%20%D0%B1%D1%80%D0%B0%D1%83%D0%B7%D0%B5%D1%80%D0%B5-%D0%B1%D0%B5%D0%B7%20%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B8-4BE3A1?style=for-the-badge&logo=safari&logoColor=white" alt="В браузере — без установки"></a>
-<a href="https://dewiar.pro/dwrapp/download.php"><img src="https://img.shields.io/badge/%D0%92%D1%81%D0%B5%20%D1%83%D1%81%D1%82%D1%80%D0%BE%D0%B9%D1%81%D1%82%D0%B2%D0%B0-dewiar.pro-FF7AC6?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Все устройства — dewiar.pro"></a>
+<a href="https://dewiar.pro/dwrapp/download"><img src="https://img.shields.io/badge/%D0%92%D1%81%D0%B5%20%D1%83%D1%81%D1%82%D1%80%D0%BE%D0%B9%D1%81%D1%82%D0%B2%D0%B0-dewiar.pro-FF7AC6?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Все устройства — dewiar.pro"></a>
 
 [![версия](https://img.shields.io/github/v/release/dwr-git/dewiar-app?label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=7c5cff)](https://github.com/dwr-git/dewiar-app/releases/latest)
 [![звёзды](https://img.shields.io/github/stars/dwr-git/dewiar-app?style=flat&label=%E2%98%85&color=FFB547)](https://github.com/dwr-git/dewiar-app/stargazers)
 [![Проверки](https://github.com/dwr-git/dewiar-app/actions/workflows/checks.yml/badge.svg)](https://github.com/dwr-git/dewiar-app/actions/workflows/checks.yml)
 
-[Сайт](https://dewiar.pro) · [Руководство](https://dewiar.pro/dwrapp/guide.php) · [Свой сервер](docs/self-hosting.md) ·
+[Сайт](https://dewiar.pro) · [Руководство](https://dewiar.pro/dwrapp/guide) · [Свой сервер](docs/self-hosting.md) ·
 [История версий](CHANGELOG.md) · [Для разработчика](CONTRIBUTING.md)
 
 </div>
@@ -95,7 +95,7 @@
 сама спокойно ответит на «как защищены мои данные?».
 
 Всё по шагам, с примерами фраз и поиском «своими словами» — в
-**[руководстве на dewiar.pro](https://dewiar.pro/dwrapp/guide.php)**. Лира знает его сама: спросите «как добавить
+**[руководстве на dewiar.pro](https://dewiar.pro/dwrapp/guide)**. Лира знает его сама: спросите «как добавить
 маму в близкие?» или «где поменять фон?».
 
 ### Стили
@@ -121,7 +121,7 @@
 
 ## Скачать — всегда последняя версия
 
-Проще всего — страница **[dewiar.pro/dwrapp/download.php](https://dewiar.pro/dwrapp/download.php)**: сама узнаёт ваше
+Проще всего — страница **[dewiar.pro/dwrapp/download](https://dewiar.pro/dwrapp/download)**: сама узнаёт ваше
 устройство и даёт свежую версию, для телефона на компьютере — QR-код.
 
 Все файлы последнего выпуска — на странице [Releases → latest](https://github.com/dwr-git/dewiar-app/releases/latest). Прямые
@@ -146,7 +146,7 @@
 | **Сервер, круглосуточно** | тот же `.deb`, затем `sudo dewiar-server setup` — [подробнее](docs/self-hosting.md#ассистент-круглосуточно-dewiar-server) |
 
 Первый запуск откроет студию на разделе «Мозг»: выберите, где думать ассистенту, — мастер найдёт сервер в сети,
-модель на этом компьютере или подключит облако по ключу. Дальше — [первые пять минут](https://dewiar.pro/dwrapp/guide.php#first-steps).
+модель на этом компьютере или подключит облако по ключу. Дальше — [первые пять минут](https://dewiar.pro/dwrapp/guide#first-steps).
 
 ## Как устроено
 
@@ -186,7 +186,7 @@ flowchart LR
 | `server/` | Серверы речи и синтеза для своей машины с видеокартой (`install-server.sh`) |
 | `packaging/`, `tools/` | Пакет `.deb`, установщики Windows, выпуск версии одной командой |
 | `data/` | Облики персонажей, встроенные навыки, модель VAD, радио |
-| `tests/` | 746 наборов проверок: настоящее ядро, окна в Chromium, телефон на подменённом мосте |
+| `tests/` | 754 наборов проверок: настоящее ядро, окна в Chromium, телефон на подменённом мосте |
 
 </details>
 

@@ -223,6 +223,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             self.turn_n += 1
             turn = Turn(self.turn_n)
             turn.via = via
+            # набрали текстом (виджет, «Чат» студии) — после ответа не слушаем фон: человек пишет, а голоса рядом —
+            # не ему (владелец 20.11: после набранного вопроса Лира ответила на разговор в комнате)
+            turn.typed = time.monotonic() - getattr(self, "_typed_t", 0.0) < 2
+            self._typed_t = 0.0
             turn.via_job = bool((via or {}).get("job"))  # дело по расписанию: в окна — только итог (_run_job решает, говорить ли)
             turn.asked = text                         # о чём просили (save_note без просьбы записать — не пишем)
             rp = getattr(self, "_chat_replay", 0)      # «Ещё раз»/«Изменить» в «Чате» — повтор, а не новое «да» (_just_agreed)
@@ -377,7 +381,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 log.info("🎨 Творческая просьба — температура %.2f", temp)
             # харнесс, шаг 1 (15.11): к вопросу — ядро действий и только нужные модули (Toolbox.specs(text)); прочее модель
             # попросит сама (more_tools) — вопрос легче вдвое: окно своей модели, свой ключ, очередь облака
-            slim_text = text.split("\n\nВложения:")[0] + "\n" + "\n".join(
+            slim_text = ask_core(text) + "\n" + "\n".join(
                 str(m.get("content") or "")[:300] for m in self.history[-4:] if m.get("role") == "user" and isinstance(m.get("content"), str))
             specs = self.toolbox.specs(slim_text) if self.s.get("tools", "enabled_all") is not False else []
             if specs and getattr(turn, "via_job", False) and "[Дело по расписанию]" in text:
@@ -420,6 +424,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             except Exception as e:  # noqa: BLE001
                 log.info("Поиск по записям: %s", e)
             ctx = [self._turn_context(text)] + ([pdelta] if pdelta else []) + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней
+            turn.read = read_mode(text, getattr(turn, "typed", False))
+            if turn.read:
+                ctx.append(READ_HINT)                  # длинный разбор — для чтения: подзаголовки, жирное, списки
+                log.info("📖 Ответ для чтения с экрана — вслух только суть")
             mlines, mpages = self.memory_for(text.split("\n\nВложения:")[0])
             if mlines:                                 # Память 2.0: старое о человеке не теряется — приходит к вопросу
                 log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))
@@ -508,6 +516,32 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             raise
         return prof, msgs, specs, system, ask0, ctx, econ_main, pmsg, slim_text
 
+    def _act_cue_arm(self, turn, name, sentences):
+        """Первое действие хода — через ACT_CUE_S проверить, не тишина ли до сих пор (act_cue.py)."""
+        if getattr(turn, "_cue_armed", False):
+            return
+        turn._cue_armed = True
+        from act_cue import ACT_CUE_S
+        t = threading.Timer(ACT_CUE_S, self._act_cue_fire, args=(turn, name, sentences))
+        t.daemon = True
+        t.start()
+
+    def _act_cue_fire(self, turn, name, sentences):
+        """Действие идёт, а Лира ещё ничего не сказала: одна короткая фраза о том, что она делает. Молчим, если ход
+        кончился или отменён, модель уже начала отвечать, вопрос не голосом (мессенджер, дело по расписанию) или
+        «Отвечать текстом»."""
+        from act_cue import cue_text
+        phrase = cue_text(name)
+        if (not phrase or turn.cancel.is_set() or getattr(turn, "ended", False) or self.turn is not turn
+                or turn.full.strip() or turn.spoken or turn.via or getattr(turn, "via_job", False)
+                or getattr(turn, "_cue_said", False) or self.s.get("tts", "text_only")):
+            return
+        turn._cue_said = True
+        phrase = self._g(phrase) if hasattr(self, "_g") else phrase      # программа по-английски — по-английски
+        self.__dict__.setdefault("_cue_set", set()).add(phrase)          # синтез запомнит (engine_remote._synth_mixed)
+        log.info("🗣 «%s» идёт дольше %.1f с — говорю «%s»", name, time.monotonic() - turn.t0, phrase)
+        sentences.put(phrase)
+
     def _turn_steps(self, turn, text, images, sentences, prof, msgs, specs, system, ask0, ctx, econ_main, pmsg, slim_text):
         """Ход разговора, середина (из _run_turn, чистое ядро 1.0.13): фразы в озвучку (что придержать до проверки), до 6
         шагов «модель → действия → результаты», запасные модели, проверки «сказала, но не сделала» и итог ответа.
@@ -519,6 +553,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             # сказки, истории и чтение вслух — целиком
             # №377: «хотелось бы прослушивать всё до конца» — студия → «Голос» → «Читать длинные ответы вслух целиком»
             voice_cap = 10 ** 9 if (self.s.get("tts", "read_all") or re.search(r"сказк|истори|расскаж|прочитай|прочти|читай|стих|подробно|целиком|полностью|до конца", text.lower())) else 900
+            if getattr(turn, "read", False) and not self.s.get("tts", "read_all"):
+                voice_cap = READ_VOICE                  # ответ для чтения — вслух только суть
             spoken = [0, False]                         # сколько символов отдано в озвучку; предел уже достигнут
 
             from gender import for_persona
@@ -531,7 +567,11 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     return
                 if spoken[0] + len(s_) > voice_cap and spoken[0] > 0:
                     spoken[1] = True
-                    sentences.put("Дальше не читаю вслух — всё на экране." + ("" if getattr(self, "_cap_said", False) else " Читать целиком — студия, «Голос»."))
+                    if getattr(turn, "read", False):
+                        sentences.put(self._g("Подробно — на экране, так удобнее читать.") if hasattr(self, "_g") else "Подробно — на экране, так удобнее читать.")
+                        self.emit("read_open")             # виджет открывает «Ответ целиком»
+                    else:
+                        sentences.put("Дальше не читаю вслух — всё на экране." + ("" if getattr(self, "_cap_said", False) else " Читать целиком — студия, «Голос»."))
                     self._cap_said = True
                     log.info("🔇 Ответ длинный — вслух прочитано %d симв., остальное на экране", spoken[0])
                     return
@@ -985,6 +1025,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         results.append("Этот вызов с теми же параметрами уже был — его результат выше. Не повторяй: "
                                        "используй его или попробуй иначе, а если сведений хватает — отвечай.")
                         continue
+                    self._act_cue_arm(turn, c.get("name"), sentences)
                     r_ = self._use_tool(turn, c, sentences)
                     seen_calls[key] = True
                     results.append(r_)
@@ -1227,8 +1268,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             if not turn.via:
                 self._pause_ok()                           # голосом и без обрыва — добавка к паузе понемногу тает
         follow = 0.0 if turn.via or time.monotonic() < self._echo_until else float(self.s.get("audio", "follow_up_seconds") or 0)
-        if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0):
-            follow = 0.0                                   # микрофон выключен — «ваша очередь» не открываем (12.11)
+        if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0) or getattr(turn, "typed", False):
+            follow = 0.0                                   # микрофон выключен или вопрос набран — «ваша очередь» не открываем
         if getattr(self, "_tray_at", 0) >= getattr(turn, "t0", time.monotonic()):
             # в этом ходе виджет спрятали («Спрякся» — модель поняла и спрятала): не ждать ответа — иначе «Ваша очередь»
             # возвращала виджет на экран (20.10, 22:41: «4 раза просил спрятаться — исчезала и появлялась»)

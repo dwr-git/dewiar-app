@@ -91,6 +91,7 @@ async function ask(text, opts = {}) {
   plog("info", `❓ ${clip(text)} → ${S.llm.cloud ? "Dewiar Облако" : (S.llm.name || S.llm.model || "модель")}`);
   const ctl = turnAbort = new AbortController();
   const sink = sentenceSink();
+  let cueArmed = false;                          // голос во время долгого действия (actCueArm) — один раз за ход
   if (!opts.hidden && CALC_TURN.test(text)) sink.holdNums(true);   // просят посчитать — числа до calc придерживаем
   if (!opts.hidden && !D.web && UPD_SELF_RX.test(text)) sink.holdAll(true);   // про версию приложения — сначала убедиться, что проверила
   const rudeNow = !opts.hidden && isRude(text);
@@ -282,6 +283,7 @@ async function ask(text, opts = {}) {
         if (once.has(key)) { msgs.push({ role: "tool", tool_call_id: c.id, name: c.name, content: "(то же самое уже сделано этим ответом — не повторяй)" }); continue; }
         once.add(key);
         ranTools = true;
+        if (!cueArmed && !opts.hidden) { cueArmed = true; actCueArm(c.name, ctl, sink); }
         try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
         plog("info", `🔧 ${c.name} → ${clip(String((res && res.text) || res || "").split("\n")[0], 90)}`);   // что сделано — видно в отчёте (№56)
         if (c.name === "calendar_add" && /^Записано/.test(String(res))) called.add("calendar_write");   // правда записано, а не только спросили

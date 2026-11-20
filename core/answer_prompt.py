@@ -485,7 +485,7 @@ class PromptMixin:
             note = ""
         if (self.s.get("llm", "lean_prompt") or self._slim_prompt()) and text:   # описания навыков — к подходящему вопросу
             try:
-                hint = self.skills.hint_for(text)
+                hint = self.skills.hint_for(ask_core(text))
             except Exception:  # noqa: BLE001
                 hint = ""
             if hint:
@@ -541,7 +541,7 @@ class PromptMixin:
             return ""
         try:
             m = getattr(self, "mcp", None)
-            ask = text.split("\n\nВложения:")[0]
+            ask = ask_core(text)
             h = pl.hint_for(ask, m.plugin_tools() if m else {}, m.plugin_errors() if m else {})
             if h:
                 return h

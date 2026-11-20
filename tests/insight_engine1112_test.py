@@ -25,7 +25,8 @@ RSS = """<rss><channel><item><title>Утечка исходников PHP-дви
 </channel></rss>""".replace("{d}", time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(time.time() - 3600)))
 SITE = '<html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head></html>'
 TG = ('<div class="tgme_widget_message" data-post="ai/5"><div class="tgme_widget_message_text">Gemini 4 Carbon вышла<br/>Агентная модель, '
-      'в 2–6 раз дешевле</div><time datetime="2026-11-12T06:00:00+00:00"></time></div>')
+      'в 2–6 раз дешевле</div><time datetime="' + time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 7200))
+      + '"></time></div>')   # свежая (20.11: дата 12.11 к 20.11 стала старше недели — пост отбрасывался)
 PAGES = {"https://example.by/feed.xml": RSS.replace("habr.com/ru/news", "example.by/n"), "https://example.by": SITE,
          "https://habr.com/ru/rss/all/all/": RSS, "https://t.me/s/ai_news": TG}
 asked = []

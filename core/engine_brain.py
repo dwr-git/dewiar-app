@@ -652,8 +652,12 @@ class BrainMixin:
         while not self.stopping.is_set():
             try:
                 self._lan_fetch()                              # дома — к сайту напрямую, без прокси (до остального: оно ходит туда же)
-            except Exception:  # noqa: BLE001
-                log.exception("адрес сайта в домашней сети")
+            except Exception as e:  # noqa: BLE001
+                import httpx
+                if isinstance(e, (httpx.HTTPError, OSError)):  # №917: сеть оборвалась — не сбой программы и не отчёт «сам при сбое»
+                    log.info("Адрес сайта в домашней сети не узнал: %s", e)
+                else:
+                    log.exception("адрес сайта в домашней сети")
             try:
                 self._ensure_brain(why)
             except Exception:  # noqa: BLE001

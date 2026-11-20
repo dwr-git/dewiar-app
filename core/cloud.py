@@ -96,10 +96,21 @@ MONTHS_GEN = ("января", "февраля", "марта", "апреля", "�
               "декабря")
 
 
-def gift_month_text(g):
+def gift_month_text(g, lang="ru"):
     """Подарок месяца пришёл (1.0.31 — на сайте, 1.0.48 — сказать человеку; владелец 20.11: «при начислении сообщать…
     и о том, что если не потратят, оно сгорит»). g — balance.gift: amount, left, until (ГГГГ-ММ-ДД)."""
-    amt = f"{float(g.get('amount') or 0):g}".replace(".", ",")
+    amt = f"{float(g.get('amount') or 0):g}"
+    if lang == "en":
+        try:
+            import datetime as _dt
+            dd = _dt.date.fromisoformat(str(g.get("until") or ""))
+            when = ("January February March April May June July August September October November December".split()[dd.month - 1]
+                    + f" {dd.day}")                          # не strftime: «%-d» нет в Windows, «%B» — по языку системы
+        except (ValueError, TypeError):
+            when = "the end of the month"
+        return (f"Monthly gift: {amt} talers for Lira's answers. It is spent first; whatever you don't use by {when} "
+                "expires — and a new one arrives then.")
+    amt = amt.replace(".", ",")
     try:
         y, m, d = (int(x) for x in str(g.get("until") or "").split("-"))
         when = f"{d} {MONTHS_GEN[m - 1]}"

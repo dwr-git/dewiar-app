@@ -37,6 +37,8 @@ class TalkCommands:
                 text = self._attach_files(text, files, images)
             if text.strip() or images:
                 self._chat_keep_partial(self.turn)        # новый вопрос посреди ответа — написанное остаётся в ленте
+            if a.get("typed"):                            # набран в поле (не кнопка-подсказка) — после ответа фон не слушаем
+                self._typed_t = time.monotonic()
             self.ask(text, images)
             return True
         if cmd == "screenshot_attach":               # кнопка «снимок экрана» в поле вопроса

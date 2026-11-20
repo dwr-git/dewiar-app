@@ -371,6 +371,21 @@ function turnTime(stage) {
   }
 }
 const CALC_TURN = /посчитай|подсчитай|рассчитай|вычисли|сколько\s+(?:ещё\s+|еще\s+)?(?:дней|минут|часов|недель|месяцев|лет|будет|процент)|через\s+сколько|сколько\s+осталось/i;
+/* Голос во время долгого действия (владелец 20.11, как на компьютере — core/act_cue.py): действие идёт дольше ~2,5 с,
+   а Лира ещё ничего не сказала — одна короткая фраза о том, что она делает. Только для действий, которые бывают долгими;
+   с подтверждением и говорящие сами — без фразы; текстовый режим и Telegram молчат сами (say). */
+const ACT_CUE_MS = 2500;
+const ACT_CUE = { web_search: "Ищу в интернете…", read_webpage: "Читаю страницу…", world_news: "Смотрю новости…",
+  ask_knowledge: "Смотрю в знаниях…", find_notes: "Смотрю заметки…", recall: "Вспоминаю…", pc_documents: "Смотрю документы на компьютере…",
+  weather: "Смотрю погоду…", calendar_list: "Смотрю календарь…", show_images: "Ищу картинки…", money_report: "Считаю…",
+  month_summary: "Считаю…", client_list: "Смотрю клиентов…", route: "Строю маршрут…" };
+function actCueArm(name, ctl, sink) {
+  const p = ACT_CUE[name]; if (!p) return;
+  setTimeout(() => {
+    if (ctl.signal.aborted || turnAbort !== ctl || !busy || sink.text().trim()) return;
+    plog("info", `🗣 «${name}» идёт дольше ${ACT_CUE_MS / 1000} с — «${p}»`); say(p);
+  }, ACT_CUE_MS);
+}
 function sentenceSink() {
   let pending = "", shown = "", first = true, raw = "", inCode = false;
   // блоки ``` … ``` (код, схемы) вслух не читаем: они приходят кусками, поэтому граница блока ищется в потоке;

@@ -2169,7 +2169,7 @@
    "expect": {
     "any": [
      "github.com/dwr-git/dewiar-app",
-     "dewiar.pro/dwrapp/download.php"
+     "dewiar.pro/dwrapp/download"
     ],
     "any2": [
      "apt install",
@@ -2183,7 +2183,7 @@
    "tool": {
     "app_help": {}
    },
-   "judge": "Нашёл в руководстве и дал настоящую команду: wget https://github.com/dwr-git/dewiar-app/releases/latest/download/dewiar-assistant_all.deb && sudo apt install ./dewiar-assistant_all.deb (или страница dewiar.pro/dwrapp/download.php). Выдуманный адрес (dewiar.pro/downloads/…) или «для Ubuntu Dewiar не выпускается» — 0 баллов."
+   "judge": "Нашёл в руководстве и дал настоящую команду: wget https://github.com/dwr-git/dewiar-app/releases/latest/download/dewiar-assistant_all.deb && sudo apt install ./dewiar-assistant_all.deb (или страница dewiar.pro/dwrapp/download). Выдуманный адрес (dewiar.pro/downloads/…) или «для Ubuntu Dewiar не выпускается» — 0 баллов."
   },
   {
    "id": "skill_create_782",
