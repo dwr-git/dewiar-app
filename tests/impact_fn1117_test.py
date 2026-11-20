@@ -113,7 +113,8 @@ def case(name, new_src, want, not_want=(), extra=None):
 # карта сама — не изменение кода; tools/test_impact.py изменён в «map»? нет — только карта
 case("правка внутри alpha", MOD.replace("return x + 1", "return x + 2"), ["a_test.py", "src_test.py"], ["b_test.py", "c_test.py", "const_test.py"])
 case("правка метода Box.take", MOD.replace("        return DERIVED", "        return DERIVED + 0"), ["c_test.py"], ["a_test.py", "b_test.py"])
-case("только комментарий в функции — функция", MOD.replace("# первая", "# первая и главная"), ["a_test.py"], ["b_test.py"])
+# 20.11: поправили только комментарий — код тот же: проверки функции не нужны, остаются те, что читают сам текст файла
+case("только комментарий в функции — код тот же", MOD.replace("# первая", "# первая и главная"), ["src_test.py"], ["a_test.py", "b_test.py"])
 case("константа LIMIT — beta (использует), take (через DERIVED) и проверка, что называет LIMIT",
      MOD.replace("LIMIT = 10", "LIMIT = 11"), ["b_test.py", "c_test.py", "const_test.py", "src_test.py"], ["a_test.py"])
 case("код уровня модуля — весь файл, как раньше", MOD.replace('print("уровень модуля")', 'print("другое")'),

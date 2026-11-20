@@ -428,6 +428,7 @@ def pad_rects(side, w, h, gap, clips, radius):
     return out + [(cx, int(y), gap, int(ch)) for y, ch in clips]
 PROMPTER_TITLE = "Dewiar — суфлёр"
 PROMPTER_RADIUS = 24
+PROMPTER_WH, PROMPTER_MIN = (440, 680), (360, 420)   # №364: размер по умолчанию и наименьший (уголок внизу справа)
 PROMPTER_BAR, PROMPTER_BTNS = 56, 180   # заголовок суфлёра (prompter.html, header): высота и место под кнопки справа
 STUDIO_TITLE = "Dewiar — студия"
 STUDIO_RADIUS = 12              # скругление углов студии (своя рамка в Linux)
@@ -3115,7 +3116,14 @@ class Api:
                 return True
             except Exception:  # noqa: BLE001
                 self._prompter = None
-        w, h = 440, 680
+        w, h = PROMPTER_WH
+        try:                                               # №364: размер, который человек выбрал в прошлый раз
+            ui = ui_settings()
+            pw, ph = int(ui.get("prompter_w") or 0), int(ui.get("prompter_h") or 0)
+            if pw >= PROMPTER_MIN[0] and ph >= PROMPTER_MIN[1]:
+                w, h = pw, ph
+        except (TypeError, ValueError):
+            pass
         try:
             if WIN:
                 l, t_, r, b = winshell.work_area()
@@ -3123,15 +3131,17 @@ class Api:
             else:
                 scr = webview.screens[0]
                 sw, sh, ox, oy = scr.width, scr.height, getattr(scr, "x", 0), getattr(scr, "y", 0)
+            w = min(w, int(sw) - 40)
             h = min(h, int(sh) - 60)
             x, y = int(ox + sw - w - 28), int(oy + 40)
         except Exception:  # noqa: BLE001
             x = y = None
         url, bridge = self._bridged(self._url("prompter.html"))
-        win = webview.create_window(PROMPTER_TITLE, url, width=w, height=h, x=x, y=y,
-                                    resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
+        win = webview.create_window(PROMPTER_TITLE, url, width=w, height=h, x=x, y=y,     # resizable — для уголка (№364)
+                                    resizable=True, min_size=PROMPTER_MIN, frameless=True, easy_drag=False, on_top=True, hidden=True,
                                     background_color="#16131d", js_api=bridge, **_no_shadow())
         self._prompter = win
+        self._prompter_wh = [w, h]
         win.events.closed += lambda *a: setattr(self, "_prompter", None)
         done, lock = [], threading.Lock()
 
@@ -3658,6 +3668,49 @@ class Api:
                     print(f"Окно блокнота: {e}", file=sys.stderr)
             threading.Thread(target=run, daemon=True).start()
 
+    def prompter_size(self):
+        """№364: нынешний размер окна суфлёра [ш, в] (для уголка в prompter.html)."""
+        return list(getattr(self, "_prompter_wh", None) or PROMPTER_WH)
+
+    def prompter_resize(self, w, h, final=False):
+        """№364 (20.11, Денис: «окно суфлёра фиксированного размера, а текста много — тянуть за край, с запоминанием»):
+        уголок внизу справа тянет окно; w, h = 0 — как задумано. Скругление — заново по новому размеру. -> [ш, в]."""
+        win = getattr(self, "_prompter", None)
+        if win is None:
+            return None
+        try:
+            w, h = (int(w), int(h)) if w and h else PROMPTER_WH
+        except (TypeError, ValueError):
+            return None
+        w, h = max(PROMPTER_MIN[0], min(w, 2400)), max(PROMPTER_MIN[1], min(h, 1800))
+        try:
+            if WIN:
+                try:                                       # WinForms не даёт окну стать меньше «наименьшего» — снимаем
+                    form = win.native
+                    from System import Action
+                    from System.Drawing import Size
+                    form.Invoke(Action(lambda f=form: setattr(f, "MinimumSize", Size(1, 1))))
+                except Exception:  # noqa: BLE001
+                    pass
+                win.resize(w, h)
+                hwnd = winshell.hwnd(PROMPTER_TITLE)
+                if hwnd:
+                    winshell.shape(hwnd, "prompter", PROMPTER_RADIUS)
+            else:
+                win.resize(w, h)
+
+                def run():
+                    from gi.repository import Gtk
+                    gw = next((g for g in Gtk.Window.list_toplevels() if g.get_title() == PROMPTER_TITLE), None)
+                    if gw is not None:
+                        shape_window(gw, "prompter", (w, h), PROMPTER_RADIUS)
+                    return True
+                self._gtk(run, timeout=2)
+        except Exception as e:  # noqa: BLE001
+            print(f"Окно суфлёра: размер {w}×{h}: {e}", file=sys.stderr)
+        self._prompter_wh = [w, h]
+        return [w, h]
+
     def close_prompter(self):
         win = getattr(self, "_prompter", None)
         self._prompter = None
@@ -3691,7 +3744,7 @@ def no_file_xhr():
 # js_bridge_call, и в самом фасаде. Чужой вызов молча отбрасывается: ответа фрейм не получит.
 JS_API = (
     "auto_back", "cancel_back", "capture_set", "capture_status", "mic_set", "mic_status", "card_size", "clip_secret", "clip_text", "clipboard_image",
-    "close_alarm", "close_capture", "close_prompter", "drag_begin", "drag_native", "drag_step", "from_tray", "get_pos",
+    "close_alarm", "close_capture", "close_prompter", "prompter_resize", "prompter_size", "drag_begin", "drag_native", "drag_step", "from_tray", "get_pos",
     "install_codec", "install_update", "move_to", "native_drag", "open_note", "open_prompter", "open_settings",
     "open_skills_folder", "open_url", "pad_flip", "pad_full", "pad_hide", "pad_mode_mark", "pad_resize", "pad_size",
     "pad_toggle", "pick_file", "pick_folder", "play_open", "quit_all", "resize_card", "rest_note", "rest_toggle", "restart",

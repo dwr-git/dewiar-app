@@ -9000,7 +9000,8 @@ async function syncRun(manual) {
     syncStatus = Object.assign(syncStatus, { ok: false, at: Date.now(), error: bad.err.message, via: bad.c.via, chans: chs });
   }
   // облако не ответило, а по Wi-Fi всё прошло — так и сказать (было «Синхронизация: нет сети» при удачном обмене)
-  if (manual && bad && !bad.err.home) toast(first ? `Синхронизировано по Wi-Fi с «${(S.sync.home || {}).n || "компьютером"}» — dewiar.pro сейчас не ответил` : "Синхронизация: " + bad.err.message);
+  if (manual && bad && !bad.err.home) toast(first ? `Синхронизировано по Wi-Fi с «${(S.sync.home || {}).n || "компьютером"}» — dewiar.pro сейчас не ответил`
+    : typeof devSyncHuman === "function" ? devSyncHuman(bad.err.message) : "Синхронизация: " + bad.err.message);
 }
 /* Состояние обмена канала: облако — pref «sync» (там же шифрование: e2eRemote, resealAll), Wi-Fi — «sync_home:<узел>».
    Номер устройства один на все каналы. Прежние версии держали обмен по Wi-Fi в «sync» — переносим. */

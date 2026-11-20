@@ -282,6 +282,75 @@ def _name_index():
     return by_name, mod
 
 
+def _code_part(line):
+    """Строка Python без комментария в конце (# вне кавычек) и без пробелов по краям."""
+    q, i = None, 0
+    while i < len(line):
+        c = line[i]
+        if q:
+            if c == "\\":
+                i += 2
+                continue
+            if c == q:
+                q = None
+        elif c in "\"'":
+            q = c
+        elif c == "#":
+            return line[:i].strip()
+        i += 1
+    return line.strip()
+
+
+def _dict_key_at(value, ln):
+    """Строка ln внутри словаря-константы (и вложенных) -> самый внутренний строковый ключ, чья пара её содержит, или None
+    (строка — сама скобка словаря, ключ не строка, не словарь — тогда по имени константы, как раньше)."""
+    import ast
+    if not isinstance(value, ast.Dict):
+        return None
+    best = None
+    stack = [value]
+    while stack:
+        d = stack.pop()
+        for k, v in zip(d.keys, d.values):
+            if k is None:
+                continue
+            a, b = k.lineno, max(k.end_lineno or k.lineno, v.end_lineno or v.lineno)
+            if a <= ln <= b:
+                if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+                    return None
+                best = k.value
+                if isinstance(v, ast.Dict):
+                    stack.append(v)
+    return best
+
+
+_STRIDX = {}
+
+
+def _str_index():
+    """Во всём проекте (кроме проверок): строковая константа -> единицы кода, где она написана ("scene_on" -> {"core/
+    answer_prompt.py::PromptMixin._scene_on"}). Только короткие строки-имена (ключи настроек и словарей)."""
+    if _STRIDX:
+        return _STRIDX
+    import ast
+    for f in repo_files():
+        if not f.endswith(".py") or f.startswith(("tests/", "tools/academy/")):
+            continue
+        try:
+            src = (ROOT / f).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        r = _units(src)
+        if not r:
+            continue
+        units, tree = r
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and re.fullmatch(r"[A-Za-z_][\w.-]{1,40}", n.value):
+                u = _unit_at(units, n.lineno)
+                _STRIDX.setdefault(n.value, set()).add(f"{f}::{u[2]}" if u else f"{f}::")
+    return _STRIDX
+
+
 def py_changed(f, base):
     """Что задело изменение .py по функциям -> ({"f::единица"}, {имена констант}, причина отказа или "")."""
     import ast
@@ -294,6 +363,12 @@ def py_changed(f, base):
     if not ru or not rn:
         return set(), set(), "не разбирается"
     old_lines, new_lines = _hunks(f, base)
+    # 20.11: поправили только комментарий в конце строки ("scene": False,  # …) — код тот же: строку не считаем
+    ot, nt = old_src.stdout.splitlines(), (ROOT / f).read_text(encoding="utf-8").splitlines()
+    oc = [_code_part(ot[i - 1]) for i in old_lines if 0 < i <= len(ot)]
+    nc = [_code_part(nt[i - 1]) for i in new_lines if 0 < i <= len(nt)]
+    old_lines = [i for i in old_lines if 0 < i <= len(ot) and _code_part(ot[i - 1]) not in nc]
+    new_lines = [i for i in new_lines if 0 < i <= len(nt) and _code_part(nt[i - 1]) not in oc]
     units, names, imports = set(), set(), False
     for lines, (us, tree), src in ((old_lines, ru, old_src.stdout), (new_lines, rn, (ROOT / f).read_text(encoding="utf-8"))):
         text = src.splitlines()
@@ -318,7 +393,15 @@ def py_changed(f, base):
                 continue
             if isinstance(stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
                 tg = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
-                names |= {x.id for t in tg for x in ast.walk(t) if isinstance(x, ast.Name)}
+                tnames = {x.id for t in tg for x in ast.walk(t) if isinstance(x, ast.Name)}
+                key = _dict_key_at(getattr(stmt, "value", None), ln)
+                if key:
+                    # 20.11 (владелец: «выпуски очень долгие»): правка одного ключа словаря-константы (settings.DEFAULTS:
+                    # "scene_on": None) задевала всех, кто трогает DEFAULTS, — 174 проверки. Теперь — ключ: код, где он
+                    # назван строкой, и проверки, что его называют (pick)
+                    names |= {"key:" + key} | {"keyof:" + n for n in tnames}
+                    continue
+                names |= tnames
             elif isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 imports = True                            # что именно сменилось в импортах — ниже, по всему файлу
             elif isinstance(stmt, ast.Expr) and isinstance(getattr(stmt, "value", None), ast.Constant) and isinstance(stmt.value.value, str):
@@ -466,14 +549,21 @@ def js_changed(f, base):
     fns, consts, text = set(), set(), []
     for lines, src in ((old_lines, old.stdout), (new_lines, new_src)):
         units, body, js = _js_units(src, html), src.splitlines(), _js_lines(src, html)
+        inside = _js_block_comment_lines(src)
         for ln in lines:
             if ln < 1 or ln > len(body):
                 continue
-            if _js_comment(body[ln - 1]):
+            if _js_comment(body[ln - 1]) or ln in inside:
                 continue                                   # пустая строка и комментарий ничего не меняют
             if ln not in js:
                 return set(), set(), [], f"разметка или стили (строка {ln})"
             u = next((x for x in units if x[0] <= ln <= x[1]), None)
+            if u is not None and u[3] == "stmt" and re.match(r"\s*(?:N\.on|document\.addEventListener|window\.addEventListener)\(", body[u[0] - 1]):
+                # 20.11: подписка на событие (N.on("stt_level", e => …)) — не «весь файл», а проверки, что называют её слова
+                fns.add("__stmt__")
+                text.append(body[ln - 1])
+                text.append(body[u[0] - 1])
+                continue
             if u is None or u[3] == "stmt":
                 return set(), set(), [], f"код верхнего уровня (строка {ln})"
             (fns if u[3] == "fn" else consts).update(u[2].split(","))
@@ -482,6 +572,24 @@ def js_changed(f, base):
 
 
 _JSIDX = {}
+
+
+def _js_block_comment_lines(src):
+    """Номера строк внутри /* … */ (продолжение многострочного комментария без «*» в начале строки — тоже комментарий)."""
+    out, pos = set(), 0
+    while True:
+        a = src.find("/*", pos)
+        if a < 0:
+            return out
+        b = src.find("*/", a + 2)
+        if b < 0:
+            return out
+        la, lb = src.count("\n", 0, a) + 1, src.count("\n", 0, b) + 1
+        if src.rfind("\n", 0, a) < a and not src[src.rfind("\n", 0, a) + 1:a].strip():
+            out |= set(range(la, lb + 1))             # комментарий с начала строки — строки целиком
+        else:
+            out |= set(range(la + 1, lb + 1))
+        pos = b + 2
 
 
 def _js_name_index(f):
@@ -518,6 +626,8 @@ def js_pick(f, base, deps, fnmap, have, ch):
     if fail:
         return None, fail
     by, cby, stmt = _js_name_index(f)
+    on_ev = "__stmt__" in fns
+    fns = fns - {"__stmt__"}
     units, todo, seen, every = set(fns), set(consts), set(), False
     while todo:                                         # константа -> функции, где она названа (и константы из неё)
         nm = todo.pop()
@@ -549,6 +659,8 @@ def js_pick(f, base, deps, fnmap, have, ch):
             out.add(t)                                  # покрытия этого файла у проверки нет — осторожно, по файлу
         elif every or fnmap.get(t, set()) & keys:
             out.add(t)
+        elif on_ev and rx and rx.search(src(t)):
+            out.add(t)                                  # подписка на событие: проверка называет её событие или слова
         elif rx and (key in d or (f != key and ("www-src" in src(t) or f.rsplit("/", 1)[-1] in src(t)))) and rx.search(src(t)):
             out.add(t)                                  # читает исходник текстом и называет изменённое
     short = sorted(units)
@@ -565,6 +677,74 @@ def _tokens(lines):
             if w not in _JS_KW:
                 out.add(w)
     return out
+
+CSS_TXT = re.compile(r"^(?:android/assets/www/[\w.-]+\.css|ui/assets/[\w.-]+\.css)$")
+PHP_TXT = re.compile(r"^server/dwrapp/(?:[\w-]+/)*[\w.-]+\.php$")
+UI_WIDE = re.compile(r"contrast|theme|light|dark|look|layout|smoke|boot|tablet|web_wide|neu|skin", re.I)
+
+
+def _changed_lines(f, base):
+    """Изменённые строки файла: старые (из base) и новые (рабочие) — текстом."""
+    old_lines, new_lines = _hunks(f, base)
+    old = subprocess.run(["git", "show", f"{base}:{f}"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
+    new = (ROOT / f).read_text(encoding="utf-8", errors="replace").splitlines() if (ROOT / f).is_file() else []
+    return ([old[i - 1] for i in old_lines if 0 < i <= len(old)], [new[i - 1] for i in new_lines if 0 < i <= len(new)], old, new,
+            old_lines, new_lines)
+
+
+def _rx_words(words):
+    return re.compile(r"(?<![\w$-])(?:" + "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")(?![\w$-])") if words else None
+
+
+def text_pick(f, base, deps, have):
+    """20.11 (владелец: «выпуски очень долгие»): app.css и файлы сайта — по смыслу правки, а не по файлу целиком (app.css
+    задевал 320 проверок, cloud.php — 260). CSS: id и классы изменённых правил (и селектор правила, где правка внутри) —
+    проверки, что грузят файл и называют их, и проверки вида целиком (контраст, темы, планшет). PHP: имена функций, где
+    правка, и отличительные слова изменённых строк (и их части через «_») — проверки, что ходят в файл и называют их.
+    -> (проверки, пояснение) или (None, причина — тогда по файлу)."""
+    if not (ROOT / f).is_file():
+        return None, "файл удалён"
+    old_t, new_t, old, new, old_n, new_n = _changed_lines(f, base)
+    words = set()
+    if f.endswith(".css"):
+        for lines, nums in ((old, old_n), (new, new_n)):
+            for i in nums:
+                if not (0 < i <= len(lines)):
+                    continue
+                j = i - 1                                    # правило, где правка: вверх до строки с «{» без «}»
+                while j >= 0 and "{" not in lines[j]:
+                    j -= 1
+                for ln in {lines[i - 1], lines[j] if j >= 0 else ""}:
+                    sel = ln.split("{", 1)[0] if "{" in ln else ln
+                    words |= set(re.findall(r"[#.]([A-Za-z][\w-]{2,})", sel))
+                    words |= set(re.findall(r"--([\w-]{3,})", ln))           # свои переменные (--bandpad)
+        why = "по правилам CSS"
+    else:
+        for lines, nums in ((old, old_n), (new, new_n)):
+            for i in nums:
+                j = i - 1
+                while j >= 0 and not re.match(r"\s*(?:function\s+\w+|\}\s*$)", lines[j] if j < len(lines) else ""):
+                    j -= 1
+                m = re.match(r"\s*function\s+(\w+)", lines[j]) if 0 <= j < len(lines) else None
+                if m:
+                    words.add(m.group(1))
+        toks = _tokens(old_t + new_t)
+        words |= toks | {p for t in toks for p in re.split(r"[_-]", t) if len(p) >= 4}
+        why = "по функциям и словам PHP"
+    texts = {}
+
+    def src(t):
+        if t not in texts:
+            texts[t] = (ROOT / "tests" / t).read_text(encoding="utf-8", errors="replace")
+        return texts[t]
+    users = [t for t, d in deps.items() if t in have and any(hits(f, x) for x in d)]
+    common = {w for w in words if sum(1 for t in users if w in src(t)) > max(25, len(users) // 3)}
+    rx = _rx_words(words - common)
+    out = {t for t in users if (rx and rx.search(src(t))) or (f.endswith(".css") and UI_WIDE.search(t))}
+    if not words:
+        return None, "не нашёл, что изменилось"
+    return out, f"{len(out)} {why} ({', '.join(sorted(words - common)[:6])}{' …' if len(words - common) > 6 else ''})"
+
 
 def pick(base=None, verbose=True):
     """-> ("ALL", причина) или (список проверок, пояснения)."""
@@ -617,6 +797,12 @@ def pick(base=None, verbose=True):
             units, names, fail = py_changed(f, base or last_tag())
             if not fail:
                 by_name, mod = _name_index()
+                keys = {n[4:] for n in names if n.startswith("key:")}
+                keyof = {n[6:] for n in names if n.startswith("keyof:")}
+                names = {n for n in names if not n.startswith(("key:", "keyof:"))}
+                if keys:                                  # ключ словаря-константы: где он назван строкой
+                    sidx = _str_index()
+                    units |= {u for k in keys for u in sidx.get(k, set()) if not u.endswith("::")}
                 todo, seen_n = set(names), set()
                 while todo:                               # константа, собранная из другой константы, — тоже
                     nm = todo.pop()
@@ -631,17 +817,33 @@ def pick(base=None, verbose=True):
                         p = ROOT / "tests" / t
                         if f.rsplit("/", 1)[-1][:-3] in (src := p.read_text(encoding="utf-8", errors="replace")) and rx.search(src):
                             ts.add(t)
+                if keys:                                  # проверки, что называют ключ («"scene_on"») или словарь с файлом
+                    krx = re.compile(r"""["'](?:""" + "|".join(re.escape(k) for k in sorted(keys)) + r""")["']""")
+                    nrx = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(n) for n in sorted(keyof)) + r")(?!\w)") if keyof else None
+                    stem = f.rsplit("/", 1)[-1][:-3]
+                    for t in have:
+                        src_t = (ROOT / "tests" / t).read_text(encoding="utf-8", errors="replace")
+                        if krx.search(src_t) or (nrx and stem in src_t and nrx.search(src_t)):
+                            ts.add(t)
                 # файл открыт процессом с записью — его вызовы записаны; прочитан текстом — «src:» выше. Без записи функций
                 # вовсе (проверка не запускала код проекта под записью) — осторожно, по файлу
                 ts |= {t for t, d in deps.items() if any(hits(f, x) for x in d) and t not in fnmap}
                 chosen.update(t for t in ts if t in have)
                 short = sorted(u.split("::", 1)[1] for u in units if u.startswith(f + "::"))
                 why.append(f"{f}: {len(ts)} по функциям ({', '.join(short[:6])}{' …' if len(short) > 6 else ''}"
-                           + (f"; имена: {', '.join(sorted(seen_n)[:4])}" if seen_n else "") + ")")
+                           + (f"; имена: {', '.join(sorted(seen_n)[:4])}" if seen_n else "")
+                           + (f"; ключи: {', '.join(sorted(keys)[:4])}" if keys else "") + ")")
                 continue
             why.append(f"{f}: по файлу — {fail}")
         if JS_FN.match(f) and fnmap:
             ts, note = js_pick(f, base or last_tag(), deps, fnmap, have, ch)
+            if ts is not None:
+                chosen.update(ts)
+                why.append(f"{f}: {note}")
+                continue
+            why.append(f"{f}: по файлу — {note}")
+        if CSS_TXT.match(f) or PHP_TXT.match(f):
+            ts, note = text_pick(f, base or last_tag(), deps, have)
             if ts is not None:
                 chosen.update(ts)
                 why.append(f"{f}: {note}")
