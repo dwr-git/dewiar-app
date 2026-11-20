@@ -17,6 +17,7 @@ import threading
 from settings import DATA_DIR, PERSONAS_DIR, SETTINGS_PATH, STATE_DIR
 
 AVATARS_DIR = DATA_DIR / "avatars"      # портреты из комплекта: <id>.png (прозрачный фон) — встроенным и галерее
+LIVE_DIR = DATA_DIR.parent / "ui" / "assets" / "live"   # живые портреты (entities.js): образы — с прозрачным фоном
 
 VOICEPRINT_DIR = STATE_DIR / "voiceprints"
 
@@ -573,6 +574,96 @@ def _avatar_small(path, size):
     return f"data:{mime};base64," + base64.b64encode(raw).decode()
 
 
+# Образы (1.0.55, владелец 20.11: «человек любит разнообразие… Лира может оставаться, а просто кнопочка „смени образ“»):
+# тот же персонаж — то же лицо, мимика и характер, другие причёска, наряд и настроение. Портрет образа —
+# AVATARS_DIR/<live>-<id>.webp, живые слои — ui/assets/live/<live>-<id>.* (tools/live_looks.py). when — когда образ
+# уместен для «Сама — по времени и сезону»: season (зима 12–2, весна 3–5, лето 6–8, осень 9–11), evening (с 19 до 6).
+LOOKS = {
+    "lira": [
+        {"id": "spring", "name": "Весна", "when": ["spring"]},
+        {"id": "loose", "name": "Волны"},
+        {"id": "braid", "name": "Коса"},
+        {"id": "silk", "name": "Шёлк"},
+        {"id": "curls", "name": "Локоны"},
+        {"id": "buns", "name": "Пучки"},
+        {"id": "winter", "name": "Зима", "when": ["winter"]},
+        {"id": "home", "name": "Дома", "when": ["evening"]},
+        {"id": "hair", "name": "Свобода"},
+        {"id": "tails", "name": "Хвостики"},
+        {"id": "street", "name": "Худи"},
+        {"id": "gamer", "name": "Геймер"},
+    ],
+    "patrik": [
+        {"id": "suit", "name": "Деловой"},
+        {"id": "home", "name": "Дома", "when": ["evening"]},
+        {"id": "silver", "name": "Серебро"},
+    ],
+}
+SEASON = {12: "winter", 1: "winter", 2: "winter", 3: "spring", 4: "spring", 5: "spring",
+          6: "summer", 7: "summer", 8: "summer", 9: "autumn", 10: "autumn", 11: "autumn"}
+THUMB_SIDE = 112
+
+
+# Лица — только у Лиры и Патрика (владелец 21.11: «остальные абстракциями, а свои пользователь создаёт сам»): готовые
+# Эва, Ника и Оскар при НОВОМ добавлении — абстракция в цвете роли (face: False в файле персонажа). Кто добавил их раньше —
+# лицо остаётся: привычный помощник не меняет облик без спроса.
+NO_FACE = {"eva", "nika", "oskar"}
+
+
+def look_auto(looks, now=None):
+    """«Сама — по времени и сезону»: вечером — домашний (если есть), иначе образ дня: сезонный в свой сезон чаще,
+    остальные по кругу — один и тот же весь день (не мелькает), каждый день другой. Чужой сезон — не надеваем
+    (шарф летом). "" — обычный облик."""
+    import datetime as _dt
+    now = now or _dt.datetime.now()
+    season, evening = SEASON[now.month], now.hour >= 19 or now.hour < 6
+    if evening:
+        home = [x["id"] for x in looks if "evening" in (x.get("when") or [])]
+        if home:
+            return home[0]
+    fits = [x for x in looks if not x.get("when") or season in x["when"]]
+    seasonal = [x["id"] for x in fits if season in (x.get("when") or [])]
+    day = now.toordinal()
+    if seasonal and day % 2 == 0:                       # свой сезон — через день
+        return seasonal[(day // 2) % len(seasonal)]
+    pool = [""] + [x["id"] for x in fits if not x.get("when")]
+    return pool[day % len(pool)]
+
+
+def _thumb(path, box=(.17, .08, .83, .74)):
+    """Маленький кружок образа для выбора (сторона THUMB_SIDE), data-URL; нет Pillow — сама картинка."""
+    try:
+        import io
+        from PIL import Image
+        from PIL import ImageDraw, ImageFilter
+        with Image.open(path) as im:
+            has_a = im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info)
+            im = im.convert("RGBA" if has_a else "RGB")
+            w, h = im.size
+            im = im.crop((int(w * box[0]), int(h * box[1]), int(w * box[2]), int(h * box[3])))     # лицо и причёска, без плеч
+            im.thumbnail((THUMB_SIDE * 2, THUMB_SIDE * 2))
+            if has_a:                                   # уже с прозрачным фоном (живой портрет образа)
+                im.thumbnail((THUMB_SIDE, THUMB_SIDE))
+                out = io.BytesIO()
+                im.save(out, "WEBP", quality=82)
+                return "data:image/webp;base64," + base64.b64encode(out.getvalue()).decode()
+            # чёрный фон портрета — прозрачным (связанный с краем): кружок ложится на материал окна, а не чёрным пятном
+            m = im.convert("L").point(lambda v: 255 if v < 22 else 0)
+            W, H = m.size
+            for xy in ((0, 0), (W - 1, 0), (0, H // 2), (W - 1, H // 2)):
+                if m.getpixel(xy) == 255:
+                    ImageDraw.floodfill(m, xy, 128)
+            alpha = m.point(lambda v: 0 if v == 128 else 255).filter(ImageFilter.GaussianBlur(1))
+            im = im.convert("RGBA")
+            im.putalpha(alpha)
+            im.thumbnail((THUMB_SIDE, THUMB_SIDE))
+            out = io.BytesIO()
+            im.save(out, "WEBP", quality=80)
+            return "data:image/webp;base64," + base64.b64encode(out.getvalue()).decode()
+    except Exception:  # noqa: BLE001
+        return _avatar_small(path, path.stat().st_size)
+
+
 class Personas:
     def __init__(self):
         self._lock = threading.RLock()
@@ -652,6 +743,45 @@ class Personas:
         with self._lock:
             return [copy.deepcopy(p) for p in self.items.values()]
 
+    look_pref = staticmethod(lambda: {})              # {pid: {"look": id, "auto": bool}} — ставит движок из настроек
+
+    def looks_of(self, p):
+        """Образы персонажа: [{id, name, img}] — первым «Обычная» (id ""); нет образов — []."""
+        live = p.get("live") or ""
+        if not live or p.get("avatar") and (PERSONAS_DIR / p["avatar"]).exists():
+            return []
+        out = []
+        for x in LOOKS.get(live, []):
+            f = AVATARS_DIR / f"{live}-{x['id']}.webp"
+            if f.exists():
+                # кружок — живой портрет образа (прозрачный фон, чистые волосы) ссылкой на файл окна: в «hello» и рассылку
+                # персонажей картинки не кладём (владелец 20.11: «тяжёлый ответ при открытии виджета»)
+                out.append({"id": x["id"], "name": x["name"], "when": x.get("when") or [], "img": f"assets/live/thumbs/{live}-{x['id']}.webp"})
+        if not out:
+            return []
+        # кружки — один кадр и размер у всех, обычный облик тоже (tools/live_looks.py thumb → ui/assets/live/thumbs)
+        return [{"id": "", "name": "Обычная", "when": [], "img": f"assets/live/thumbs/{live}.webp"}] + out
+
+    def _thumb_memo(self, path, box=None):
+        memo = self.__dict__.setdefault("_thumb_m", {})
+        try:
+            key = (str(path), path.stat().st_mtime_ns)
+        except OSError:
+            return ""
+        if key not in memo:
+            memo[key] = _thumb(path, box) if box else _thumb(path)
+        return memo[key]
+
+    def look_now(self, p, pref=None):
+        """Какой образ сейчас у персонажа -> id ("" — обычный)."""
+        looks = [x for x in LOOKS.get(p.get("live") or "", []) if (AVATARS_DIR / f"{p.get('live')}-{x['id']}.webp").exists()]
+        if not looks:
+            return ""
+        pref = pref if pref is not None else ((self.look_pref() or {}).get(p["id"]) or {})
+        if pref.get("auto"):
+            return look_auto(looks)
+        return pref.get("look") if pref.get("look") in {x["id"] for x in looks} else ""
+
     def public(self):
         """Для интерфейса: вместо avatar (имя файла) — avatar_url (картинка как data-URL); taught — есть ли голосовой
         отпечаток («Научить произношению»)."""
@@ -661,6 +791,17 @@ class Personas:
             q["avatar_url"] = self.avatar_data_url(p)
             if p.get("avatar") and (PERSONAS_DIR / p["avatar"]).exists():
                 q.pop("live", None)                   # своё фото вместо портрета — живое лицо Эвы не рисуем
+            elif p.get("face") is False:              # добавлен после 1.0.55 — абстракция, без лица
+                q.pop("live", None)
+                q["avatar_url"] = ""
+            looks = self.looks_of(p)
+            if looks:                                 # образы: живое лицо и портрет — выбранного (или «Сама»)
+                pref = (self.look_pref() or {}).get(p["id"]) or {}
+                cur = self.look_now(p, pref)
+                q["looks"], q["look"], q["look_auto"] = looks, cur, bool(pref.get("auto"))
+                if cur:
+                    q["live"] = f"{p['live']}-{cur}"
+                    q["avatar_url"] = self.avatar_data_url({"id": q["live"]})
             q["taught"] = (VOICEPRINT_DIR / p["id"] / "meta.json").exists()
             out.append(q)
         return out
@@ -701,7 +842,9 @@ class Personas:
                 while pid in self.items:
                     pid, n = f"{base}-{n}", n + 1
             keep = {k: p[k] for k in ("name", "gender", "wake", "style", "color", "tagline", "about",
-                                      "character", "voice", "role", "skills", "focus", "route", "gallery", "knowledge", "template") if k in p}
+                                      "character", "voice", "role", "skills", "focus", "route", "gallery", "knowledge", "template", "face") if k in p}
+            if "face" not in keep and (self.items.get(pid) or {}).get("face") is False:
+                keep["face"] = False                   # абстракция вместо лица остаётся при правке в студии
             if pid in TEMPLATES and pid in self.items:
                 keep["template"] = True                # свой из шаблона: живое лицо и роль — из шаблона (reload)
             if "knowledge" in keep:                    # базы сайта Dewiar, по которым персонаж отвечает
@@ -760,20 +903,22 @@ class Personas:
         """Готовые персонажи: шаблоны (бывшие встроенные) и специалисты. installed — уже в команде."""
         have = set(self.items)
         src = list(TEMPLATES.items()) + [(k, v) for k, v in GALLERY.items() if not v.get("kids")]
-        return [dict(copy.deepcopy(v), id=k, installed=k in have, template=k in TEMPLATES, avatar_url=self.avatar_data_url({"id": k}))
+        return [dict({kk: vv for kk, vv in copy.deepcopy(v).items() if not (k in NO_FACE and kk == "live")}, id=k, installed=k in have,
+                     template=k in TEMPLATES, avatar_url="" if k in NO_FACE else self.avatar_data_url({"id": k}))
                 for k, v in src]
 
     def gallery_add(self, gid):
         if gid in TEMPLATES:                          # бывший встроенный — своим, поля дополнятся из шаблона (reload)
             with self._lock:
                 PERSONAS_DIR.mkdir(parents=True, exist_ok=True)
-                (PERSONAS_DIR / f"{gid}.json").write_text(json.dumps({"template": True}, ensure_ascii=False), encoding="utf-8")
+                (PERSONAS_DIR / f"{gid}.json").write_text(json.dumps(dict({"template": True}, **({"face": False} if gid in NO_FACE else {})),
+                                                                      ensure_ascii=False), encoding="utf-8")
                 self.reload()
             return gid
         g = GALLERY.get(gid)
         if not g:
             raise ValueError("нет такого специалиста")
-        return self.save(dict(copy.deepcopy(g), id=gid, gallery=True))
+        return self.save(dict(copy.deepcopy(g), id=gid, gallery=True, **({"face": False} if gid in NO_FACE else {})))
 
     def wake_map(self, only=None, kids=False):
         """Слово запуска -> id персонажа: wake плюс то, как имя слышит маленький распознаватель Vosk (heard["vosk"]).

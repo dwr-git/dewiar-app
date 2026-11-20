@@ -458,6 +458,40 @@
   .gi { display: grid; place-items: center; flex: none; }
   .gi svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   #b-team svg.chev { width: 13px; height: 13px; opacity: .7; }
+  /* Образы (1.0.55): у имени — стрелка (есть образы), нажали — кружки образов под именем и «Сама — по времени и сезону» */
+  #bubble.looks #say { display: inline-flex; align-items: center; gap: 6px; }
+  #bubble .lkc { display: none; width: 12px; height: 12px; margin-left: -3px; fill: none; stroke: currentColor; stroke-width: 2.4;
+                 stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity .15s, transform .2s; }
+  #bubble.looks { cursor: pointer; } #bubble.looks .lkc { display: block; } #bubble.looks:hover .lkc, #bubble.lkopen .lkc { opacity: .6; }
+  #bubble.lkopen .lkc { transform: rotate(180deg); }
+  #bubble .lkn { opacity: .55; font-weight: 500; }
+  #looks { position: absolute; left: 14px; right: 14px; z-index: 22; padding: 12px 8px 10px; border-radius: 20px; background: #16161c;
+           box-shadow: 0 18px 40px -12px rgba(0,0,0,.8); animation: tpop .16s ease-out; }
+  #looks[hidden] { display: none; }
+  #card.lkopen #orb { width: calc(150px * var(--ok, 1)); height: calc(150px * var(--ok, 1)); }   /* открыли образы — облик уступает место */
+  #looks { overflow-y: auto; scrollbar-width: none; } #looks::-webkit-scrollbar { display: none; }
+  #looks .lg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 0; }
+  #looks .lg button { display: flex; flex-direction: column; align-items: center; gap: 4px; border: 0; background: none; padding: 2px 0;
+                      color: var(--muted); font: 600 10px Manrope, sans-serif; cursor: pointer; white-space: nowrap; }
+  #looks .lg img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; display: block; background: rgba(255,255,255,.06); box-shadow: 0 0 0 1px rgba(255,255,255,.08);
+                   transition: transform .15s; }
+  #looks .lg button:hover img { transform: scale(1.06); }
+  #looks .lg button.cur { color: var(--ink); } #looks .lg button.cur img { box-shadow: 0 0 0 2px #16161c, 0 0 0 3.5px var(--ink); }
+  #looks .la { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 6px 0; padding-top: 9px;
+               border-top: 1px solid rgba(255,255,255,.07); font-size: 12px; color: var(--ink); cursor: pointer; }
+  #looks .la input { appearance: none; -webkit-appearance: none; width: 30px; height: 17px; border-radius: 9px; margin: 0; flex: none;
+                     background: rgba(255,255,255,.18); position: relative; cursor: pointer; transition: background .2s; }
+  #looks .la input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: left .2s; }
+  #looks .la input:checked { background: var(--ink); } #looks .la input:checked::after { left: 15px; }
+  body.light #looks { background: #fff; box-shadow: 0 14px 40px rgba(20,30,60,.18); }
+  body.light #looks .lg button.cur img { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--ink); }
+  body.light #looks .la { border-top-color: rgba(20,20,40,.08); } body.light #looks .la input { background: rgba(20,20,40,.15); }
+  body.light #looks .la input:checked::after, body.neu #looks .la input:checked::after { background: var(--glass, #fff); }
+  body.neu #looks { background: var(--glass); box-shadow: 8px 8px 20px var(--neu-dark), -8px -8px 20px var(--neu-light); }
+  body.neu #looks .lg img { box-shadow: 3px 3px 7px var(--neu-dark), -3px -3px 7px var(--neu-light); }
+  body.neu #looks .lg button.cur img { box-shadow: 0 0 0 2px var(--glass), 0 0 0 3.5px var(--ink); }
+  body.neu #looks .la { border-top-color: rgba(20,30,60,.08); } body.neu #looks .la input { background: var(--neu-dark); }
+  body.kids #looks, body.kids #bubble .lkc { display: none !important; }
   #team { position: absolute; left: 12px; right: 12px; bottom: 58px; max-height: 236px; overflow-y: auto; z-index: 20; display: none;
           padding: 6px; border-radius: 18px; background: #16161c;
           box-shadow: 0 18px 40px -12px rgba(0,0,0,.8); }
@@ -643,6 +677,7 @@
   <div id="orb" title="Нажмите — говорить. Удерживайте (или пробел) — диктовка любой длины, отпустите — отправлю"><canvas id="cv"></canvas>
     <svg id="tarc" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="tarcg" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="90" y2="100"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient></defs><circle class="tk" cx="50" cy="50" r="48.5"/><circle class="fg" cx="50" cy="50" r="48.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" stroke="url(#tarcg)" transform="rotate(-90 50 50)"/><circle class="bead" cx="50" cy="1.5" r="1.45"/></svg><span id="tmini"></span></div>
   <div id="bubble"><span id="lvl" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span id="say">Подключаюсь…</span><button id="stopb" type="button" aria-label="Остановить ответ" title="Остановить: замолчать и не отвечать дальше (Esc)"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.2"/></svg>Стоп</button></div>
+  <div id="looks" hidden role="dialog" aria-label="Образ"><div class="lg" id="looks-g"></div><label class="la"><span>Сама — по времени и сезону</span><input type="checkbox" id="looks-auto"></label></div>
   <div id="mid">
     <div id="cap"><div class="you" id="you" translate="no"></div><div id="act" title="Ход работы"></div><div class="bot" id="bot" translate="no"></div><div id="media"></div><button id="more">Открыть целиком</button></div>
     <div id="yn"><button class="yes" id="y">Да</button><button id="ya" hidden title="Команды, которые только смотрят, на этом сервере — дальше без вопроса">Всегда</button><button id="n">Нет</button></div>
@@ -873,8 +908,42 @@ function setState(s) {
   if (REST.on && (s === "muted" || s === "idle")) { say.textContent = "Отдыхаю до " + REST.until_text; say.title = "Не слушаю и не говорю. Нажмите на лицо или на «отдыхаю» — и я снова с вами"; }
   else if (LABEL[s]) { say.textContent = LABEL[s]; say.title = ""; }
   else if (radioNow && (s === "idle" || s === "muted")) { say.innerHTML = ""; const b = document.createElement("b"); b.textContent = "♪ " + radioNow; say.appendChild(b); say.title = "Играет радио. «Пауза», «дальше», «выключи музыку»"; }
-  else { say.innerHTML = ""; say.title = ""; const b = document.createElement("b"); b.textContent = current ? current.name : "Dewiar"; say.appendChild(b); }
+  else {
+    say.innerHTML = ""; say.title = ""; const b = document.createElement("b"); b.textContent = current ? current.name : "Dewiar"; say.appendChild(b);
+    const ln = lookName(current);
+    if (ln) { const n = document.createElement("span"); n.className = "lkn"; n.textContent = "· " + ln; say.appendChild(n); }
+    if (hasLooks()) { say.insertAdjacentHTML("beforeend", '<svg class="lkc" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>'); say.title = "Образ — нажмите, чтобы выбрать"; }
+  }
+  bub.classList.toggle("looks", hasLooks() && !LABEL[s] && !(REST.on && (s === "muted" || s === "idle")) && !radioNow);
 }
+/* Образы (1.0.55): тот же персонаж — другие причёска и наряд. У имени — стрелка, нажали — кружки под именем; голосом —
+   «смени образ», «надень зимний», «выбирай образ сама». Выбор — в ядре (persona_look), здесь только показ. */
+function hasLooks() { return !!(current && current.looks && current.looks.length > 1); }
+function lookName(p) { const l = p && p.look ? (p.looks || []).find(x => x.id === p.look) : null; return l ? l.name : ""; }
+function renderLooks() {
+  const g = $("looks-g"); g.innerHTML = "";
+  (current.looks || []).forEach(l => {
+    const b = document.createElement("button"); b.type = "button"; b.className = (current.look || "") === l.id ? "cur" : "";
+    const im = document.createElement("img"); im.src = l.img; im.alt = ""; im.draggable = false;
+    const n = document.createElement("span"); n.textContent = l.name; b.append(im, n);
+    b.onclick = () => core.call("persona_look", { id: current.id, look: l.id }).catch(showErr);
+    g.appendChild(b);
+  });
+  $("looks-auto").checked = !!current.look_auto;
+}
+function looksOpen(on) {
+  const t = $("looks"), b = $("bubble");
+  if (on === undefined) on = t.hidden;
+  if (on && !hasLooks()) on = false;
+  t.hidden = !on; b.classList.toggle("lkopen", on); $("card").classList.toggle("lkopen", on);
+  const place = () => { if (t.hidden) return; const top = b.offsetTop + b.offsetHeight + 10, bar = $("bar") ? $("bar").offsetTop : $("card").clientHeight;
+    t.style.top = top + "px"; t.style.maxHeight = Math.max(120, bar - top - 10) + "px"; };
+  if (on) { renderLooks(); place(); setTimeout(place, 380); }       // облик уменьшается за .35 с — место пересчитать
+}
+$("bubble").addEventListener("click", e => { if (e.target.closest("#stopb") || !$("bubble").classList.contains("looks")) return; e.stopPropagation(); looksOpen(); });
+$("looks-auto").addEventListener("change", e => core.call("persona_look", { id: current.id, auto: e.target.checked }).catch(showErr));
+document.addEventListener("click", e => { if (!$("looks").hidden && !e.target.closest("#looks, #bubble")) looksOpen(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("looks").hidden) looksOpen(false); });
 function setRadio(r) {
   radioNow = r && r.playing ? (r.station || "Радио") : "";
   entity.vinyl = radioNow || null;
@@ -1227,7 +1296,7 @@ core.on("hello", d => {
 })
 .on("settings", e => { TEXT_MODE = !!((e.settings || {}).ui || {}).text_mode; setTextMode(TEXT_MODE); applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); pultOn = (((e.settings || {}).ui || {}).pult_on) !== false; featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
 .on("persona", e => applyPersona(e.persona))
-.on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); })
+.on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); if (!$("looks").hidden) { if (hasLooks()) renderLooks(); else looksOpen(false); } })
 .on("level", e => { entity.set({ level: e.v, voice: e.src === "voice" }); if (e.src !== "voice" && state === "listening") lvlSet(e.v); })
 .on("listen_none", e => {                  // №178: ждала вопрос — речи не было: сказать почему, без голоса
   const say = $("say"); say.textContent = t(e && e.sound ? "hud.listen.noise" : "hud.listen.none"); say.title = t("hud.listen.tip");
@@ -1456,7 +1525,7 @@ core.on("hold", e => { if (!e.on && hold && hold.on) { clearInterval(hold.timer)
 let nativeDrag = false;              // Linux, окна прямо на Wayland: тащит композитор (app.Api.native_drag, №442)
 function nativeDragCheck() { const a = api(); if (a && a.native_drag) a.native_drag().then(v => { nativeDrag = !!v; }).catch(() => {}); }
 window.addEventListener("pywebviewready", nativeDragCheck); setTimeout(nativeDragCheck, 1500);
-const NO_DRAG = "button, input, textarea, select, a[href], label, [contenteditable], #ask, #cap, #note, #upd, #task, #yn, #rem, #lightbox, #cloudlow, #annb, #clb, #drb, #reader";
+const NO_DRAG = "button, input, textarea, select, a[href], label, [contenteditable], #ask, #cap, #note, #upd, #task, #yn, #rem, #lightbox, #cloudlow, #annb, #clb, #drb, #reader, #bubble.looks, #looks";
 function noDrag(t) {
   if (!t || !t.closest) return true;
   if (t.closest(NO_DRAG)) return true;

@@ -59,6 +59,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
              PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin, ChatMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
+        personas.look_pref = lambda: self.s.get("looks") or {}      # образы: выбор человека — в настройках
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
             from personas import DEFAULT
             self.s.update({"persona": DEFAULT})

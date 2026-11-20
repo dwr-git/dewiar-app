@@ -191,6 +191,11 @@ class TalkCommands:
         if cmd == "persona_set":
             self.switch_persona(a["id"])
             return True
+        if cmd == "persona_look":                       # образ: {id, look} или {id, auto}; look "next" — следующий
+            q = self.set_look(a.get("id") or self.s.get("persona"), a.get("look"), a.get("auto"))
+            if q is None:
+                raise ValueError("У этого персонажа нет образов")
+            return {"look": q.get("look", ""), "look_auto": q.get("look_auto", False)}
         if cmd == "persona_save":
             pid = self.personas.save(a["persona"])
             p = self.personas.get(pid)

@@ -2275,3 +2275,9 @@ body.light .blg-del { color: #c23a5a; }
 .cl-co[hidden], #cl-join[hidden] { display: none; }
 .cl-co .btn { align-self: flex-start; }
 #cl-join-code { text-transform: uppercase; letter-spacing: .06em; font-family: ui-monospace, Menlo, monospace; }
+
+/* образы персонажа (1.0.55): кружки в листе «Кто отвечает» */
+.plook .plg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 4px; margin-top: 10px; }
+.plook .plg button { display: flex; flex-direction: column; align-items: center; gap: 5px; border: 0; background: none; padding: 2px 0; color: var(--muted); font: 600 11px/1.2 Manrope, sans-serif; }
+.plook .plg img { width: 54px; height: 54px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.06); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+.plook .plg button.on { color: var(--ink); } .plook .plg button.on img { box-shadow: 0 0 0 2px var(--bg, #111), 0 0 0 3.5px var(--ink); }

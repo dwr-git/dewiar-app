@@ -320,6 +320,7 @@
   "pbot_set",
   "pbot_try",
   "persona_delete",
+  "persona_look",
   "persona_memory",
   "persona_save",
   "persona_set",

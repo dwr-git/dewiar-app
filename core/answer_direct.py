@@ -411,3 +411,67 @@ class DirectMixin:
                 log.info("📘 Урок из поправки: %s", rule)
                 self.emit("lesson", text=rule)
         threading.Thread(target=run, name="learn", daemon=True).start()
+
+
+# «Лира, смени образ», «надень зимний», «образ „Весна“», «выбирай образ сама», «верни обычный образ» (1.0.55)
+LOOK_RX = re.compile(r"(?i)^(?:[а-яё]+,?\s+)?(?:(?P<next>смени|поменяй|другой|новый|следующий)\s+(?:свой\s+)?образ"
+                     r"|(?P<auto>(?:выбирай|меняй|подбирай)\s+образ\w*\s+(?:сама?|по\s+(?:сезону|погоде|времени))"
+                     r"|образ\w*\s+(?:сама?|по\s+сезону))"
+                     r"|(?P<plain>(?:верни|сними)\s+(?:обычн\w+\s+образ|образ)|обычн\w+\s+образ)"
+                     r"|(?:надень|переоденься\s+в|образ)\s+[«\"]?(?P<name>[а-яё]+))[»\".!? ]*$")
+
+
+class LookMixin:
+    def set_look(self, pid, look=None, auto=None):
+        """Образ персонажа: look — id или "" (обычный), "next" — следующий по кругу; auto — «Сама — по времени и сезону».
+        Хранится в настройках (looks: {pid: {look, auto}}), персонажи заново — окнам. -> public-персонаж или None."""
+        p = self.personas.get(pid)
+        cur = next((x for x in self.personas.public() if x["id"] == p["id"]), None)
+        if not cur or not cur.get("looks"):
+            return None
+        all_ = self.s.get("looks") or {}
+        pref = dict(all_.get(p["id"]) or {})
+        ids = [x["id"] for x in cur["looks"]]
+        if look == "next":
+            look = ids[(ids.index(cur.get("look") or "") + 1) % len(ids)]
+            auto = False
+        if look is not None and look in ids:
+            pref["look"] = look
+            if auto is None:
+                pref["auto"] = False
+        if auto is not None:
+            pref["auto"] = bool(auto)
+        self.s.update({"looks": {**all_, p["id"]: pref}})
+        pub = self.personas.public()
+        self.emit("personas", personas=pub)
+        return next((x for x in pub if x["id"] == p["id"]), None)
+
+    def _direct_look(self, text, via=None):
+        """Смена образа словами — сразу, без модели. -> True, если это была такая просьба."""
+        m = LOOK_RX.match((text or "").strip())
+        if not m:
+            return False
+        pid = self.s.get("persona")
+        cur = next((x for x in self.personas.public() if x["id"] == pid), None)
+        if not cur or not cur.get("looks"):
+            return False
+        names = {x["name"].lower(): x["id"] for x in cur["looks"]}
+        if m.group("next"):
+            q = self.set_look(pid, "next")
+        elif m.group("auto"):
+            q = self.set_look(pid, auto=True)
+        elif m.group("plain"):
+            q = self.set_look(pid, "")
+        else:
+            w = m.group("name").lower().replace("ё", "е")         # «зимний» — «Зима», «шелковый» — «Шёлк», «домашний» — «Дома»
+            hit = next((i for n, i in names.items() if n.replace("ё", "е")[:3] == w[:3]), None)
+            if hit is None:
+                return False
+            q = self.set_look(pid, hit)
+        if not q:
+            return False
+        name = next((x["name"] for x in q["looks"] if x["id"] == q.get("look")), "Обычная")
+        msg = ("Хорошо, образ буду выбирать сама — по времени и сезону. Сегодня — «" + name + "».") if q.get("look_auto") \
+            else ("Вернула обычный образ." if not q.get("look") else f"Готово — образ «{name}».")
+        self._say_quick(msg, text, via)
+        return True

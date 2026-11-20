@@ -1222,16 +1222,21 @@ function myPersonasApply() {
    (у каждого устройства свой набор). Пакетов знаний компьютера здесь нет — специализация словами в подсказке (focus). */
 const PGALLERY = window.DEWIAR_GALLERY || [];
 function galIds() { try { const l = JSON.parse(prefGet("gal_personas") || "[]"); return Array.isArray(l) ? l.filter(id => PGALLERY.some(g => g.id === id)) : []; } catch (e) { return []; } }
+function galNoFace() { try { const l = JSON.parse(prefGet("gal_noface") || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
 function galApply() {
   for (let i = PERSONAS.length - 1; i >= 0; i--) if (PERSONAS[i].gallery) PERSONAS.splice(i, 1);
   const at = PERSONAS.findIndex(p => p.custom);
-  const add = galIds().map(id => Object.assign({ main: false, skills: [], focus: "" }, PGALLERY.find(g => g.id === id), { gallery: true }));
+  // лица — только у Лиры и Патрика (1.0.55): Эва, Ника, Оскар, выбранные с этой версии, — абстракция (gal_noface);
+  // выбранные раньше остаются с лицом — привычный помощник не меняет облик без спроса
+  const nf = galNoFace();
+  const add = galIds().map(id => Object.assign({ main: false, skills: [], focus: "" }, PGALLERY.find(g => g.id === id), { gallery: true },
+    nf.includes(id) ? { avatar: "", live: "" } : {}));
   PERSONAS.splice(at < 0 ? PERSONAS.length : at, 0, ...add);       // после встроенных, перед своими
 }
 // -> персонаж, который теперь отвечает (или null — нет такого)
 function galAdd(id) {
   const g = PGALLERY.find(x => x.id === id); if (!g) return null;
-  const l = galIds(); if (!l.includes(id)) l.push(id);
+  const l = galIds(); if (!l.includes(id)) { l.push(id); if (g.noface) prefSet("gal_noface", JSON.stringify(galNoFace().filter(x => x !== id).concat([id]))); }
   prefSet("gal_personas", JSON.stringify(l)); galApply();
   S.persona = id; saveS(); applyPersona();
   return PERSONAS.find(p => p.id === id) || null;
@@ -1244,7 +1249,40 @@ galApply();
 myPersonasApply();
 // с 0.4.27 встроенных двое — Лира и Патрик; выбранный прежде Агент, Джарвис, Эва или Кодер — теперь Лира
 if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try { prefSet("settings", JSON.stringify(S)); } catch (e) { } }
-const persona = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
+const personaBase = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
+/* Образы (1.0.55, как на компьютере): тот же персонаж — другие причёска и наряд. Выбор — S.looks {id: {look, auto}};
+   живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени и сезону» — lookAuto (то же правило, что core/personas.py). */
+const SEASON = ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "autumn", "autumn", "autumn", "winter"];
+function lookAuto(looks, now = new Date()) {
+  const season = SEASON[now.getMonth()], h = now.getHours();
+  if (h >= 19 || h < 6) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
+  const fits = looks.filter(x => !(x.when || []).length || x.when.includes(season));
+  const seasonal = fits.filter(x => (x.when || []).includes(season)).map(x => x.id);
+  const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + 719163;   // как date.toordinal() в Python
+  if (seasonal.length && day % 2 === 0) return seasonal[Math.floor(day / 2) % seasonal.length];
+  const pool = [""].concat(fits.filter(x => !(x.when || []).length).map(x => x.id));
+  return pool[day % pool.length];
+}
+function lookOf(p) {
+  if (!p || !(p.looks || []).length || p.kids) return "";
+  const pr = (S.looks || {})[p.id] || {};
+  if (pr.auto) return lookAuto(p.looks);
+  return p.looks.some(x => x.id === pr.look) ? pr.look : "";
+}
+function persona() {
+  const p = personaBase(), l = lookOf(p);
+  return l ? Object.assign({}, p, { live: `${p.live}-${l}`, avatar: `live/${p.live}-${l}.webp`, look: l }) : p;
+}
+function setLook(look, auto) {
+  const p = personaBase(); if (!(p.looks || []).length) return false;
+  const pr = Object.assign({}, (S.looks || {})[p.id] || {});
+  if (look === "next") { const ids = [""].concat(p.looks.map(x => x.id)); look = ids[(ids.indexOf(lookOf(p)) + 1) % ids.length]; auto = false; }
+  if (look !== undefined && look !== null) { pr.look = look; if (auto === undefined) pr.auto = false; }
+  if (auto !== undefined) pr.auto = !!auto;
+  S.looks = Object.assign({}, S.looks || {}, { [p.id]: pr }); saveS(); applyPersona();
+  return true;
+}
+const lookName = (p, id) => id ? ((p.looks || []).find(x => x.id === id) || {}).name || "" : "Обычная";
 const hex2rgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 let orb = null;
 function applyPersona() {
@@ -3869,12 +3907,22 @@ const UPD_ASK_RX = new RegExp("^(?:обновить?\\s+" + UPD_WHO
   + "|как(?:ая|ой)\\s+(?:у\\s+тебя\\s+|сейчас\\s+|у\\s+приложения\\s+)?верси[яи](?:\\s+(?:у\\s+тебя|приложения|программы|dewiar|девиар|стоит))?"
   + "|ты\\s+обновлен[аы]?"
   + "|(?:есть\\s+(?:ли\\s+)?|вышл[аои]\\s+(?:ли\\s+)?|не\\s+вышл[аои]\\s+ли\\s+)?(?:нов(?:ая|ые)\\s+верси[яи]|обновлени[ея])(?:\\s+(?:есть|вышл[аои]|для\\s+(?:тебя|приложения)))?)$");
+/* Образы словами (как core/answer_direct.LOOK_RX): t — уже без имени персонажа в начале, ё → е, без точки в конце. */
+const LOOK_RX = /^(?:(смени|поменяй|другой|новый|следующий)\s+(?:свой\s+)?образ|((?:выбирай|меняй|подбирай)\s+образ\S*\s+(?:сама?|по\s+(?:сезону|погоде|времени))|образ\S*\s+(?:сама?|по\s+сезону))|((?:верни|сними)\s+(?:обычн\S+\s+образ|образ)|обычн\S+\s+образ)|(?:надень|переоденься\s+в|образ)\s+[«"]?([а-я]+))[»"]?$/;
+function lookQuick(t) {
+  const m = LOOK_RX.exec(t), p = personaBase(); if (!m || !(p.looks || []).length) return null;
+  if (m[1]) setLook("next"); else if (m[2]) setLook(undefined, true); else if (m[3]) setLook("");
+  else { const w = m[4].slice(0, 3), hit = p.looks.find(x => x.name.toLowerCase().replace(/ё/g, LAT_LOOK.e).slice(0, 3) === w); if (!hit) return null; setLook(hit.id); }
+  const cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
+  return { say: auto ? `Хорошо, образ буду выбирать сама — по времени и сезону. Сегодня — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
+}
 async function quick(text) {
   { const bq = await bugQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (bq) return bq; }
   // «Лира, позвони…», «Лира открой сканер» — имя персонажа в начале не мешает быстрым ответам
   const t = text.toLowerCase().replace(/ё/g, "е").replace(/[.!?,]+$/g, "").replace(/\s+/g, " ").trim()
     .replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m);
   if (NEW_CONV_RX.test(t) || NEW_CONV_RX.test(t.replace(/^\S+\s+/, ""))) { convReset(); return { say: "Хорошо, начинаем с чистого листа." }; }
+  { const lk = lookQuick(t); if (lk) return lk; }      // «смени образ», «надень зимний», «выбирай образ сама» (1.0.55)
   // «запиши в заметки …», «добавь в заметки …», «заметка: …» — сразу в заметки, без модели: модель иногда отвечала
   // «Записала.», не вызвав save_note, и заметка терялась (отзыв 11.10). Текст — как сказан, заголовок — первые слова.
   // «запланируй на сегодня: в 13 …, в 16 …» — дела дня; «я позвонил в банк», «готово, купил хлеб» — отметка (17.10, без модели)
@@ -6456,7 +6504,7 @@ $("#who").onclick = () => {
     e.set({ state: "idle" }); pEnts.push(e);
     b.onclick = () => { S.persona = p.id; saveS(); applyPersona(); closeSheets(); showYou(""); showBot(`Теперь отвечает ${p.name}.`); say(`Привет! Это ${p.name}.`); };
   });
-  renderKbPanel(); renderMemPanel();
+  renderLookPanel(); renderKbPanel(); renderMemPanel();
   openSheet("#sh-persona");
 };
 /* «Готовые персонажи» в листе «Кто отвечает»: карточка — облик, имя, роль, что умеет; «Выбрать» — в команду и сразу отвечает.
@@ -6466,7 +6514,7 @@ function galHtml() {
   const have = galIds();
   const card = (g) => { const on = have.includes(g.id), cur = on && S.persona === g.id;
     return `<div class="pg${on ? " in" : ""}" data-g="${esc(g.id)}" style="--c:${esc(g.color || "#8A9BFF")}">`
-      + `<span class="pgava">${g.avatar ? `<img src="${g.avatar}" alt="" loading="lazy" decoding="async">` : `<i>${esc(g.name.slice(0, 1))}</i>`}</span>`
+      + `<span class="pgava">${g.avatar && !(g.noface && !(on && !galNoFace().includes(g.id))) ? `<img src="${g.avatar}" alt="" loading="lazy" decoding="async">` : `<i>${esc(g.name.slice(0, 1))}</i>`}</span>`
       + `<span class="pgtx"><b>${esc(g.name)}</b>${g.role ? `<em>${esc(g.role)}</em>` : ""}<span class="pgtl">${esc(g.tagline || "")}</span></span>`
       + (cur ? `<span class="pgnow">Отвечает</span>` : on ? `<button class="btn pgoff" aria-label="Убрать из команды: ${esc(g.name)}">Убрать</button>`
         : `<button class="btn p pgon" aria-label="Выбрать: ${esc(g.name)}">Выбрать</button>`) + `</div>`; };
@@ -6485,6 +6533,20 @@ function galWire() {
     const id = b.closest(".pg").dataset.g, g = PGALLERY.find(x => x.id === id);
     galRemove(id); toast(`«${g ? g.name : id}» больше не в команде`); $("#who").onclick();
   });
+}
+/* образы (1.0.55): у Лиры и Патрика — кружки образов и «Сама — по времени и сезону»; голосом — «смени образ» (11-commands) */
+function renderLookPanel() {
+  const box = $("#plook"); if (!box) return;
+  const p = personaBase(), cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
+  if (!(p.looks || []).length || kidsOn()) { box.innerHTML = ""; return; }
+  // кружки — один кадр и размер у всех (live/thumbs, tools/live_looks.py), обычный облик тоже
+  const all = [{ id: "", name: "Обычная", img: `live/thumbs/${p.live}.webp` }].concat(p.looks.map(x => ({ id: x.id, name: x.name, img: `live/thumbs/${p.live}-${x.id}.webp` })));
+  box.innerHTML = `<div class="card plook"><b>Образ ${esc(p.name === "Лира" ? "Лиры" : p.name === "Патрик" ? "Патрика" : p.name)}</b>`
+    + `<div class="plg">${all.map(x => `<button class="${x.id === cur ? "on" : ""}" data-l="${esc(x.id)}"><img src="${x.img}" alt="" loading="lazy"><span>${esc(x.name)}</span></button>`).join("")}</div>`
+    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени и сезону<small>Вечером — домашний, зимой — зимний, каждый день — немного другая</small></div>`
+    + `<label class="tg"><input type="checkbox" id="plook-auto" ${auto ? "checked" : ""}><i></i></label></div></div>`;
+  $$("#plook .plg button").forEach(b => b.onclick = () => { setLook(b.dataset.l); renderLookPanel(); });
+  $("#plook-auto").onchange = (e) => { setLook(undefined, e.target.checked); renderLookPanel(); };
 }
 /* своя память у персонажа (0.56): «Общая» — одна на всех, «Своя» — помнит только то, что рассказали ему (синхронизируется) */
 function renderMemPanel() {

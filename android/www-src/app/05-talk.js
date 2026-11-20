@@ -171,16 +171,21 @@ function myPersonasApply() {
    (у каждого устройства свой набор). Пакетов знаний компьютера здесь нет — специализация словами в подсказке (focus). */
 const PGALLERY = window.DEWIAR_GALLERY || [];
 function galIds() { try { const l = JSON.parse(prefGet("gal_personas") || "[]"); return Array.isArray(l) ? l.filter(id => PGALLERY.some(g => g.id === id)) : []; } catch (e) { return []; } }
+function galNoFace() { try { const l = JSON.parse(prefGet("gal_noface") || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
 function galApply() {
   for (let i = PERSONAS.length - 1; i >= 0; i--) if (PERSONAS[i].gallery) PERSONAS.splice(i, 1);
   const at = PERSONAS.findIndex(p => p.custom);
-  const add = galIds().map(id => Object.assign({ main: false, skills: [], focus: "" }, PGALLERY.find(g => g.id === id), { gallery: true }));
+  // лица — только у Лиры и Патрика (1.0.55): Эва, Ника, Оскар, выбранные с этой версии, — абстракция (gal_noface);
+  // выбранные раньше остаются с лицом — привычный помощник не меняет облик без спроса
+  const nf = galNoFace();
+  const add = galIds().map(id => Object.assign({ main: false, skills: [], focus: "" }, PGALLERY.find(g => g.id === id), { gallery: true },
+    nf.includes(id) ? { avatar: "", live: "" } : {}));
   PERSONAS.splice(at < 0 ? PERSONAS.length : at, 0, ...add);       // после встроенных, перед своими
 }
 // -> персонаж, который теперь отвечает (или null — нет такого)
 function galAdd(id) {
   const g = PGALLERY.find(x => x.id === id); if (!g) return null;
-  const l = galIds(); if (!l.includes(id)) l.push(id);
+  const l = galIds(); if (!l.includes(id)) { l.push(id); if (g.noface) prefSet("gal_noface", JSON.stringify(galNoFace().filter(x => x !== id).concat([id]))); }
   prefSet("gal_personas", JSON.stringify(l)); galApply();
   S.persona = id; saveS(); applyPersona();
   return PERSONAS.find(p => p.id === id) || null;
@@ -193,7 +198,40 @@ galApply();
 myPersonasApply();
 // с 0.4.27 встроенных двое — Лира и Патрик; выбранный прежде Агент, Джарвис, Эва или Кодер — теперь Лира
 if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try { prefSet("settings", JSON.stringify(S)); } catch (e) { } }
-const persona = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
+const personaBase = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
+/* Образы (1.0.55, как на компьютере): тот же персонаж — другие причёска и наряд. Выбор — S.looks {id: {look, auto}};
+   живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени и сезону» — lookAuto (то же правило, что core/personas.py). */
+const SEASON = ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "autumn", "autumn", "autumn", "winter"];
+function lookAuto(looks, now = new Date()) {
+  const season = SEASON[now.getMonth()], h = now.getHours();
+  if (h >= 19 || h < 6) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
+  const fits = looks.filter(x => !(x.when || []).length || x.when.includes(season));
+  const seasonal = fits.filter(x => (x.when || []).includes(season)).map(x => x.id);
+  const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + 719163;   // как date.toordinal() в Python
+  if (seasonal.length && day % 2 === 0) return seasonal[Math.floor(day / 2) % seasonal.length];
+  const pool = [""].concat(fits.filter(x => !(x.when || []).length).map(x => x.id));
+  return pool[day % pool.length];
+}
+function lookOf(p) {
+  if (!p || !(p.looks || []).length || p.kids) return "";
+  const pr = (S.looks || {})[p.id] || {};
+  if (pr.auto) return lookAuto(p.looks);
+  return p.looks.some(x => x.id === pr.look) ? pr.look : "";
+}
+function persona() {
+  const p = personaBase(), l = lookOf(p);
+  return l ? Object.assign({}, p, { live: `${p.live}-${l}`, avatar: `live/${p.live}-${l}.webp`, look: l }) : p;
+}
+function setLook(look, auto) {
+  const p = personaBase(); if (!(p.looks || []).length) return false;
+  const pr = Object.assign({}, (S.looks || {})[p.id] || {});
+  if (look === "next") { const ids = [""].concat(p.looks.map(x => x.id)); look = ids[(ids.indexOf(lookOf(p)) + 1) % ids.length]; auto = false; }
+  if (look !== undefined && look !== null) { pr.look = look; if (auto === undefined) pr.auto = false; }
+  if (auto !== undefined) pr.auto = !!auto;
+  S.looks = Object.assign({}, S.looks || {}, { [p.id]: pr }); saveS(); applyPersona();
+  return true;
+}
+const lookName = (p, id) => id ? ((p.looks || []).find(x => x.id === id) || {}).name || "" : "Обычная";
 const hex2rgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 let orb = null;
 function applyPersona() {

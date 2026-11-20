@@ -16,7 +16,7 @@ from answer_rules import (
 from answer_prompt import PromptMixin, prompt_parts
 from answer_models import ModelsMixin
 from answer_report import ReportMixin
-from answer_direct import DirectMixin
+from answer_direct import DirectMixin, LookMixin
 
 
 
@@ -24,7 +24,7 @@ from answer_direct import DirectMixin
 HABIT_TURN_RX = re.compile(r"\[Дело по расписанию\][^«]*«[^»]*(?:итог|подвед|сводк|что сделано)|^\W*(?:[а-яё]+,\s*)?(?:итог(?:и)? (?:дня|недели)|"
                            r"подвед[её]?\w* итог|что я (?:сегодня|за день) сделал)", re.I)
 
-class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
+class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin):
     # ---------- ответ ----------
     CODER_RX = re.compile(r"coder|codellama|codegemma|starcoder|codestral|devstral|sqlcoder|code-?llama|wizardcoder", re.I)
 
@@ -194,6 +194,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
         if not raw and not quiet and not via and not images and not K and self._direct_call(text):
             return
         if not raw and not quiet and not images and not K and self._direct_update(text, via):
+            return
+        if not raw and not quiet and not images and not K and self._direct_look(text, via):
             return
         if not raw and not quiet and not via and not images and self.radio.paused and \
                 re.sub(r"[^\w ]", "", text.lower()).strip() in {"продолжи", "продолжай", "включи обратно", "верни радио",

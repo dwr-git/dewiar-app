@@ -840,6 +840,22 @@
   // Свой набор слоёв и геометрия (Патрик — tools/live_face.py): рот и улыбка <имя>-mouth-0..3 / <имя>-smile, маска
   // разреза глаз <имя>-eyes.png (зрачок рисуется только внутри неё — веки его прикрывают), цвет радужки, координаты.
   const LIVE_CONF = {
+    // образы Лиры и Патрика (tools/live_looks.py): глаза и губы — свои, с картинки образа
+    "lira-braid": {"own": true, "iris": ["lira-braid-iris-l.png", "lira-braid-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-loose": {"own": true, "iris": ["lira-loose-iris-l.png", "lira-loose-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-hair": {"own": true, "iris": ["lira-hair-iris-l.png", "lira-hair-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-home": {"own": true, "iris": ["lira-home-iris-l.png", "lira-home-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-spring": {"own": true, "iris": ["lira-spring-iris-l.png", "lira-spring-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-silk": {"own": true, "iris": ["lira-silk-iris-l.png", "lira-silk-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-curls": {"own": true, "iris": ["lira-curls-iris-l.png", "lira-curls-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-buns": {"own": true, "iris": ["lira-buns-iris-l.png", "lira-buns-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-winter": {"own": true, "iris": ["lira-winter-iris-l.png", "lira-winter-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-street": {"own": true, "iris": ["lira-street-iris-l.png", "lira-street-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-gamer": {"own": true, "iris": ["lira-gamer-iris-l.png", "lira-gamer-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-tails": {"own": true, "iris": ["lira-tails-iris-l.png", "lira-tails-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "patrik-suit": {"own": true, "iris": ["patrik-suit-iris-l.png", "patrik-suit-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "patrik-home": {"own": true, "iris": ["patrik-home-iris-l.png", "patrik-home-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "patrik-silver": {"own": true, "iris": ["patrik-silver-iris-l.png", "patrik-silver-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
     // радужка — настоящая, вырезанная с портрета (iris: файлы), в покое лицо в точности как на фото; ходит чуть-чуть
     patrik: { own: true, mask: true, iris: ["patrik-iris-l.png", "patrik-iris-r.png"],
               geo: { eyes: [[140.8, 142.9], [206.5, 143.3]], iris: 12.0, mouth: [143.0, 201.0, 74.0, 44.0], moveX: 1.8, moveY: 0.5 } },

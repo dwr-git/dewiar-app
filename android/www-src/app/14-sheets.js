@@ -41,7 +41,7 @@ $("#who").onclick = () => {
     e.set({ state: "idle" }); pEnts.push(e);
     b.onclick = () => { S.persona = p.id; saveS(); applyPersona(); closeSheets(); showYou(""); showBot(`Теперь отвечает ${p.name}.`); say(`Привет! Это ${p.name}.`); };
   });
-  renderKbPanel(); renderMemPanel();
+  renderLookPanel(); renderKbPanel(); renderMemPanel();
   openSheet("#sh-persona");
 };
 /* «Готовые персонажи» в листе «Кто отвечает»: карточка — облик, имя, роль, что умеет; «Выбрать» — в команду и сразу отвечает.
@@ -51,7 +51,7 @@ function galHtml() {
   const have = galIds();
   const card = (g) => { const on = have.includes(g.id), cur = on && S.persona === g.id;
     return `<div class="pg${on ? " in" : ""}" data-g="${esc(g.id)}" style="--c:${esc(g.color || "#8A9BFF")}">`
-      + `<span class="pgava">${g.avatar ? `<img src="${g.avatar}" alt="" loading="lazy" decoding="async">` : `<i>${esc(g.name.slice(0, 1))}</i>`}</span>`
+      + `<span class="pgava">${g.avatar && !(g.noface && !(on && !galNoFace().includes(g.id))) ? `<img src="${g.avatar}" alt="" loading="lazy" decoding="async">` : `<i>${esc(g.name.slice(0, 1))}</i>`}</span>`
       + `<span class="pgtx"><b>${esc(g.name)}</b>${g.role ? `<em>${esc(g.role)}</em>` : ""}<span class="pgtl">${esc(g.tagline || "")}</span></span>`
       + (cur ? `<span class="pgnow">Отвечает</span>` : on ? `<button class="btn pgoff" aria-label="Убрать из команды: ${esc(g.name)}">Убрать</button>`
         : `<button class="btn p pgon" aria-label="Выбрать: ${esc(g.name)}">Выбрать</button>`) + `</div>`; };
@@ -70,6 +70,20 @@ function galWire() {
     const id = b.closest(".pg").dataset.g, g = PGALLERY.find(x => x.id === id);
     galRemove(id); toast(`«${g ? g.name : id}» больше не в команде`); $("#who").onclick();
   });
+}
+/* образы (1.0.55): у Лиры и Патрика — кружки образов и «Сама — по времени и сезону»; голосом — «смени образ» (11-commands) */
+function renderLookPanel() {
+  const box = $("#plook"); if (!box) return;
+  const p = personaBase(), cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
+  if (!(p.looks || []).length || kidsOn()) { box.innerHTML = ""; return; }
+  // кружки — один кадр и размер у всех (live/thumbs, tools/live_looks.py), обычный облик тоже
+  const all = [{ id: "", name: "Обычная", img: `live/thumbs/${p.live}.webp` }].concat(p.looks.map(x => ({ id: x.id, name: x.name, img: `live/thumbs/${p.live}-${x.id}.webp` })));
+  box.innerHTML = `<div class="card plook"><b>Образ ${esc(p.name === "Лира" ? "Лиры" : p.name === "Патрик" ? "Патрика" : p.name)}</b>`
+    + `<div class="plg">${all.map(x => `<button class="${x.id === cur ? "on" : ""}" data-l="${esc(x.id)}"><img src="${x.img}" alt="" loading="lazy"><span>${esc(x.name)}</span></button>`).join("")}</div>`
+    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени и сезону<small>Вечером — домашний, зимой — зимний, каждый день — немного другая</small></div>`
+    + `<label class="tg"><input type="checkbox" id="plook-auto" ${auto ? "checked" : ""}><i></i></label></div></div>`;
+  $$("#plook .plg button").forEach(b => b.onclick = () => { setLook(b.dataset.l); renderLookPanel(); });
+  $("#plook-auto").onchange = (e) => { setLook(undefined, e.target.checked); renderLookPanel(); };
 }
 /* своя память у персонажа (0.56): «Общая» — одна на всех, «Своя» — помнит только то, что рассказали ему (синхронизируется) */
 function renderMemPanel() {
