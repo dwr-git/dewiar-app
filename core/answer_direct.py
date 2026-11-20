@@ -164,6 +164,61 @@ class DirectMixin:
         if media and w in MEDIA_STOP | {"stop", "останови"}:
             threading.Thread(target=self._media_stop_word, args=(w, False), daemon=True).start()
 
+    MEDIA_STOP_LONE_S = 1.6           # «стоп» командой — короткая фраза с тишиной вокруг, а не слово посреди разговора
+
+    def _media_stop_heard(self, word, now, in_speech):
+        """Быстрый слух (Vosk) услышал одно слово-стоп без имени, пока Лира ждёт. Своё радио — на паузу сразу, как
+        раньше. Чужую музыку (плеер в другой программе) — только если и точная проверка согласна: 20.11 (владелец:
+        «ложное "стой"… всегда ставит музыку на паузу… пару раз за рабочий день») Vosk с грамматикой из одних команд
+        натягивал на «стой» обрывок разговора рядом. Решаем по самой фразе — когда она закончится (_media_stop_utt)."""
+        if self.radio.playing:
+            threading.Thread(target=self._media_stop_word, args=(word,), daemon=True).start()
+            return
+        uid = self.utt_id
+        last = getattr(self, "_idle_utt_last", None)
+        if not in_speech and last and last[2] == uid and now - last[1] < 2.5:
+            self._media_stop_check(word, last[0])        # фраза уже кончилась — звук есть
+        else:
+            self._media_stop_cand = (word, now, uid)     # ещё звучит — проверим, когда кончится
+
+    def _media_stop_utt(self, pcm, now):
+        """Конец любой фразы: запомнить её (для «стоп», которое быстрый слух дослышит чуть позже) и, если по ней ждёт
+        решение «стоп» для чужой музыки, — отдать на проверку."""
+        uid = self.utt_id
+        self._idle_utt_last = (pcm, now, uid)
+        cand = getattr(self, "_media_stop_cand", None)
+        if cand and cand[2] == uid and now - cand[1] < 4:
+            self._media_stop_cand = None
+            self._media_stop_check(cand[0], pcm)
+
+    def _media_stop_check(self, word, pcm):
+        """Чужая музыка и «стоп» без имени: фраза длиннее ~1,6 с — это разговор, в котором мелькнуло слово, не команда.
+        Короткую — перепроверяет точная модель (GigaAM, если стоит; в потоке проверок), её нет — верим короткой фразе."""
+        dur = len(pcm) / 2 / RATE
+        if dur > self.MEDIA_STOP_LONE_S:
+            log.info("«%s» внутри разговора (%.1f с) — музыку не трогаю", word, dur)
+            return
+        if self._stop_checker() is None:
+            threading.Thread(target=self._media_stop_word, args=(word,), daemon=True).start()
+            return
+        if self.check_q.qsize() < 3:
+            self.check_q.put(("media_stop", pcm, word))
+
+    def _media_stop_verify(self, pcm, word):
+        """Поток проверок: точная модель слышит в короткой фразе только слово-стоп (одно-два слова) — пауза; слышит
+        другое («с той стороны», «постой-ка, Вань») — нет. Не проверилось — верим быстрому слуху, как раньше."""
+        text = None
+        try:
+            text = self._stop_checker().transcribe(pcm).strip()
+        except Exception as e:  # noqa: BLE001
+            log.debug("проверка «%s» для музыки не удалась: %s", word, e)
+        if text is not None:
+            ws = re.findall(r"[\wё]+", _norm(text))
+            if not ws or len(ws) > 2 or not self._stop_hit(text):
+                log.info("«%s» — точная проверка слышит «%s»: музыку не трогаю", word, text[:60])
+                return
+        self._media_stop_word(word)
+
     def _media_stop_word(self, word, force=False):
         """«Пауза» / «стоп» без имени, пока играет музыка — ставим её на паузу -> True, если поставили. Если ничего
         не играет — молчим (слово могли сказать не ассистенту). force — после имени: если узнать, играет ли что-то,

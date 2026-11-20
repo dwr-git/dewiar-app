@@ -135,6 +135,8 @@ class Done:
             for e in entries if isinstance(entries, (list, tuple)) else [entries]:
                 o = {"title": e} if isinstance(e, str) else dict(e or {})
                 title = re.sub(r"\s+", " ", str(o.get("title") or "")).strip()[:120]
+                # «Отметь ещё: отправила договор…» — «ещё:» из просьбы, а не часть дела (экзамен 20.11: «Еще: отправила…»)
+                title = re.sub(r"^(?:и\s+(?:ещ[её]|также)\s+|(?:ещ[её]|также|тоже)\s*[:,—-]\s*)", "", title, flags=re.I).strip()
                 if not title:
                     continue
                 title = title[0].upper() + title[1:]

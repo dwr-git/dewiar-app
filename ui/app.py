@@ -529,7 +529,7 @@ def ensure_core():
 def _core_call(token, cmd, timeout=4):
     """Одна команда ядру по WebSocket (Linux; на Windows — winshell.core_call): hello с токеном, затем {id, cmd}."""
     from websockets.sync.client import connect
-    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=timeout, close_timeout=1) as ws:
+    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=timeout, close_timeout=1, max_size=None) as ws:   # ответ на hello — все настройки, бывает > 1 МБ (№908, Mac: 5 МБ)
         ws.send(json.dumps({"cmd": "hello", "token": token}))
         ws.recv(timeout=timeout)
         ws.send(json.dumps({"id": 1, "cmd": cmd, "args": {}}))
@@ -1911,6 +1911,11 @@ class Api:
             # pkexec: 126 — окно пароля закрыли, 127 — не разрешили
             why = [x for x in tail if re.search(r"dpkg:|error|ошибк|E:|не удалось|failed", x, re.I) and "preconfigure" not in x]
             err = "установка отменена (пароль не введён)" if rc in (126, 127) else (" ".join((why or tail)[-4:]) or f"код {rc}")[-600:]
+            # №913 (20.11, CachyOS): окно пароля не у всех систем есть (нет агента polkit) — та же установка одной строкой
+            # в терминале; путь — к уже скачанному и проверенному файлу
+            if cmd and cmd[0] == "pkexec":
+                import shlex
+                err += ". Можно поставить и в терминале: sudo " + " ".join(shlex.quote(x) for x in cmd[1:] if x not in ("-o", "APT::Status-Fd=1"))
             try:
                 (Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "dewiar-update.log").write_text("\n".join(tail), encoding="utf-8")
             except OSError:
@@ -2117,6 +2122,26 @@ class Api:
             return ""
         path = res if isinstance(res, str) else res[0]
         Path(path).write_bytes(base64.b64decode(b64))
+        return path
+
+    def save_copy(self, src, filename):
+        """«Скачать» файл из «Облака Лиры»: окно «Сохранить как…» и копия файла с диска (без пересылки через страницу).
+        -> путь или "". Копируем только файлы из облака Лиры (их путь дало ядро)."""
+        import shutil
+        import webview
+        from drive import EXTS, FILE_MAX
+        p = Path(str(src or ""))
+        if not p.is_file():
+            raise ValueError("файла нет на этом компьютере")
+        if p.suffix.lower() not in EXTS or p.name.startswith(".") or p.stat().st_size > FILE_MAX:
+            raise ValueError("скачать можно только файл из облака Лиры")      # мост окна — не копировщик любых файлов
+        kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
+        start = Path.home() / "Downloads" if (Path.home() / "Downloads").is_dir() else Path.home()
+        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(start), save_filename=filename or p.name)
+        if not res:
+            return ""
+        path = res if isinstance(res, str) else res[0]
+        shutil.copyfile(p, path)
         return path
 
     def open_skills_folder(self, path=""):
@@ -3660,7 +3685,7 @@ JS_API = (
     "install_codec", "install_update", "move_to", "native_drag", "open_note", "open_prompter", "open_settings",
     "open_skills_folder", "open_url", "pad_flip", "pad_full", "pad_hide", "pad_mode_mark", "pad_resize", "pad_size",
     "pad_toggle", "pick_file", "pick_folder", "play_open", "quit_all", "resize_card", "rest_note", "rest_toggle", "restart",
-    "restart_core", "run_installer", "save_file", "save_file_b64", "save_pos", "set_mode", "set_on_top", "set_zoom", "shot_hide",
+    "restart_core", "run_installer", "save_copy", "save_file", "save_file_b64", "save_pos", "set_mode", "set_on_top", "set_zoom", "shot_hide",
     "show", "show_alarm", "show_capture", "snip_close", "snip_open", "snip_show", "studio_close", "studio_max", "studio_min",
     "to_tray", "toggle_settings", "tray_back", "update_progress",
 )
@@ -4077,7 +4102,7 @@ def _present(gw):
 def _core_save_ui(token, patch):
     """Сохранить ui.* в настройках ядра (Linux: тот же WebSocket, что у страниц)."""
     from websockets.sync.client import connect
-    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=3, close_timeout=1) as ws:
+    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=3, close_timeout=1, max_size=None) as ws:   # ответ на hello — все настройки, бывает > 1 МБ (№908, Mac: 5 МБ)
         ws.send(json.dumps({"cmd": "hello", "token": token}))
         ws.recv(timeout=3)
         ws.send(json.dumps({"id": 1, "cmd": "settings_save", "args": {"patch": {"ui": patch}}}))

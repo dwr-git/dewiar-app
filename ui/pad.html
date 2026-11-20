@@ -504,11 +504,15 @@
   .cl-f i { padding: 2px 6px; border-radius: 6px; font: normal 800 10px/1.4 system-ui, sans-serif; letter-spacing: .05em; color: #fff; background: var(--k); }
   .cl-f span { width: 100%; font-size: 13px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   .cl-f small { font-size: 11.5px; color: var(--muted); }
-  .cl-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--muted);
+  .cl-x, .cl-dl { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--muted);
     font: 17px/1 system-ui, sans-serif; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s; }
-  .cl-f:hover .cl-x, .cl-f:focus-within .cl-x { opacity: 1; } .cl-x:hover { background: var(--pu-card); color: var(--ink); box-shadow: var(--pu-lift); }
-  .cl-x:focus-visible { opacity: 1; outline: 2px solid var(--pu-think); }
-  @media (hover: none) { .cl-x { opacity: .7; } }
+  /* «Скачать» (владелец 20.11: «навожу — удалить можно, хорошо бы ещё и скачать») — рядом с «×», тем же кружком */
+  .cl-dl { right: 32px; display: grid; place-items: center; padding: 0; }
+  .cl-dl svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .cl-f:hover :is(.cl-x, .cl-dl), .cl-f:focus-within :is(.cl-x, .cl-dl) { opacity: 1; }
+  :is(.cl-x, .cl-dl):hover { background: var(--pu-card); color: var(--ink); box-shadow: var(--pu-lift); }
+  :is(.cl-x, .cl-dl):focus-visible { opacity: 1; outline: 2px solid var(--pu-think); }
+  @media (hover: none) { .cl-x, .cl-dl { opacity: .7; } }
   .cl-f.ask { cursor: default; gap: 4px; } .cl-f.ask:hover { transform: none; }
   .cl-ask { display: flex; gap: 6px; margin-top: 4px; }
   .cl-ask button { padding: 5px 12px; border: 0; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }

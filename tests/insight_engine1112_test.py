@@ -38,7 +38,7 @@ def ask(system, user, max_tokens=700):
     if "спокойный аналитик" in system:
         return "**Главное** — утечка исходников PHP [1], рядом Dart [2] и выдуманное [9]."
     if "ведёшь картину" in system or "maintain an expert" in system:
-        return json.dumps({"theses": [], "new_hyps": [{"text": "Выйдет патч", "due": "2026-11-30"}]})
+        return json.dumps({"theses": [], "new_hyps": [{"text": "Выйдет патч", "due": time.strftime("%Y-%m-%d", time.localtime(time.time() + 10 * 86400))}]})   # срок — всегда в будущем
     sig = 9.2 if "Утечка" in user else 4
     return json.dumps({"summary": "Суть: " + user.split("Заголовок: ")[-1][:40] if "Заголовок" in user else "Суть",
                        "why": "Важно", "type": "incident" if sig > 9 else "release", "tags": ["php", "безопасность"] if sig > 9 else ["dart"],

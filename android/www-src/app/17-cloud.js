@@ -374,8 +374,17 @@ async function cloudBalance(force) {
   if (prev && ((cloudInfo.low && !prev.low) || (cloudInfo.empty && !prev.empty)))          // один раз, когда стало мало; site — общий счёт с сайтом (вход аккаунтом)
     D.notify(cloudInfo.site ? (cloudInfo.empty ? "На счёте dewiar.pro закончились ИИ-талеры" : `На счёте dewiar.pro: ${cloudInfo.balance_text || cloudInfo.balance + " тал."}`)
       : cloudInfo.empty ? "Заряд Dewiar Облака закончился" : `Заряд Dewiar Облака: ${cloudInfo.percent}%`, cloudInfo.site ? "Пополнить — в личном кабинете на сайте" : "Настройки → Мозг → Пополнить");
-  balBadge(cloudInfo); payWarnCheck(cloudInfo);
+  giftNote(cloudInfo); balBadge(cloudInfo); payWarnCheck(cloudInfo);
   return cloudInfo;
+}
+/* Подарок месяца пришёл (1.0.48, владелец 20.11: «при начислении сообщать… и что если не потратят, сгорит») — один раз
+   за месяц, как на компьютере (cloud.gift_month_text). */
+function giftNote(c) {
+  const g = c && c.gift;
+  if (!g || !(+g.left > 0) || !g.until || S.giftSeen === g.until) return;
+  S.giftSeen = g.until; saveS();
+  const u = new Date(g.until + "T12:00:00"), when = isNaN(u) ? "конца месяца" : u.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  D.notify("Подарок месяца: " + String(+g.amount).replace(".", ",") + " талера", `Тратится первым; что не потратите до ${when}, сгорит — тогда же придёт новый.`);
 }
 /* Ключ Dewiar удалили или перевыпустили на сайте, а вход в аккаунт есть — не мучаем человека ошибкой: думаем по аккаунту. */
 const keyGone = (m) => /ключ dewiar не найден|invalid_api_key|ключ отозван/i.test(String(m || ""));

@@ -3339,8 +3339,25 @@ function wordsNum(s) {
 const DOW = { "понедельник": 1, "вторник": 2, "сред": 3, "четверг": 4, "пятниц": 5, "суббот": 6, "воскресень": 0 };
 /* -> {at: Date, repeat: ""|daily|weekdays|weekly, rel?, rest} или null — времени во фразе нет. rest — фраза без слов о времени
    (из неё берут, о чём напомнить). Только время без дня и оно уже прошло — завтра; день без времени — 9:00. */
+/* №350 (20.11): время, как его говорят: «без пяти шесть» (5:55), «без четверти восемь вечера» (19:45), «полшестого» и
+   «в половине шестого» (5:30), «в четверть девятого» (8:15), «в 5 минут седьмого» (6:05) — к виду «в 5:55», дальше как
+   обычно. Так же на компьютере (core/when.py _clock). «Без 5 рублей» — не время: после «без N» нужен час. */
+// слова — одной строкой: это не надписи интерфейса, переводить их не нужно (счёт i18n_ratchet)
+const ORDG = Object.fromEntries("первого второго третьего четвертого пятого шестого седьмого восьмого девятого десятого одиннадцатого двенадцатого"
+  .split(" ").map((w, i) => [w, i + 1]));
+const BEZW = Object.fromEntries("минуты:1 одной:1 двух:2 трех:3 четырех:4 пяти:5 шести:6 семи:7 восьми:8 девяти:9 десяти:10 пятнадцати:15 четверти:15 двадцати:20 тридцати:30 двадцати_пяти:25"
+  .split(" ").map(x => x.split(":")).map(([w, n]) => [w.replace("_", " "), +n]));
+function colloqTime(t) {
+  const hm = (h, mi) => ` в ${h >= 13 ? h : (h || 12)}:${String(mi).padStart(2, "0")} `;
+  t = t.replace(/\s(?:в\s+|к\s+)?без\s+(двадцати пяти|\d{1,2}|[а-я]+)(?:\s+минут[а-я]*)?\s+(\d{1,2}|час|[а-я]+)(?=\s)/g, (x, a, b) => {
+    const n = /^\d+$/.test(a) ? +a : BEZW[a], h = /^час$/.test(b) ? 1 : /^\d+$/.test(b) ? +b : NUMW[b];
+    return n && n < 60 && h && h <= 24 ? hm(h - 1, 60 - n) : x; });
+  t = t.replace(/\s(?:в\s+)?(?:половин[еу]\s+|пол-?\s?)([а-я]+ого)(?=\s)/g, (x, o) => ORDG[o] ? hm(ORDG[o] - 1, 30) : x);
+  t = t.replace(/\s(?:в\s+)?четверть\s+([а-я]+ого)(?=\s)/g, (x, o) => ORDG[o] ? hm(ORDG[o] - 1, 15) : x);
+  return t.replace(/\s(?:в\s+)?(\d{1,2})\s+минут[а-я]*\s+([а-я]+ого)(?=\s)/g, (x, n, o) => ORDG[o] && +n > 0 && +n < 30 ? hm(ORDG[o] - 1, +n) : x);
+}
 function parseWhen(t, now = new Date(), again = false) {
-  t = " " + String(t || "").toLowerCase().replace(/ё/g, "е") + " ";
+  t = colloqTime(" " + String(t || "").toLowerCase().replace(/ё/g, "е") + " ");
   let m = t.match(/через\s+(?:(\S+(?:\s+(?:и\s+)?\S+)?)\s+)?(секунд[а-яё]*|минут[а-яё]*|час[а-яё]*|полчаса|полтора часа)/);
   if (m) {
     let n = m[2].startsWith("полчаса") ? 30 : m[2].startsWith("полтора") ? 90 : (m[1] ? wordsNum(m[1]) : 1);
@@ -3387,7 +3404,9 @@ function parseWhen(t, now = new Date(), again = false) {
   }
   m = t.match(/(?:\sв|\sна|\sк)\s+(\d{1,2})(?:[:.\s](\d{2}))?(?:\s*(утра|дня|вечера|ночи))?(?=\s)/) || t.match(/\s(\d{1,2}):(\d{2})\s/);
   let h = null, mi = 0;
-  if (m) { h = +m[1]; mi = m[2] ? +m[2] : 0; if (m[3] && /дня|вечера/.test(m[3]) && h < 12) h += 12; if (m[3] === "ночи" && h === 12) h = 0; }
+  let bare = false;                                    // час без «утра/вечера» и без дня — утро или вечер решает напоминание
+  if (m) { h = +m[1]; mi = m[2] ? +m[2] : 0; if (m[3] && /дня|вечера/.test(m[3]) && h < 12) h += 12; if (m[3] === "ночи" && h === 12) h = 0;
+    bare = !m[3] && !hasDay && !repeat && h >= 1 && h <= 11 && !/утр|вечер|днем|ночью|\bрано\b|встаю|проснусь/.test(t); }
   else if (/утром|каждое утро/.test(t)) h = 9; else if (/вечером|каждый вечер/.test(t)) h = 20; else if (/днем/.test(t)) h = 13;
   if (h == null && !hasDay) return null;
   if (h == null) h = 9;
@@ -3397,7 +3416,17 @@ function parseWhen(t, now = new Date(), again = false) {
   if (dowToday && !repeat && day <= now) day.setDate(day.getDate() + 7);
   if (repeat && day <= now) day.setDate(day.getDate() + (repeat === "weekly" ? 7 : 1));
   if (repeat) day = rollRepeat(day, repeat, now);       // первый раз — в подходящий день («кроме пятницы», сказанное в пятницу)
-  return { at: day, repeat, rest: t.replace(m ? m[0] : "", " ") };
+  return { at: day, repeat, rest: t.replace(m ? m[0] : "", " "), bare };
+}
+/* Напоминание «в 3» без части суток, когда 3:00 сегодня прошло, а 15:00 нет, — на 15:00, и сказать, как поправить (как на
+   компьютере: when.py, guessed; №350: «надо, чтобы предлагала утро или вечер»). Будильник — как сказано. -> подсказка или "" */
+function dayHalf(w, now = new Date()) {
+  if (!w || !w.bare || w.rel) return "";
+  const h = w.at.getHours(), pm = new Date(now); pm.setHours(h + 12, w.at.getMinutes(), 0, 0);
+  if (h > 11 || w.at.getDate() === now.getDate() || pm <= now) return "";
+  w.at = pm;
+  const hm = h + (w.at.getMinutes() ? ":" + pad(w.at.getMinutes()) : "");
+  return ` Если нужно в ${hm} утра — поправьте время в карточке.`;
 }
 const whenText = (d) => { const now = new Date(), tm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const dd = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
@@ -3940,6 +3969,7 @@ async function quick(text) {
     // сказанное в кавычках — сам текст напоминания, не время (владелец 19.11: «напомни "ЗАВТРА СКАЧАТЬ…"»): прячем на разбор
     const qs = [], src = m[1].replace(/«[^»]*»|"[^"]*"|„[^“]*“|“[^”]*”/g, (x) => (qs.push(x.slice(1, -1).trim()), ` zq${qs.length - 1}z `));
     const w = parseWhen(src, undefined, /^напоминай/.test(t));        // «напоминай, кроме пятницы, в 9…» — каждый день, кроме пятницы
+    const half = dayHalf(w);                                        // «в 3», а 3:00 прошло — 15:00 и как поправить (№350)
     if (w) {
       let what = remindWhat(w.rest);
       if (LEFT_DAY.test(what)) return null;                 // непонятые слова о дне — пусть решает модель (№897)
@@ -3954,7 +3984,7 @@ async function quick(text) {
         what = body ? "Заметка: " + (body.length > 90 ? body.slice(0, 90).replace(/\s+\S*$/, "") + "…" : body) : "";
       }
       if (what) { const x = addAlarm(what[0].toUpperCase() + what.slice(1), w.at, "reminder", w.repeat);
-        return { say: `Напомню ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}: ${what}.`, card: alarmCard(x) }; }
+        return { say: `Напомню ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}: ${what}.${half}`, card: alarmCard(x) }; }
     }
   }
   // «напиши в телеграм: …» и «напиши Ане в телеграм: …» (идея №4: получатель — из контактов, «Отправить» нажимает человек)
@@ -7887,7 +7917,9 @@ async function openLessons() {
     const l = items.find(x => x.id === b.dataset.id); if (!l) return;
     if (!l.video && l.youtube) return D.openUrl(l.youtube);
     const v = $("#lsn-v"); v.poster = l.poster || ""; v.src = l.video; $("#lsn-t").textContent = `Урок ${l.n} · ${l.title}`;
-    $("#lsn-player").hidden = false; $("#lessons-body").scrollTop = 0; v.play().catch(() => { });
+    // плеер — над списком: долистали до урока внизу и нажали — звук был, а видео — за краем экрана (владелец 20.11);
+    // прокручиваем к плееру тот лист, что прокручивается на самом деле (scrollTop у #lessons-body ничего не делал)
+    const pl = $("#lsn-player"); pl.hidden = false; pl.scrollIntoView({ block: "start", behavior: "smooth" }); v.play().catch(() => { });
   });
 }
 
@@ -9549,8 +9581,17 @@ async function cloudBalance(force) {
   if (prev && ((cloudInfo.low && !prev.low) || (cloudInfo.empty && !prev.empty)))          // один раз, когда стало мало; site — общий счёт с сайтом (вход аккаунтом)
     D.notify(cloudInfo.site ? (cloudInfo.empty ? "На счёте dewiar.pro закончились ИИ-талеры" : `На счёте dewiar.pro: ${cloudInfo.balance_text || cloudInfo.balance + " тал."}`)
       : cloudInfo.empty ? "Заряд Dewiar Облака закончился" : `Заряд Dewiar Облака: ${cloudInfo.percent}%`, cloudInfo.site ? "Пополнить — в личном кабинете на сайте" : "Настройки → Мозг → Пополнить");
-  balBadge(cloudInfo); payWarnCheck(cloudInfo);
+  giftNote(cloudInfo); balBadge(cloudInfo); payWarnCheck(cloudInfo);
   return cloudInfo;
+}
+/* Подарок месяца пришёл (1.0.48, владелец 20.11: «при начислении сообщать… и что если не потратят, сгорит») — один раз
+   за месяц, как на компьютере (cloud.gift_month_text). */
+function giftNote(c) {
+  const g = c && c.gift;
+  if (!g || !(+g.left > 0) || !g.until || S.giftSeen === g.until) return;
+  S.giftSeen = g.until; saveS();
+  const u = new Date(g.until + "T12:00:00"), when = isNaN(u) ? "конца месяца" : u.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  D.notify("Подарок месяца: " + String(+g.amount).replace(".", ",") + " талера", `Тратится первым; что не потратите до ${when}, сгорит — тогда же придёт новый.`);
 }
 /* Ключ Dewiar удалили или перевыпустили на сайте, а вход в аккаунт есть — не мучаем человека ошибкой: думаем по аккаунту. */
 const keyGone = (m) => /ключ dewiar не найден|invalid_api_key|ключ отозван/i.test(String(m || ""));

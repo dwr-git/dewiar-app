@@ -196,6 +196,7 @@ async function quick(text) {
     // сказанное в кавычках — сам текст напоминания, не время (владелец 19.11: «напомни "ЗАВТРА СКАЧАТЬ…"»): прячем на разбор
     const qs = [], src = m[1].replace(/«[^»]*»|"[^"]*"|„[^“]*“|“[^”]*”/g, (x) => (qs.push(x.slice(1, -1).trim()), ` zq${qs.length - 1}z `));
     const w = parseWhen(src, undefined, /^напоминай/.test(t));        // «напоминай, кроме пятницы, в 9…» — каждый день, кроме пятницы
+    const half = dayHalf(w);                                        // «в 3», а 3:00 прошло — 15:00 и как поправить (№350)
     if (w) {
       let what = remindWhat(w.rest);
       if (LEFT_DAY.test(what)) return null;                 // непонятые слова о дне — пусть решает модель (№897)
@@ -210,7 +211,7 @@ async function quick(text) {
         what = body ? "Заметка: " + (body.length > 90 ? body.slice(0, 90).replace(/\s+\S*$/, "") + "…" : body) : "";
       }
       if (what) { const x = addAlarm(what[0].toUpperCase() + what.slice(1), w.at, "reminder", w.repeat);
-        return { say: `Напомню ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}: ${what}.`, card: alarmCard(x) }; }
+        return { say: `Напомню ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}: ${what}.${half}`, card: alarmCard(x) }; }
     }
   }
   // «напиши в телеграм: …» и «напиши Ане в телеграм: …» (идея №4: получатель — из контактов, «Отправить» нажимает человек)

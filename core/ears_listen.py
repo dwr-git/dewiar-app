@@ -185,7 +185,7 @@ class ListenMixin:
                 self.spotter.last_final = None
                 if self._pending_media_stop and now - self._pending_media_stop < 4 and fin.strip() in MEDIA_STOP \
                         and self.state in ("idle", "listening"):
-                    threading.Thread(target=self._media_stop_word, args=(fin.strip(),), daemon=True).start()
+                    self._media_stop_heard(fin.strip(), now, in_speech)
                 elif fin.strip() in MEDIA_WORDS and self.radio.playing and self.state == "idle" and not self.meeting \
                         and not self.alarm:
                     threading.Thread(target=self._media_word, args=(fin.strip(),), daemon=True).start()
@@ -283,6 +283,7 @@ class ListenMixin:
         в распознавание как вопрос (stt_q), в проверку имени точной моделью или отпечатком (check_q),
         ранней проверке, которая уже идёт, — или отбросить (короткий звук, «стоп», чужой разговор, своё эхо)."""
         dur = len(pcm) / 2 / RATE
+        self._media_stop_utt(pcm, now)
         if self.stop_utt:
             self.stop_utt = False
             if dur < 1.6:                                  # было только «стоп»/«хватит» — замолчали и спим до имени

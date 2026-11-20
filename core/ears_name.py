@@ -19,6 +19,9 @@ class NameMixin:
             if kind == "stop":
                 self._stop_check(pcm, uid)
                 continue
+            if kind == "media_stop":
+                self._media_stop_verify(pcm, uid)
+                continue
             if self._check_voiceprint(kind, pcm, uid):
                 continue
             checker = self.wake_checker()

@@ -56,7 +56,8 @@ class ReportMixin:
         except OSError:
             pass
         u = self.updater.public()
-        add("Версия", not u.get("available"), f"Dewiar {VERSION}" + (f" — есть {u['available']}" if u.get("available") else " — последняя"),
+        add("Версия", not u.get("available"), f"Dewiar {VERSION}" + (f" — есть {(u['available'] or {}).get('version', '') if isinstance(u['available'], dict) else u['available']}"   # №913: не весь словарь
+                                               if u.get("available") else " — последняя"),
             "Обновите: «О программе» → «Обновить».", "about", warn=True)
         if st.get("meeting"):
             add("Созвон", False, "идёт созвон: " + ", ".join(st["meeting"].get("apps") or []), "Пока идёт созвон, ассистент слушает тише — так задумано.",

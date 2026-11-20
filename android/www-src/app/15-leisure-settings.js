@@ -341,7 +341,9 @@ async function openLessons() {
     const l = items.find(x => x.id === b.dataset.id); if (!l) return;
     if (!l.video && l.youtube) return D.openUrl(l.youtube);
     const v = $("#lsn-v"); v.poster = l.poster || ""; v.src = l.video; $("#lsn-t").textContent = `Урок ${l.n} · ${l.title}`;
-    $("#lsn-player").hidden = false; $("#lessons-body").scrollTop = 0; v.play().catch(() => { });
+    // плеер — над списком: долистали до урока внизу и нажали — звук был, а видео — за краем экрана (владелец 20.11);
+    // прокручиваем к плееру тот лист, что прокручивается на самом деле (scrollTop у #lessons-body ничего не делал)
+    const pl = $("#lsn-player"); pl.hidden = false; pl.scrollIntoView({ block: "start", behavior: "smooth" }); v.play().catch(() => { });
   });
 }
 

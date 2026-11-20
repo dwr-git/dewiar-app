@@ -598,7 +598,7 @@ def core_call(port, token, cmd, args=None, timeout=4):
     затем {id, cmd, args} -> data из ответа или None. Ошибки связи и таймауты — исключением."""
     import json
     from websockets.sync.client import connect
-    with connect(f"ws://127.0.0.1:{port}", open_timeout=timeout, close_timeout=1) as ws:
+    with connect(f"ws://127.0.0.1:{port}", open_timeout=timeout, close_timeout=1, max_size=None) as ws:   # ответ на hello — все настройки, бывает > 1 МБ (№908, Mac: 5 МБ)
         ws.send(json.dumps({"cmd": "hello", "token": token}))
         ws.recv(timeout=timeout)
         ws.send(json.dumps({"id": 1, "cmd": cmd, "args": args or {}}))

@@ -540,12 +540,29 @@ def keylog_guard():
         return True
 
 
+def certs_guard():
+    """№908 (20.11, Mac): «Близкие», синхронизация и обновление падали каждые 6 с: FileNotFoundError из
+    load_verify_locations — у человека в окружении SSL_CERT_FILE (или SSL_CERT_DIR) указывает на файл, которого нет
+    (так бывает после удаления Homebrew, conda, старого Python), а httpx берёт сертификаты оттуда. Нет такого файла —
+    переменную для Dewiar убираем (сертификаты — из системы и встроенные). -> что убрали."""
+    gone = []
+    for k in ("SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+        v = os.environ.get(k)
+        if v and not os.path.exists(v):
+            os.environ.pop(k, None)
+            gone.append(k)
+    if gone:
+        log.warning("%s указывает на несуществующий путь — для Dewiar отключено, иначе не работала бы сеть", ", ".join(gone))
+    return gone
+
+
 def install():
     """Подменить httpx.Client.__init__ — один раз при запуске ядра (main.py); повторный вызов ничего не делает.
     И сертификаты — из хранилища системы (trust_system)."""
     global _installed
     if not _installed:
         keylog_guard()
+        certs_guard()
         trust_system()
         httpx.Client.__init__ = _patched_init
         _installed = True

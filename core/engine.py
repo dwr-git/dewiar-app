@@ -367,6 +367,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         # 0.82.1: коротко и без ссылки (раньше — весь текст «Как пополнить» со ссылкой): где кнопка — и всё
         from cloud import low_text
         self.cloud.on_low = lambda c: self.chat.notify(low_text(c))
+        from cloud import gift_month_text
+        self.cloud.on_gift = lambda g: self.push("Подарок месяца", gift_month_text(g), telegram=False)
         self.cloud.on_key_gone = self._cloud_key_gone
         self.toolbox.hooks["calendars"] = self.calendars
         self.toolbox.hooks["dewiar_web"] = self._dewiar_web          # поиск и страницы через сервер Dewiar, если сеть режет

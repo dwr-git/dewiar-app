@@ -92,6 +92,23 @@ def low_text(c):
             + "Пополнить: студия → «Мозг» → «Пополнить».")
 
 
+MONTHS_GEN = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября",
+              "декабря")
+
+
+def gift_month_text(g):
+    """Подарок месяца пришёл (1.0.31 — на сайте, 1.0.48 — сказать человеку; владелец 20.11: «при начислении сообщать…
+    и о том, что если не потратят, оно сгорит»). g — balance.gift: amount, left, until (ГГГГ-ММ-ДД)."""
+    amt = f"{float(g.get('amount') or 0):g}".replace(".", ",")
+    try:
+        y, m, d = (int(x) for x in str(g.get("until") or "").split("-"))
+        when = f"{d} {MONTHS_GEN[m - 1]}"
+    except (ValueError, IndexError):
+        when = "конца месяца"
+    return (f"Подарок месяца: {amt} талера на ответы Лиры. Тратится первым; что не потратите до {when}, сгорит — "
+            "тогда же придёт новый.")
+
+
 def public(url, path, body=None, timeout=20):
     """Запрос к облаку без ключа (заявка на доступ, код другого устройства) -> JSON; ошибка — CloudError с текстом облака."""
     try:
@@ -257,6 +274,7 @@ class Cloud:
         self._next = 0.0
         self._stop = threading.Event()
         self.on_low = None              # (info) -> None: заряд стал «мало» или кончился — напомнить в мессенджер
+        self.on_gift = None             # (gift) -> None: пришёл подарок месяца — сказать один раз (1.0.48)
         self.on_key_gone = None         # () -> None: ключ dw- удалили на сайте — перейти на аккаунт, если вошли (engine_brain)
 
     # ---------- ключ ----------
@@ -334,6 +352,14 @@ class Cloud:
                 self.on_low(info)
             except Exception:  # noqa: BLE001
                 log.exception("облако: напоминание о заряде")
+        g = info.get("gift") if isinstance(info.get("gift"), dict) else None
+        if g and (g.get("left") or 0) > 0 and g.get("until") and g["until"] != self.s.get("cloud", "gift_seen") \
+                and self.on_gift and self.s.get("llm", "active") == PROFILE_ID:
+            self.s.update({"cloud": {"gift_seen": g["until"]}})        # один раз за месяц, и после перезапуска тоже
+            try:
+                self.on_gift(g)
+            except Exception:  # noqa: BLE001
+                log.exception("облако: подарок месяца")
 
     # ---------- расход, пополнение, модели, распознавание ----------
     def usage(self):

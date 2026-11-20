@@ -272,9 +272,20 @@ class MusicMixin:
                 if k[1]:
                     days.setdefault(k, set()).add(d)
 
+        hstems = [{w[:4] for w in h.split() if len(w) >= 4} for h in hn]
+
+        def part_of(t):
+            """Кусок привычки своими словами: «обед, карту взяла» модель отметила двумя делами — «Обед» и «Карту взяла»
+            (экзамен 20.11, в пятый раз «карту» в итоге дня). Короткая отметка (до 3 слов), у которой хотя бы половина
+            слов — из привычки (по первым 4 буквам). «Отправила договор Вектору» при привычке «проверить договор» — 1 из 3, нет."""
+            ws = [w for w in t.split() if len(w) >= 4]
+            if not ws or len(t.split()) > 3:
+                return False
+            return any(sum(w[:4] in hs for w in ws) * 2 >= len(ws) for hs in hstems if hs)
+
         def habit(title, rid=""):
             t, r = norm(title), str(rid or "")
-            return bool((r and r in ids) or (t and (t in hn or any(len(h) >= 8 and (h in t or t in h) for h in hn)
+            return bool((r and r in ids) or (t and (t in hn or any(len(h) >= 8 and (h in t or t in h) for h in hn) or part_of(t)
                                                      or len(days.get(("t", t), ())) >= 2)) or (r and len(days.get(("r", r), ())) >= 2))
         habit.titles = sorted(hn | {k[1] for k, v in days.items() if k[0] == "t" and len(v) >= 2})
         return habit
