@@ -269,6 +269,8 @@
  "pci.pc": "computer",
  "pci.off": "No computer linked yet",
  "pci.on_p": "You can hand big jobs to it right from here — by voice or text.",
+ "pci.idle": "Computer “{name}” is offline right now",
+ "pci.idle_p": "It's off or Dewiar isn't running on it. It will pick up your jobs when it's back on; urgent ones go to the Dewiar cloud.",
  "pci.off_p": "Install Dewiar on your computer (Windows, Linux or Mac) and sign in to the same account — your phone and computer become one team.",
  "pci.dl": "Download for computer",
  "pci.ask_h": "Hand a job to the computer from here",

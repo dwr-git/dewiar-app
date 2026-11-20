@@ -11,6 +11,7 @@ parse(text, now) → {"text", "at": datetime, "repeat": dict|None, "kind": "remi
 
 repeat: {"kind": "daily", "time": "08:00"}  {"kind": "weekly", "days": [0, 2], "time": "19:00"} (0 — понедельник)
         {"kind": "interval", "minutes": 120}  {"kind": "monthly", "day": 5, "time": "10:00"}
+        {"kind": "monthly", "day": 15, "to_day": 19, "time": "09:00"} — «каждый месяц с 15 по 19 число» (раз в день; №927)
         {"kind": "interval", "minutes": 60, "from": "09:00", "to": "18:00", "days": [0, 1, 2, 3, 4]} — «по будням с 9 до 18
         каждый час» (окно — только днём и только в эти дни; отчёт №137, 20.10)
 Этот формат хранят напоминания (Reminders в tools.py) и фоновые задания (jobs.py), он же уходит в синхронизацию
@@ -253,6 +254,11 @@ def _day(t, now):
     return None
 
 
+# «каждый месяц с 15 по 19 число», «с 15 по 19 число каждого месяца», «ежемесячно с 1-го по 5-е»
+MONTH_DAYS_RX = re.compile(r"(?:\b(?:каждый\s+месяц|ежемесячно)\s+)?\bс\s+(\d{1,2})(?:-?(?:го|е))?\s+(?:по|до)\s+(\d{1,2})(?:-?(?:е|го))?"
+                           r"\s+(?:числ\w*|день|дня)(?:\s+(?:каждого\s+)?месяца)?(?:\s+каждого\s+месяца|\s+каждый\s+месяц)?")
+
+
 def _repeat(t):
     """Повтор -> (repeat без времени, (начало, конец)) или None. «Каждый день/каждую неделю» — не интервал, а daily/weekly;
     default_hour — час для «каждое утро/вечер/ночь», если время не названо (parse его убирает)."""
@@ -346,6 +352,16 @@ def next_time(rep, after: datetime):
             c = (after + timedelta(days=d)).replace(hour=hh, minute=mm, second=0, microsecond=0)
             if c > after and c.weekday() in days:
                 return c
+    if k == "monthly" and rep.get("to_day"):            # каждый день с day по to_day каждого месяца (№927)
+        d0, d1 = int(rep.get("day") or 1), int(rep["to_day"])
+        y, mo = after.year, after.month
+        for _ in range(3):
+            last = calendar.monthrange(y, mo)[1]
+            for dd in range(min(d0, last), min(d1, last) + 1):
+                c = datetime(y, mo, dd, hh, mm)
+                if c > after:
+                    return c
+            y, mo = (y + 1, 1) if mo == 12 else (y, mo + 1)
     if k == "monthly":
         day = int(rep.get("day") or after.day)
         y, mo = after.year, after.month
@@ -356,6 +372,27 @@ def next_time(rep, after: datetime):
                 return c
             y, mo = (y + 1, 1) if mo == 12 else (y, mo + 1)
     return after + timedelta(days=1)
+
+
+def after_done(rep, at: datetime, now: datetime):
+    """«Сделано» у повторяющегося напоминания (№927: «каждый месяц с 15 по 19… пока не будет выполнено» — после «Готово»
+    продолжало звенеть): срабатывания этого круга больше не нужны — следующее с нового круга. Круг: для «с 15 по 19
+    число» — месяц, для окна часов «с 9 до 18» и для ежедневных, еженедельных, ежемесячных — день. -> новое время или None
+    (следующее срабатывание уже в новом круге — ничего не меняем; простой интервал без окна — тоже)."""
+    k = (rep or {}).get("kind")
+    if k == "monthly" and rep.get("to_day"):
+        if (at.year, at.month) != (now.year, now.month) or at.day > int(rep["to_day"]):
+            return None
+        last = calendar.monthrange(now.year, now.month)[1]
+        end = datetime(now.year, now.month, min(int(rep["to_day"]), last), 23, 59, 59)
+        return next_time(rep, end)
+    if k == "interval" and not rep.get("from") and not rep.get("days"):
+        return None
+    if k in ("interval", "daily", "weekly", "monthly"):
+        if at.date() != now.date():
+            return None
+        return next_time(rep, now.replace(hour=23, minute=59, second=59, microsecond=0))
+    return None
 
 
 def describe_repeat(rep):
@@ -389,6 +426,8 @@ def describe_repeat(rep):
             return f"по выходным в {tm}"
         names = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
         return ("по " + ", ".join(names[d] for d in days) if days else "каждую неделю") + f" в {tm}"
+    if k == "monthly" and rep.get("to_day"):
+        return f"каждый месяц с {rep.get('day')} по {rep['to_day']} число в {tm}"
     if k == "monthly":
         return f"каждый месяц {rep.get('day')}-го в {tm}"
     return ""
@@ -463,6 +502,13 @@ def parse(text, now=None):
         if not rest.startswith("через"):
             rest = "через " + rest
     spans = []
+    # №927 (20.11): «каждый месяц с 15 по 19 число… раз в день» — дни месяца, а не часы (ставилось «каждый час с 15 до 19»)
+    mdays = MONTH_DAYS_RX.search(rest)
+    if mdays and 1 <= int(mdays.group(1)) < int(mdays.group(2)) <= 31:
+        rest = rest[:mdays.start()] + " каждый месяц " + " " * max(0, mdays.end() - mdays.start() - 14) + rest[mdays.end():]
+        rest = re.sub(r"\bне\s+каждый\s+час\W+(?:а\s+)?раз\s+в\s+день\b|\bне\s+каждый\s+час\b|\b(?:один\s+)?раз\s+в\s+день\b", " ", rest)
+    else:
+        mdays = None
     # окно «с 9 до 18» / «с 9:00 по 18:00» — только днём (дело «проверяй почту по будням с 9 до 18», №137)
     win = re.search(r"\bс\s+(\d{1,2})(?::(\d{2}))?\s+(?:до|по)\s+(\d{1,2})(?::(\d{2}))?(?:\s+час\w*)?(?=\s|$)", rest)
     if win and int(win.group(1)) < int(win.group(3)) <= 24:
@@ -509,6 +555,8 @@ def parse(text, now=None):
         rep["time"] = f"{hh:02d}:{mi:02d}"
         if rep["kind"] == "weekly" and not rep.get("days"):
             rep["days"] = [(day[0] if day else now.date()).weekday()]
+        if rep["kind"] == "monthly" and mdays:
+            rep["day"], rep["to_day"] = int(mdays.group(1)), int(mdays.group(2))
         if rep["kind"] == "monthly" and not rep.get("day"):
             rep["day"] = (day[0] if day else now.date()).day
         if day:

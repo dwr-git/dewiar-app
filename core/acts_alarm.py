@@ -325,6 +325,8 @@ class AlarmMixin:
             m = D.reminder_match(title, list(self.reminders.items), ahead=True)
             if m and not m.get("repeat"):
                 self.reminders.remove(m["id"])
+            elif m:
+                self.reminders.done_round(m["id"])
             r = dn.add([{"title": m.get("text"), "rid": m["id"]} if m else title], "pc")
         elif cmd == "done_reminder":
             x = self.reminders.get(a.get("id") or "")
@@ -332,6 +334,8 @@ class AlarmMixin:
                 raise ValueError("такого напоминания уже нет")
             if not x.get("repeat"):
                 self.reminders.remove(x["id"])
+            else:                                       # №927: сделано — звонки этого круга (дня, «с 15 по 19» — месяца) не нужны
+                self.reminders.done_round(x["id"])
             r = dn.add([{"title": x.get("text") or "Дело", "rid": x["id"]}], "pc")
         elif cmd == "done_undo":
             if not dn.undo(a.get("id") or ""):

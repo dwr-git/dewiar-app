@@ -1849,6 +1849,9 @@ function voiceOpts(voices, cur) {
 function cloudVoice() {
   if (loggedIn() && S.accCloud && S.accCloud.tts) return { url: S.accCloud.base.split("?")[0] + "?p=", key: S.account.token };
   if (S.llm.cloud && S.llm.tts) return { url: cloudBase() + "?p=", key: S.llm.api_key };
+  // №928/№363 (20.11): мозг — своя модель по API, а слух — облако Dewiar своим ключом: голос пропадал совсем, если в телефоне
+  // нет своего синтеза речи (помогала только установка «Синтеза речи Google»). Тот же ключ облака озвучит ответы
+  if (S.stt.engine === "server" && S.stt.key && /cloud\.php/.test(S.stt.url || "")) return { url: String(S.stt.url).split("?")[0] + "?p=", key: S.stt.key };
   return null;
 }
 /* Голос устройства для героя или героини. Выбран в настройках — он. Иначе подбираем сами: признак пола у голоса (у части
@@ -4833,13 +4836,18 @@ function coerceArgs(name, a) {
 }
 /* Выполнить инструмент модели. -> строка для модели (ошибка — «Ошибка: …» с подсказкой, что сказать человеку);
    take_photo -> {text, image}, call_persona -> {text, switchTo} — их разбирает ask(). */
+const IDEA_OK_RX = /иде[яюиейа]|предлож|разработчик|в (?:приложени|программ)|добав(?:ь|ьте|ить)\b|\bотправ\w*|\bпередай|^\s*(?:ну\s+)?(?:да|давай|ага|конечно|хорошо|согласен|согласна|отправь|предложи|можно)\b/i;
 async function runTool(name, a) {
   hUse("pt:" + name);
   if (kidsOn() && !kidsTools().has(name)) return "Ошибка: в детском режиме этого нельзя. Скажи по-доброму, что это можно только вместе с мамой или папой.";
   if (HANDS_SET.has(name)) return handsTool(name, a || {});
   a = coerceArgs(name, a);
   switch (name) {
-    case "suggest_idea": return ideaSuggest(a.title, a.text);     // «Идеи Лиры» голосом (ideas.js, 0.61)
+    case "suggest_idea":                                         // «Идеи Лиры» голосом (ideas.js, 0.61)
+      // идеи №360/№361 (20.11): просили «совет агентов — бег или силовые?», а модель отправила это разработчику идеей. Идея
+      // уходит, только если о ней и говорят: «предложи идею», «передай разработчику» — или согласились на её же вопрос («да»)
+      if (turnQ && !IDEA_OK_RX.test(turnQ)) return "Ошибка: идею разработчику отправляют, только когда человек сам просит или соглашается. Сейчас он просил другое — ответь на его вопрос сам, ничего не отправляя.";
+      return ideaSuggest(a.title, a.text);
     case "set_reminder": {
       let at = null;
       if (a.in_minutes) at = new Date(Date.now() + a.in_minutes * 60000);

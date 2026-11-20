@@ -303,11 +303,22 @@ def t_month_summary(a, ctx):
     return M.context(M.gather(eng, ym)) + "\n\n" + M.PROMPT
 
 
+IDEA_OK_RX = re.compile(r"иде[яюиейа]|предлож|разработчик|в\s+(?:приложени|программ)|добав(?:ь|ьте|ить)\b|\bотправ\w*|\bпередай|"
+                        r"^\s*(?:ну\s+)?(?:да|давай|ага|конечно|хорошо|согласен|согласна|отправь|предложи|можно)\b", re.I)
+
+
 def t_suggest_idea(a, ctx):
     """«Предложи идею разработчику» (0.61): через ядро (ideas.suggest) — похожая есть: голос за неё; нет — новая."""
     eng = ctx.get("engine")
     if eng is None:
         raise ToolError("идеи — только в программе Dewiar")
+    try:                                        # идеи №360/361: «совет агентов» ушёл разработчику идеей — только по просьбе
+        said = str((ctx.get("turn_text") or (lambda: ""))() or "")
+    except Exception:  # noqa: BLE001
+        said = ""
+    if said and not IDEA_OK_RX.search(said):
+        raise ToolError("идею разработчику отправляют, только когда человек сам просит или соглашается. Сейчас он просил "
+                        "другое — ответь на его вопрос сам, ничего не отправляя")
     import ideas
     try:
         return ideas.suggest(eng, a.get("title") or "", a.get("text") or "")

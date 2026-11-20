@@ -157,6 +157,22 @@ class Reminders:
                     return dict(x)
         return None
 
+    def done_round(self, rid, now=None):
+        """«Сделано» по повторяющемуся напоминанию: звонки этого круга больше не нужны (№927: «каждый месяц с 15 по 19…
+        пока не будет выполнено» звенело и после «Готово») — следующее с нового круга (when.after_done). -> новое время
+        или None (ничего не меняли)."""
+        from when import after_done
+        x = self.get(rid)
+        if not x or not x.get("repeat"):
+            return None
+        try:
+            nxt = after_done(x["repeat"], datetime.fromisoformat(x["at"]), now or datetime.now())
+        except (KeyError, ValueError, TypeError):
+            return None
+        if nxt:
+            self.update(rid, {"at": nxt.isoformat(timespec="seconds")})
+        return nxt
+
     def find(self, query):
         """Записи по id или по тексту: запрос входит в текст или текст — в запрос («отмени напоминание про обед»)."""
         q = re.sub(r"\s+", " ", str(query or "").lower().replace("ё", "е")).strip()
@@ -558,6 +574,8 @@ def t_mark_done(a, ctx):
             if not m.get("repeat"):
                 rem.remove(m["id"])
                 closed.append(m.get("text") or "")
+            else:
+                rem.done_round(m["id"])
             lst.append({"title": m.get("text") or t, "rid": m["id"]})
         else:
             lst.append({"title": t})

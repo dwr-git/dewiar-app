@@ -260,6 +260,9 @@ function voiceOpts(voices, cur) {
 function cloudVoice() {
   if (loggedIn() && S.accCloud && S.accCloud.tts) return { url: S.accCloud.base.split("?")[0] + "?p=", key: S.account.token };
   if (S.llm.cloud && S.llm.tts) return { url: cloudBase() + "?p=", key: S.llm.api_key };
+  // №928/№363 (20.11): мозг — своя модель по API, а слух — облако Dewiar своим ключом: голос пропадал совсем, если в телефоне
+  // нет своего синтеза речи (помогала только установка «Синтеза речи Google»). Тот же ключ облака озвучит ответы
+  if (S.stt.engine === "server" && S.stt.key && /cloud\.php/.test(S.stt.url || "")) return { url: String(S.stt.url).split("?")[0] + "?p=", key: S.stt.key };
   return null;
 }
 /* Голос устройства для героя или героини. Выбран в настройках — он. Иначе подбираем сами: признак пола у голоса (у части
