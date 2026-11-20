@@ -301,6 +301,8 @@ class ExamJob(threading.Thread):
             args.append("--big")
         if j.get("lean"):                       # проба короткой инструкции (кабинет → «Экзамен» → галочка)
             args.append("--lean")
+        if j.get("scene"):                      # «Ум Лиры», шаг 1: сцена разговора (кабинет → «Экзамен» → галочка)
+            args.append("--scene")
         if j.get("only"):
             args += ["--only", ",".join(j["only"])]
         args += ["--partial", str(part)] + (["--resume"] if resume else [])

@@ -161,8 +161,8 @@ from exam_big import BIG_CHECKS, make_fixture  # noqa: E402,F401
 class Core:
     """Ядро Dewiar в режиме сервера во временных папках; команды и события — по WebSocket, как у студии."""
 
-    def __init__(self, profile, tmp, log=print, lean=False):
-        self.profile, self.tmp, self.log, self.lean = profile, Path(tmp), log, bool(lean)
+    def __init__(self, profile, tmp, log=print, lean=False, scene=False):
+        self.profile, self.tmp, self.log, self.lean, self.scene = profile, Path(tmp), log, bool(lean), bool(scene)
         self.port = _free_port()
         self.proc = None
         self.ws = None
@@ -183,7 +183,9 @@ class Core:
             # и «дни рождения Ани и Пети» оказались в «Обо мне» настоящего человека)
             "sync": {"enabled": False},
             "tasks": {"auto_run": True, "self_check": True},
-            "llm": {"active": "exam", "profiles": {"exam": self.profile}, "lean_prompt": self.lean}}, ensure_ascii=False), encoding="utf-8")
+            # --scene («Ум Лиры», шаг 1): сцена разговора; следующий шаг идёт сразу — ждём дописанную сцену до 30 с
+            "llm": {"active": "exam", "profiles": {"exam": self.profile}, "lean_prompt": self.lean,
+                    **({"scene": True, "scene_wait": 30} if self.scene else {})}}, ensure_ascii=False), encoding="utf-8")
         env = dict(os.environ, DEWIAR_CONFIG_DIR=str(cfg), DEWIAR_STATE_DIR=str(st), DEWIAR_WORKSPACE_DIR=str(ws),
                    DEWIAR_PORT=str(self.port), DEWIAR_ASSUME_AEC="1")
         env.pop("DEWIAR_PROMPTER_WAV", None)
@@ -1153,13 +1155,16 @@ def load_partial(path):
         return None
 
 
-async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False, partial=None, resume=False, big=False):
+async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False, partial=None, resume=False, big=False,
+                   scene=False):
     from version import VERSION
     data = json.loads(SCEN.read_text(encoding="utf-8"))
+    if only:                                   # «sit_» — все сценарии с этим началом (кабинет: «Только „Понимание ситуации“»)
+        only = {s["id"] for s in data["scenarios"] if s["id"] in only or any(o.endswith("_") and s["id"].startswith(o) for o in only)}
     scs = [s for s in data["scenarios"] if (not only or s["id"] in only) and (long or not s.get("long") or (only and s["id"] in only))
            and (big or not s.get("big") or (only and s["id"] in only))]   # большие задачи — только с --big (галочка)
     tmp = Path(keep) if keep else Path(tempfile.mkdtemp(prefix="dewiar-exam-"))
-    core = Core(profile, tmp / "core", log, lean=lean)
+    core = Core(profile, tmp / "core", log, lean=lean, scene=scene)
     started = dt.datetime.now()
     results = []
     prev = load_partial(partial) if (partial and resume) else None
@@ -1203,7 +1208,8 @@ async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, k
     results.sort(key=lambda r: order.get(r.get("id"), 0))
     rep = {"version": VERSION, "started": started.isoformat(timespec="seconds"), "duration_s": round((dt.datetime.now() - started).total_seconds()),
            # проба короткой инструкции — в подписи модели: в кабинете и отчёте сразу видно, какой прогон с чем сравнивать
-           "model": (profile.get("title") or profile.get("model") or "?") + (" · короткая инструкция" if lean else ""), "lean": bool(lean),
+           "model": (profile.get("title") or profile.get("model") or "?") + (" · короткая инструкция" if lean else "") + (" · сцена разговора" if scene else ""),
+           "lean": bool(lean), "scene": bool(scene),
            "host": platform.node()[:40],
            "os": f"{platform.system()} {platform.release()}"[:60], "long": bool(long), "big": bool(big), "scenarios": results}
     rep["summary"] = summary(results)
@@ -1232,13 +1238,14 @@ def main():
     ap.add_argument("--model", default="", help="модель облака (по умолчанию первая доступная ключу)")
     ap.add_argument("--llm", help="профиль модели JSON: {kind, base_url, model, api_key}")
     ap.add_argument("--judge", help="профиль судьи JSON (по умолчанию — та же модель)")
-    ap.add_argument("--only", help="только эти сценарии: id через запятую")
+    ap.add_argument("--only", help="только эти сценарии: id через запятую; «sit_» — все с этим началом")
     ap.add_argument("--long", action="store_true", help="и долгие: фоновые задачи и код")
     ap.add_argument("--big", action="store_true", help="и большие задачи (Б1, Б3–Б7, Б11: до часа каждая, docs/HARNESS.md)")
     ap.add_argument("--out", default=".", help="куда положить отчёт")
     ap.add_argument("--upload", action="store_true", help="отправить отчёт в кабинет (тем же ключом)")
     ap.add_argument("--keep", help="папка для временных файлов ядра (не удалять — для разбора)")
     ap.add_argument("--lean", action="store_true", help="короткая инструкция модели (llm.lean_prompt) — проба")
+    ap.add_argument("--scene", action="store_true", help="«Ум Лиры», шаг 1: сцена разговора (llm.scene) — проба")
     ap.add_argument("--json-out", help="записать отчёт JSON (с md) ещё и в этот файл — так его забирает исполнитель")
     ap.add_argument("--partial", help="после каждого сценария — сделанное в этот файл (для --resume)")
     ap.add_argument("--resume", action="store_true", help="продолжить по файлу --partial: пройденные сценарии не повторять")
@@ -1258,7 +1265,7 @@ def main():
     else:
         ap.error("нужен --key или --llm")
     jp = json.loads(a.judge) if a.judge else None
-    rep = asyncio.run(run_exam(prof, jp, set(a.only.split(",")) if a.only else None, a.long, keep=a.keep, lean=a.lean,
+    rep = asyncio.run(run_exam(prof, jp, set(a.only.split(",")) if a.only else None, a.long, keep=a.keep, lean=a.lean, scene=a.scene,
                                log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume, big=a.big))
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

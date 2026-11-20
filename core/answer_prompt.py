@@ -74,6 +74,8 @@ class PromptMixin:
             turns = int(self.s.get("llm", "history_turns") or 0)
             if turns > 0 and self.conv.needs_fold(self.history, turns):
                 threading.Thread(target=self._conv_fold, args=(turns,), name="conv-fold", daemon=True).start()
+            if self.s.get("llm", "scene") and self.conv.scene_due(self.history):   # «Ум Лиры», шаг 1 — за переключателем
+                threading.Thread(target=self._conv_scene, name="conv-scene", daemon=True).start()
         except Exception:  # noqa: BLE001
             log.exception("разговор: запомнить")
 
@@ -88,6 +90,17 @@ class PromptMixin:
             return "".join(stream_chat(dict(prof, max_tokens=1200), system, messages))
         if self.conv.fold(lambda: self.history, turns, ask):
             self.emit("conversation", **self.conv.public(self.history))
+
+    def _conv_scene(self):
+        """Сцена разговора (llm.scene): пишет активная модель коротким запросом в фоне, по свежей истории."""
+        prof = self.s.active_llm()
+        if not prof:
+            return
+
+        def ask(system, messages):
+            from llm import stream_chat
+            return "".join(stream_chat(dict(prof, max_tokens=500), system, messages))
+        self.conv.scene_update(list(self.history), ask)
 
     def _conv_archive(self, name, text):
         """Conversation.archive -> файл «Память/Разговоры/<дата время>.md» (последние 120; старше — удаляются)."""
@@ -481,6 +494,9 @@ class PromptMixin:
                 out += " " + my
         try:
             note = self.conv.turn_note()
+            if self.s.get("llm", "scene"):                       # «Ум Лиры», шаг 1: сцена — в справку, не в системную подсказку
+                self.conv.scene_wait(float(self.s.get("llm", "scene_wait") or 0))
+                note = (note + " " + self.conv.scene_note()).strip()
         except Exception:  # noqa: BLE001
             note = ""
         if (self.s.get("llm", "lean_prompt") or self._slim_prompt()) and text:   # описания навыков — к подходящему вопросу
