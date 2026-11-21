@@ -17,6 +17,7 @@ from engine_intro import IntroMixin  # noqa: E402
 from health import HealthMixin  # noqa: E402
 from engine_pay import PayMixin  # noqa: E402
 from engine_senior import SeniorMixin  # noqa: E402  режимы Лиры и «Для старших» (senior.py)
+import xray  # noqa: E402  «Рентген» ответа (план «Качество», 21.11)
 from engine_watch import WatchMixin  # noqa: E402  «Дозор»: присмотреть и сказать, когда готово (watch.py)
 from engine_home import HomeMixin  # noqa: E402  «Дома по Wi-Fi»: синхронизация без dewiar.pro (homehub.py)
 from engine_mymusic import MyMusicMixin  # noqa: E402
@@ -59,6 +60,12 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
              PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin, ChatMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
+        try:
+            from settings import STATE_DIR
+            xray.setup(STATE_DIR, on=self.s.get("llm", "xray") is not False)
+            xray.instrument(self)                          # быстрые команды — путь хода в «Рентгене»
+        except Exception:  # noqa: BLE001
+            logging.getLogger("dewiar").debug("рентген", exc_info=True)
         personas.look_pref = lambda: self.s.get("looks") or {}      # образы: выбор человека — в настройках
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
             from personas import DEFAULT
@@ -855,6 +862,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
     # ---------- события наружу ----------
 
     def emit(self, type_, **kw):
+        if type_ in ("tool", "answer"):
+            xray.event(type_, kw)                          # «Рентген»: действия и итог хода; к итогу — номер рентгена
         if type_ == "wake":
             self._ui_wake()                                # имя услышано, а виджета нет (закрыт, упал) — открыть
         if type_ == "answer" and not kw.pop("model", False) and kw.get("text"):

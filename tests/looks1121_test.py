@@ -1,7 +1,7 @@
 """Образы (1.0.55, владелец 20.11: «человек любит разнообразие… Лира может оставаться, а просто кнопочка „смени образ“»).
 Тот же персонаж — то же лицо, мимика, голос и характер; другие причёска и наряд. Выбор — в настройках (looks), живое лицо
-и портрет в окнах — выбранного образа; «Сама — по времени и сезону»: вечером — домашний, свой сезон чаще, чужой — никогда.
-Голосом — «смени образ», «надень зимний», «выбирай образ сама», «верни обычный образ». В виджете — стрелка у имени и
+и портрет в окнах — выбранного образа; «Сама — по времени дня»: вечером — домашний, днём — образ дня (сезонных нет: владелец 21.11).
+Голосом — «смени образ», «надень локоны», «выбирай образ сама», «верни обычный образ». В виджете — стрелка у имени и
 кружки под ним. Слои образа — свои глаза и губы с картинки (tools/live_looks.py), фон без чёрной каймы."""
 import datetime as dt, json, os, re, sys, tempfile
 from pathlib import Path
@@ -59,26 +59,27 @@ ps = P.Personas()
 ps.look_pref = lambda: s.get("looks") or {}
 pub = {x["id"]: x for x in ps.public()}
 L = pub["lira"]
-ok([x["name"] for x in L["looks"]][:2] == ["Обычная", "Весна"] and L["look"] == "" and L["live"] == "lira",
+ok([x["name"] for x in L["looks"]][:2] == ["Обычная", "Коса"] and L["look"] == "" and L["live"] == "lira",
    f"Лира: образы с «Обычной» первой, по умолчанию — обычная: {[x['name'] for x in L['looks']]}")
 ok(L["looks"][0]["img"] == "assets/live/thumbs/lira.webp" and all(x["img"] == f"assets/live/thumbs/lira-{x['id']}.webp" for x in L["looks"][1:])
    and all((ROOT / "ui" / x["img"]).exists() for x in L["looks"])
    and len(json.dumps(L["looks"])) < 12000, f"кружки образов — ссылками на файлы окна, «hello» не тяжелеет ({len(json.dumps(L['looks'])) // 1024} КБ)")
-ok("looks" not in pub.get("jarvis", {}) and "patrik" in pub and len(pub["patrik"]["looks"]) == 4, "образы только у Лиры и Патрика")
-s.update({"looks": {"lira": {"look": "winter"}}})
+ok("looks" not in pub.get("jarvis", {}) and "patrik" in pub and len(pub["patrik"]["looks"]) == len(P.LOOKS["patrik"]) + 1, "образы только у Лиры и Патрика")
+s.update({"looks": {"lira": {"look": "silk"}}})
 L = {x["id"]: x for x in ps.public()}["lira"]
-ok(L["live"] == "lira-winter" and L["look"] == "winter" and L["avatar_url"].startswith("data:image/"), "выбран «Зима» — живое лицо и портрет образа")
+ok(L["live"] == "lira-silk" and L["look"] == "silk" and L["avatar_url"].startswith("data:image/"), "выбран «Шёлк» — живое лицо и портрет образа")
 s.update({"looks": {"lira": {"look": "нет-такого"}}})
 ok({x["id"]: x for x in ps.public()}["lira"]["live"] == "lira", "неизвестный образ — обычный облик, без ошибок")
 A = lambda m, d, h=12: P.look_auto(P.LOOKS["lira"], dt.datetime(2026, m, d, h))
 ok(A(7, 4, 21) == "home" and A(1, 2, 23) == "home", "«Сама»: вечером — домашний")
-summer = {A(7, d) for d in range(1, 31)}
-ok("winter" not in summer and "spring" not in summer and len(summer) >= 4, f"летом — без шарфа и весны, каждый день другой: {sorted(summer)}")
-ok({A(1, d) for d in range(1, 31)} >= {"winter"} and "spring" not in {A(1, d) for d in range(1, 31)}, "зимой — «Зима» бывает, «Весна» — нет")
+days = {A(7, d) for d in range(1, 31)} | {A(1, d) for d in range(1, 31)}
+ok("home" not in days and len(days) >= 5, f"днём — образ дня по кругу, каждый день другой: {sorted(days)}")
+ok({x["id"] for x in P.LOOKS["lira"]}.isdisjoint({"spring", "winter", "loose", "gamer"}) and not any(set(x.get("when") or []) - {"evening"} for x in P.LOOKS["lira"]),
+   "владелец 21.11: «Весна», «Зима», «Волны», «Геймер» убраны, выбора по сезону нет")
 ok(A(3, 10) == A(3, 10, 15), "в течение дня образ не мелькает")
 
 # голосом и командой
-for t, want in (("Лира, смени образ", "next"), ("надень зимний", "name"), ("образ «Весна»", "name"), ("выбирай образ сама", "auto"),
+for t, want in (("Лира, смени образ", "next"), ("надень локоны", "name"), ("образ «Шёлк»", "name"), ("выбирай образ сама", "auto"),
                 ("верни обычный образ", "plain"), ("смени тему", None), ("надень куртку потеплее", None),
                 # 21.11, первая проба владельца: «Смени облик» — ушло модели, та ответила «не могу сменить облик» и позвала персонажа
                 ("Смени облик.", "next"), ("поменяй внешность", "next"), ("переоденься", "next"), ("верни обычный облик", "plain"),
@@ -100,9 +101,9 @@ class Eng(AD.DirectMixin, AD.LookMixin):
 
 s.update({"looks": {}, "persona": "lira"})
 E = Eng()
-ok(E._direct_look("Лира, смени образ") and s.get("looks")["lira"]["look"] == "spring" and "«Весна»" in E.said[-1] and "personas" in E.ev,
+ok(E._direct_look("Лира, смени образ") and s.get("looks")["lira"]["look"] == "braid" and "«Коса»" in E.said[-1] and "personas" in E.ev,
    f"«смени образ» — следующий, сказала какой, окна узнали: {E.said[-1:]}")
-ok(E._direct_look("надень зимний") and s.get("looks")["lira"]["look"] == "winter", "«надень зимний» — «Зима»")
+ok(E._direct_look("надень локоны") and s.get("looks")["lira"]["look"] == "curls", "«надень локоны» — «Локоны»")
 ok(E._direct_look("надень шелковый") and s.get("looks")["lira"]["look"] == "silk", "«надень шелковый» — «Шёлк» (ё и е)")
 ok(E._direct_look("выбирай образ сама") and s.get("looks")["lira"]["auto"] is True and "сама" in E.said[-1], "«выбирай образ сама» — «Сама» включена")
 ok(E._direct_look("смени образ") and s.get("looks")["lira"]["auto"] is False, "выбрала сама человек — «Сама» выключается")
@@ -149,12 +150,13 @@ with sync_playwright() as p:
     top = pg.evaluate("() => [document.getElementById('looks').getBoundingClientRect().top, document.getElementById('bubble').getBoundingClientRect().bottom]")
     ok(top[0] >= top[1] + 6, f"кружки не примыкают к имени: {top}")
     pg.click("#looks-g button:nth-child(2)"); pg.wait_for_timeout(100)
-    ok(pg.evaluate("CALLS.slice(-1)[0]") == ["persona_look", {"id": "lira", "look": "spring"}], f"выбор образа — в ядро: {pg.evaluate('CALLS.slice(-1)[0]')}")
+    ok(pg.evaluate("CALLS.filter(c => c[0] === 'persona_look').slice(-1)[0]") == ["persona_look", {"id": "lira", "look": "braid"}], f"выбор образа — в ядро: {pg.evaluate('CALLS.slice(-1)[0]')}")
     pg.click("#looks .la"); pg.wait_for_timeout(100)
-    ok(pg.evaluate("CALLS.slice(-1)[0]") == ["persona_look", {"id": "lira", "auto": True}], "«Сама — по времени и сезону» — в ядро")
-    s.update({"looks": {"lira": {"look": "spring"}}})
+    ok(pg.evaluate("CALLS.filter(c => c[0] === 'persona_look').slice(-1)[0]") == ["persona_look", {"id": "lira", "auto": True}],
+       "«Сама — по времени дня» — в ядро (фоновые вызовы окна, например complaints, не в счёт)")
+    s.update({"looks": {"lira": {"look": "braid"}}})
     pg.evaluate("ps => core.emit('personas', { personas: ps })", ps.public()); pg.wait_for_timeout(200)
-    ok(pg.evaluate("document.querySelector('#looks-g button.cur span').textContent") == "Весна" and "Весна" in pg.evaluate("document.getElementById('say').textContent"),
+    ok(pg.evaluate("document.querySelector('#looks-g button.cur span').textContent") == "Коса" and "Коса" in pg.evaluate("document.getElementById('say').textContent"),
        "выбранный образ отмечен и назван у имени")
     pg.mouse.click(150, 40); pg.wait_for_timeout(100)
     ok(pg.evaluate("document.getElementById('looks').hidden"), "щелчок мимо — кружки прячутся")
@@ -162,7 +164,7 @@ with sync_playwright() as p:
     pg.evaluate("() => core.emit('state', { state: 'thinking' })"); pg.wait_for_timeout(100)
     pg.click("#b-team"); pg.wait_for_timeout(200)
     row = pg.evaluate("() => { const r = document.querySelector('#team button.lkrow'); return r ? r.textContent : ''; }")
-    ok("Образ" in row and "весна — сменить" in row, f"меню персонажа: строка «Образ» с текущим: {row!r}")
+    ok("Образ" in row and "коса — сменить" in row, f"меню персонажа: строка «Образ» с текущим: {row!r}")
     pg.click("#team button.lkrow"); pg.wait_for_timeout(500)
     ok(not pg.evaluate("document.getElementById('looks').hidden") and not pg.evaluate("document.getElementById('team').classList.contains('show')"),
        "из меню персонажа — кружки образов открылись (и когда Лира думает)")

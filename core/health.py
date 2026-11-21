@@ -488,6 +488,15 @@ class HealthMixin:
         for x in xs:
             by.setdefault(x.get("how") or "?", []).append(x["total"])
         out["by"] = {k: [len(v), Latency.summary([{"total": t} for t in v])["total"][0]] for k, v in list(by.items())[:6]}
+        # 21.11 (пакет: первая строка потока 5,3 с при «первом слове модели» у сайта 1,2 с — но в это число входят и своя
+        # модель, и ключ сервиса): путь до сервера — по «где думает», чтобы облако Dewiar было видно отдельно
+        net = {}
+        for x in xs:
+            if "line" in x:
+                net.setdefault(x.get("how") or "?", []).append(x)
+        if net:
+            out["net_by"] = {k: [len(v), Latency.summary([{"total": 0, "hdr": y.get("hdr", 0), "line": y["line"]} for y in v]).get("hdr"),
+                                 Latency.summary([{"total": 0, "line": y["line"]} for y in v]).get("line")] for k, v in list(net.items())[:6]}
         out["_n"] = len(xs)
         return out
 

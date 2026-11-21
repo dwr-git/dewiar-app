@@ -1,5 +1,5 @@
-"""Образы на телефоне (1.0.55): в листе «Кто отвечает» — кружки образов Лиры и Патрика и «Сама — по времени и сезону»;
-выбор меняет живое лицо (live/<live>-<образ>.webp); голосом — «смени образ», «надень зимний», «выбирай образ сама».
+"""Образы на телефоне (1.0.55): в листе «Кто отвечает» — кружки образов Лиры и Патрика и «Сама — по времени дня»;
+выбор меняет живое лицо (live/<live>-<образ>.webp); голосом — «смени образ», «надень локоны», «выбирай образ сама».
 Правило «Сама» — то же, что на компьютере (core/personas.look_auto)."""
 import datetime as dt, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
@@ -41,11 +41,11 @@ try:
         ok(n == len(L) + 1, f"лист «Кто отвечает»: кружки образов и «Обычная»: {n}")
         pg.click("#plook .plg button:nth-child(2)"); pg.wait_for_timeout(300)
         r = pg.evaluate("() => [S.looks.lira.look, persona().live, orb.live]")
-        ok(r == ["spring", "lira-spring", "lira-spring"], f"выбрали «Весна» — живое лицо образа: {r}")
+        ok(r == ["braid", "lira-braid", "lira-braid"], f"выбрали «Коса» — живое лицо образа: {r}")
         pg.check("#plook-auto", force=True); pg.wait_for_timeout(200)
-        ok(pg.evaluate("S.looks.lira.auto") is True, "«Сама — по времени и сезону» включается")
+        ok(pg.evaluate("S.looks.lira.auto") is True, "«Сама — по времени дня» включается")
         pg.evaluate("closeSheets()")
-        for say, want in (("Лира, смени образ", "next"), ("надень зимний", "winter"), ("верни обычный образ", ""),
+        for say, want in (("Лира, смени образ", "next"), ("надень локоны", "curls"), ("верни обычный образ", ""),
                           ("Смени облик.", "next"), ("верни обычный облик", "")):   # 21.11: владелец говорил «облик»
             out = pg.evaluate("async t => { const before = lookOf(personaBase()); const r = await quick(t); return [r && r.say, lookOf(personaBase()), before]; }", say)
             good = out[0] and (out[1] == want if want != "next" else out[1] != out[2])

@@ -14,6 +14,7 @@ from answer_rules import (
     PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, ack_again, REPEAT_RX, shown_q, SONGS_ASK_RX,
     SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT)  # noqa: F401 — прежние имена на месте
 from answer_prompt import PromptMixin, prompt_parts
+from xray import current as xray_current, turned as xray_turned
 from answer_models import ModelsMixin
 from answer_report import ReportMixin
 from answer_direct import DirectMixin, LookMixin
@@ -29,6 +30,22 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
     CODER_RX = re.compile(r"coder|codellama|codegemma|starcoder|codestral|devstral|sqlcoder|code-?llama|wizardcoder", re.I)
 
     def ask(self, text, images=None, quiet=False, via=None, raw=False, shown=None, report=None):
+        """Вопрос → ответ (_ask) под «Рентгеном» (core/xray.py): путь хода, подсказка, действия, проверки — по ходу целиком.
+        Вопрос, ушедший модели, рентген закрывает ход (_run_turn); быструю команду — здесь."""
+        import xray
+        if not str(text or "").strip() and not images:
+            return self._ask(text, images, quiet, via, raw, shown, report)
+        xr = xray.begin(str(text or "").strip() or "Что на этой картинке?", via=via, quiet=quiet, raw=raw,
+                        typed=time.monotonic() - getattr(self, "_typed_t", 0.0) < 2)
+        try:
+            return self._ask(text, images, quiet, via, raw, shown, report)
+        finally:
+            if xr is not None and (xr.get("route") or {}).get("kind") != "model":
+                xray.finish(xr)                        # быстрая команда (или ничего) — ход кончился здесь
+            else:
+                xray.attach(None)                      # ушло модели — дальше пишет поток хода, а этот поток свободен
+
+    def _ask(self, text, images=None, quiet=False, via=None, raw=False, shown=None, report=None):
         """Вопрос → ответ. Сначала быстрые пути без модели (будильник, «спрячься»/«отключись», команды компьютера, сейф, умный дом, деньги,
         дела, заметки, напоминания, «замолчи», новый разговор, позвать персонажа, радио, музыка), затем, возможно,
         передача специалисту (_route) и ход разговора в потоке turn-N; прежний ход отменяется.
@@ -224,6 +241,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             self._cancel_locked()
             self.turn_n += 1
             turn = Turn(self.turn_n)
+            turn.xr = xray_current()                  # рентген хода — и в поток turn-N
+            xray_turned(turn.xr)
             turn.via = via
             # набрали текстом (виджет, «Чат» студии) — после ответа не слушаем фон: человек пишет, а голоса рядом —
             # не ему (владелец 20.11: после набранного вопроса Лира ответила на разговор в комнате)
@@ -521,6 +540,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 msgs = put_profile(msgs, personal)
             system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)
             self._pparts = prompt_parts(system, specs, msgs, personal if personal else "", "\n\n".join(c for c in ctx if c))
+            try:
+                import xray
+                from llm import context_window
+                xray.prompt(system, specs, msgs, parts=self._pparts, prof=prof, ctx_window=context_window(prof),
+                            extra={"ctx": [c.split("\n", 1)[0][:120] for c in ctx if c]})
+            except Exception:  # noqa: BLE001
+                log.debug("рентген", exc_info=True)
         except LLMError as e:
             e.turn_prof = prof                         # сбой при подготовке — какой моделью шёл ход
             raise
@@ -1221,6 +1247,19 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
         return prof
 
     def _run_turn(self, turn, text, images=()):
+        """Поток turn-N под «Рентгеном»: тот же рентген, что у вопроса; кончился ход (или отменён) — рентген закрыт."""
+        import xray
+        xray.attach(getattr(turn, "xr", None))
+        try:
+            return self._run_turn_body(turn, text, images)
+        finally:
+            xr = getattr(turn, "xr", None)
+            if xr is not None:
+                if turn.cancel.is_set():
+                    xr["cancelled"] = True
+                xray.finish(xr)
+
+    def _run_turn_body(self, turn, text, images=()):
         """Поток turn-N: один ход разговора. Фразы ответа идут в очередь sentences — их озвучивает отдельный поток
         (_speak_worker; для сообщений без голоса — _drain_worker), None в очереди — конец. До 6 шагов
         «модель → инструменты → результаты → модель». Запасные пути: облако не ответило — запасной мозг;

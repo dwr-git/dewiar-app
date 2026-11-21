@@ -48,6 +48,15 @@ class FilesCommands:
                 return r
             except (WorkspaceError, OSError, ValueError) as e:
                 raise ValueError(str(e)) from e
+        if cmd == "xray_get":                                   # «Рентген» ответа (core/xray.py)
+            import xray
+            r = xray.get(str(a.get("id") or ""), full=bool(a.get("full")))
+            if r is None:
+                raise ValueError("рентген этого ответа уже не хранится — он помнит последние 60 ответов")
+            return r
+        if cmd == "xray_list":
+            import xray
+            return {"items": xray.recent(int(a.get("n") or 20))}
         if cmd == "ws_read":
             try:
                 return self.workspace.read(a.get("path", ""))

@@ -5244,3 +5244,81 @@ html.st-light .ch-chip, html.st-light .ch-chip i { background: color-mix(in srgb
 .co-link span { flex-basis: 100%; } .co-link code { flex: 1; min-width: 0; font-size: 13px; letter-spacing: 0; line-height: 1.4; word-break: break-all; }
 .co-new .hint { flex-basis: 100%; margin: 0; }
 @media (max-width: 720px) { .co-seats li { grid-template-columns: 1fr; gap: 6px; } .co-act { justify-content: flex-start; } .co-left { text-align: left; } }
+
+/* «Рентген» ответа (studio/xray.js, план «Качество» 21.11): плёнка рентгена — тёмная пластина, ход ответа светящейся цепочкой
+   узлов; цвет узла — итог шага (бирюза — хорошо, янтарь — поправила, коралл — не вышло, тусклый — не понадобилось).
+   Ниже — подробности выбранного узла. Одна яркая вещь — сама цепочка; остальное тихое. */
+#xr-ov { --xr-plate: #0D121E; --xr-ink: #E6ECF7; --xr-mute: rgba(230,236,247,.58); --xr-line: rgba(120,220,230,.28);
+  --xr-ok: #55E0CF; --xr-warn: #FFB84D; --xr-fail: #FF7183; --xr-skip: rgba(230,236,247,.28); --xr-glass: rgba(255,255,255,.045);
+  position: fixed; inset: 0; z-index: 900; display: none; align-items: center; justify-content: center; padding: 24px 16px;
+  background: rgba(5,8,15,.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+#xr-ov.on { display: flex; animation: chr-in .18s ease-out; }
+.xr-card { width: min(1120px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; border-radius: 24px;
+  color: var(--xr-ink); box-shadow: 0 30px 90px -20px rgba(0,0,0,.65);
+  background: radial-gradient(120% 70% at 50% 0%, rgba(85,224,207,.10), transparent 60%), var(--xr-plate); }
+.xr-card header { display: flex; align-items: flex-start; gap: 16px; padding: 18px 20px 6px 28px; }
+.xr-card header > div { flex: 1; min-width: 0; }
+.xr-card h2 { margin: 0; font: 700 17px/1.3 Manrope, sans-serif; letter-spacing: .01em; }
+.xr-q { margin: 4px 0 0; font-size: 13px; color: var(--xr-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xr-x { border: 0; background: transparent; color: inherit; font: 600 13px Manrope, sans-serif; padding: 6px 9px; border-radius: 9px; cursor: pointer; opacity: .75; }
+.xr-x:hover { opacity: 1; background: rgba(255,255,255,.08); }
+.xr-map { list-style: none; margin: 0; padding: 18px 24px 22px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; position: relative; }
+.xr-map li { position: relative; min-width: 0; }
+.xr-map li + li::before { content: ""; position: absolute; left: -10px; top: 31px; width: 10px; height: 2px; background: var(--xr-line); }
+.xr-n { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; cursor: pointer;
+  padding: 12px 12px 13px; border-radius: 16px; border: 1px solid rgba(255,255,255,.06); background: var(--xr-glass); color: inherit; font: inherit;
+  transition: background .15s, border-color .15s, transform .15s; }
+.xr-n:hover { background: rgba(255,255,255,.075); }
+.xr-n:focus-visible { outline: 2px solid var(--xr-ok); outline-offset: 2px; }
+.xr-n.sel { border-color: color-mix(in srgb, var(--xr-c) 70%, transparent); background: color-mix(in srgb, var(--xr-c) 11%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--xr-c) 10%, transparent), 0 10px 30px -14px var(--xr-c); }
+.xr-n.ok { --xr-c: var(--xr-ok); } .xr-n.warn { --xr-c: var(--xr-warn); } .xr-n.fail { --xr-c: var(--xr-fail); } .xr-n.skip { --xr-c: var(--xr-skip); }
+.xr-n.skip b, .xr-n.skip .xr-t, .xr-n.skip small { opacity: .55; }
+.xr-i { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 6px;
+  color: var(--xr-c); background: color-mix(in srgb, var(--xr-c) 14%, transparent); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--xr-c) 55%, transparent); }
+.xr-i svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.xr-n b { font: 700 11.5px Manrope, sans-serif; letter-spacing: .04em; color: var(--xr-mute); }
+.xr-t { font: 600 14px/1.3 Manrope, sans-serif; overflow-wrap: anywhere; }
+.xr-n small { font-size: 11.5px; line-height: 1.35; color: var(--xr-mute); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.xr-det { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 28px 30px; border-top: 1px solid rgba(255,255,255,.06); scrollbar-width: thin; font-size: 14px; line-height: 1.6; }
+.xr-det h3 { margin: 18px 0 10px; font: 700 15px Manrope, sans-serif; }
+.xr-det h4 { margin: 20px 0 8px; font: 700 12.5px Manrope, sans-serif; color: var(--xr-mute); letter-spacing: .02em; }
+.xr-det p { margin: 0 0 10px; max-width: 76ch; }
+.xr-mute { color: var(--xr-mute); }
+.xr-det blockquote { margin: 0 0 10px; padding: 10px 16px; border-radius: 12px; background: var(--xr-glass); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 80ch; }
+.xr-det code { font: 12px/1.4 "JetBrains Mono", ui-monospace, monospace; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,.07); }
+.xr-det pre { margin: 6px 0 8px; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.28); font: 12px/1.5 "JetBrains Mono", ui-monospace, monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 340px; overflow: auto; }
+.xr-bar { display: flex; height: 16px; border-radius: 9px; overflow: hidden; gap: 2px; background: rgba(255,255,255,.04); }
+.xr-bar i, .xr-leg i { display: block; min-width: 3px; }
+.p-sys { background: #8A9BFF; } .p-tools { background: #4FD1C5; } .p-prof { background: #F59AC0; } .p-hist { background: #6CB8FF; } .p-ask { background: #FFC46B; }
+.p-free { background: repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 4px, transparent 4px 8px); }
+.xr-leg { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 18px; }
+.xr-leg li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.xr-leg li i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.xr-leg b { margin-left: auto; font-variant-numeric: tabular-nums; } .xr-leg small { width: 34px; text-align: right; color: var(--xr-mute); font-variant-numeric: tabular-nums; }
+.xr-list { margin: 0; padding-left: 20px; } .xr-list li { margin: 3px 0; overflow-wrap: anywhere; }
+.xr-tags { line-height: 2; }
+.xr-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; } .xr-dl dt { color: var(--xr-mute); } .xr-dl dd { margin: 0; overflow-wrap: anywhere; }
+.xr-acts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.xr-acts li { padding: 10px 14px; border-radius: 12px; background: var(--xr-glass); border-left: 3px solid var(--xr-ok); }
+.xr-acts li.fail { border-left-color: var(--xr-fail); }
+.xr-acts .xr-st { display: block; font-size: 12px; color: var(--xr-mute); margin: 2px 0 4px; }
+.xr-acts p { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.xr-full { margin-top: 10px; }
+.xr-log { list-style: none; margin: 0; padding: 0; font: 12px/1.5 "JetBrains Mono", ui-monospace, monospace; }
+.xr-log li { display: flex; gap: 12px; padding: 2px 0; }
+.xr-log time { flex: none; width: 46px; text-align: right; color: var(--xr-mute); font-variant-numeric: tabular-nums; }
+.xr-log span { min-width: 0; overflow-wrap: anywhere; } .xr-log li.w span { color: var(--xr-warn); }
+.xr-det .btn.small { margin: 6px 0 2px; }
+html.st-light #xr-ov, html.st-neu #xr-ov { --xr-plate: #F6F8FC; --xr-ink: #1E2433; --xr-mute: rgba(30,36,51,.58); --xr-line: rgba(30,140,150,.3);
+  --xr-ok: #129C8E; --xr-warn: #C27A00; --xr-fail: #D93A52; --xr-skip: rgba(30,36,51,.3); --xr-glass: rgba(20,30,60,.04); }
+html.st-light .xr-card, html.st-neu .xr-card { box-shadow: 0 30px 80px -20px rgba(20,30,60,.45); }
+html.st-light .xr-n, html.st-neu .xr-n { border-color: rgba(20,30,60,.07); }
+html.st-light .xr-det, html.st-neu .xr-det { border-top-color: rgba(20,30,60,.08); }
+html.st-light .xr-det pre, html.st-neu .xr-det pre { background: rgba(20,30,60,.05); }
+html.st-light .xr-det code, html.st-neu .xr-det code { background: rgba(20,30,60,.06); }
+@media (max-width: 980px) { .xr-map { grid-template-columns: repeat(4, minmax(0, 1fr)); } .xr-map li + li::before { display: none; } }
+@media (max-width: 640px) { .xr-map { grid-template-columns: 1fr; padding: 12px 16px; } .xr-n { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 10px; }
+  .xr-i { margin: 0; } .xr-n small { flex-basis: 100%; } .xr-card header { padding-left: 18px; } .xr-det { padding: 6px 16px 24px; } }
+@media (prefers-reduced-motion: reduce) { #xr-ov.on { animation: none; } .xr-n { transition: none; } }

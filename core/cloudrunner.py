@@ -305,6 +305,9 @@ class ExamJob(threading.Thread):
             args.append("--scene")
         if j.get("only"):
             args += ["--only", ",".join(j["only"])]
+        if j.get("groups") or j.get("sets") or int(j.get("repeat") or 1) > 1:   # «Стенд гипотез» (core/stand.py)
+            args += (["--group", ",".join(j.get("groups") or [])] if j.get("groups") else []) \
+                + [x for s_ in (j.get("sets") or []) for x in ("--set", str(s_))] + ["--repeat", str(int(j.get("repeat") or 1))]
         args += ["--partial", str(part)] + (["--resume"] if resume else [])
         self.post("running", note="Продолжаю экзамен с места, где исполнитель перезапустился" if resume else "Экзамен идёт")
         if self.cancel:                              # остановили, пока готовились, — не начинаем

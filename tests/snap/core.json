@@ -556,7 +556,9 @@
   "ws_rename",
   "ws_set_path",
   "ws_tree",
-  "ws_write"
+  "ws_write",
+  "xray_get",
+  "xray_list"
  ],
  "names": [
   "APP_ALIASES",

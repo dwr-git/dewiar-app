@@ -88,6 +88,13 @@ class ReportMixin:
                  f"Часовой пояс: {datetime.now().astimezone():%Z (UTC%z)}; по UTC сейчас {datetime.now(timezone.utc):%H:%M}", ""]
         if note:
             lines += ["== Со слов человека", note, ""]
+        try:                                           # «Рентген» последних ответов (core/xray.py): путь, модель, подсказка,
+            import xray                                # действия, проверки — разработчику видно, почему ответ такой
+            xb = xray.brief(8)
+            if xb:
+                lines += ["== Рентген последних ответов (путь · модель · подсказка · действия · проверки)", xb, ""]
+        except Exception:  # noqa: BLE001
+            pass
         lines += ["== Состояние", json.dumps(self.status, ensure_ascii=False, indent=1, default=str), ""]
         lines += ["== Настройки (без ключей)", json.dumps(clean(self.s.snapshot()), ensure_ascii=False, indent=1), ""]
         try:

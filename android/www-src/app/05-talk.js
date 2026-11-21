@@ -200,16 +200,12 @@ myPersonasApply();
 if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try { prefSet("settings", JSON.stringify(S)); } catch (e) { } }
 const personaBase = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
 /* Образы (1.0.55, как на компьютере): тот же персонаж — другие причёска и наряд. Выбор — S.looks {id: {look, auto}};
-   живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени и сезону» — lookAuto (то же правило, что core/personas.py). */
-const SEASON = ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "autumn", "autumn", "autumn", "winter"];
+   живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени» — lookAuto (то же правило, что core/personas.py). */
 function lookAuto(looks, now = new Date()) {
-  const season = SEASON[now.getMonth()], h = now.getHours();
+  const h = now.getHours();
   if (h >= 19 || h < 6) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
-  const fits = looks.filter(x => !(x.when || []).length || x.when.includes(season));
-  const seasonal = fits.filter(x => (x.when || []).includes(season)).map(x => x.id);
   const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + 719163;   // как date.toordinal() в Python
-  if (seasonal.length && day % 2 === 0) return seasonal[Math.floor(day / 2) % seasonal.length];
-  const pool = [""].concat(fits.filter(x => !(x.when || []).length).map(x => x.id));
+  const pool = [""].concat(looks.filter(x => !(x.when || []).length).map(x => x.id));   // сезонных нет (владелец 21.11)
   return pool[day % pool.length];
 }
 function lookOf(p) {

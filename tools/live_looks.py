@@ -66,6 +66,28 @@ def matte(src, crop=None, light_hair=True, neck_gap=False):
     return Image.fromarray(np.dstack([col.clip(0, 255), alpha * 255]).astype(np.uint8), "RGBA")
 
 
+def source(who, name):
+    """Исходник образа: design/looks/<who>-<name>.png с прозрачным фоном (владелец 21.11 снял фон сам, «качественно») —
+    или прежний .jpg на чёрном. -> (RGB на чёрном 1024, RGBA 1024 или None)."""
+    png = SRC / f"{who}-{name}.png"
+    if png.exists():
+        rgba = Image.open(png).convert("RGBA")
+        if rgba.size != (1024, 1024):
+            rgba = rgba.resize((1024, 1024), Image.LANCZOS)
+        black = Image.new("RGBA", rgba.size, (0, 0, 0, 255))
+        black.alpha_composite(rgba)
+        return black.convert("RGB"), rgba
+    return Image.open(SRC / f"{who}-{name}.jpg").convert("RGB"), None
+
+
+def matte_alpha(rgba, crop):
+    """Готовый прозрачный фон: та же вырезка и размер, что у matte, прозрачность — как в исходнике (край чуть мягче)."""
+    big = rgba.crop(crop).resize((360 * K, 360 * K), Image.LANCZOS)
+    arr = np.asarray(big).astype(np.float32)
+    a = np.asarray(Image.fromarray(arr[..., 3].astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(0.5))).astype(np.float32)
+    return Image.fromarray(np.dstack([arr[..., :3], a]).clip(0, 255).astype(np.uint8), "RGBA")
+
+
 def find_iris(big, cx, cy):
     """Центр радужки рядом с (cx, cy): самые тёмные точки в круге 9 px (кадр 360) — их середина."""
     a = np.asarray(big).astype(np.float32)[..., :3].mean(2)
@@ -98,13 +120,14 @@ def build(name, who="lira"):
     W = WHO[who]
     LF.LIP_Y, LF.MOUTH_CX, LF.MOUTH_HALF = W["lip"]
     LF.MOUTH = W["mouth"]
-    full = Image.open(SRC / f"{who}-{name}.jpg").convert("RGB")
+    full, rgba = source(who, name)
     src = full.resize((512, 512), Image.LANCZOS)
     src.save(ROOT / f"data/avatars/{who}-{name}.webp", quality=90, method=6)
     # 21.11 (владелец: «качество ниже… грубоватые пиксели»): портрет режем из исходника 1024, а не из уменьшенного 512 —
     # меньше растягивания, чётче лицо и волосы
     k = full.width / 512
-    big = matte(full, tuple(round(v * k) for v in W["crop"]), W["light_hair"], f"{who}-{name}" in NECK_GAP)
+    crop = tuple(round(v * k) for v in W["crop"])
+    big = matte_alpha(rgba, crop) if rgba is not None else matte(full, crop, W["light_hair"], f"{who}-{name}" in NECK_GAP)
     D = W["iris"]
     LF.IRIS, LF.IRIS_D = W["eyes"], D
     pre = f"{who}-{name}"
@@ -129,16 +152,20 @@ THUMB = 112
 def thumb(who, look=""):
     """Кружок для выбора образа — у всех образов и у обычного облика один кадр и один размер: ui/assets/live/thumbs/<имя>.webp."""
     name = f"{who}-{look}" if look else who
-    src = Image.open(ROOT / f"data/avatars/{name}.webp").convert("RGB").resize((512, 512), Image.LANCZOS)
     W = WHO[who]
-    big = matte(src, (0, 0, 512, 512), W["light_hair"] and bool(look)) if look else matte(src, (0, 0, 512, 512), False)
+    rgba = source(who, look)[1] if look and (SRC / f"{who}-{look}.png").exists() else None
+    if rgba is not None:
+        big = matte_alpha(rgba, (0, 0, 1024, 1024))
+    else:
+        src = Image.open(ROOT / f"data/avatars/{name}.webp").convert("RGB").resize((512, 512), Image.LANCZOS)
+        big = matte(src, (0, 0, 512, 512), W["light_hair"] and bool(look)) if look else matte(src, (0, 0, 512, 512), False)
     k = big.size[0] / 512
     out = big.crop(tuple(int(v * k) for v in THUMB_BOX)).resize((THUMB, THUMB), Image.LANCZOS)
     (LIVE / "thumbs").mkdir(exist_ok=True)
     out.save(LIVE / "thumbs" / f"{name}.webp", quality=88, method=6)
 
 
-LOOKS = {"lira": ["hair", "home", "spring", "silk", "curls", "buns", "winter", "street", "gamer", "tails", "loose", "braid"], "patrik": ["suit", "home", "silver"]}
+LOOKS = {"lira": ["home", "hair", "silk", "curls", "buns", "street", "tails", "ties", "cyber", "braid", "kolos", "bob", "bangs"], "patrik": ["suit", "home", "silver", "coat", "beard", "shirt"]}
 
 if __name__ == "__main__":
     conf = {}

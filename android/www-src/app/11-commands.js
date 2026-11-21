@@ -78,7 +78,7 @@ function lookQuick(t) {
   if (m[1]) setLook("next"); else if (m[2]) setLook(undefined, true); else if (m[3]) setLook("");
   else { const w = m[4].slice(0, 3), hit = p.looks.find(x => x.name.toLowerCase().replace(/ё/g, LAT_LOOK.e).slice(0, 3) === w); if (!hit) return null; setLook(hit.id); }
   const cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
-  return { say: auto ? `Хорошо, образ буду выбирать сама — по времени и сезону. Сегодня — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
+  return { say: auto ? `Хорошо, образ буду выбирать сама — по времени дня. Сегодня — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
 }
 async function quick(text) {
   { const bq = await bugQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (bq) return bq; }
@@ -86,7 +86,7 @@ async function quick(text) {
   const t = text.toLowerCase().replace(/ё/g, "е").replace(/[.!?,]+$/g, "").replace(/\s+/g, " ").trim()
     .replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m);
   if (NEW_CONV_RX.test(t) || NEW_CONV_RX.test(t.replace(/^\S+\s+/, ""))) { convReset(); return { say: "Хорошо, начинаем с чистого листа." }; }
-  { const lk = lookQuick(t); if (lk) return lk; }      // «смени образ», «надень зимний», «выбирай образ сама» (1.0.55)
+  { const lk = lookQuick(t); if (lk) return lk; }      // «смени образ», «надень локоны», «выбирай образ сама» (1.0.55)
   // «запиши в заметки …», «добавь в заметки …», «заметка: …» — сразу в заметки, без модели: модель иногда отвечала
   // «Записала.», не вызвав save_note, и заметка терялась (отзыв 11.10). Текст — как сказан, заголовок — первые слова.
   // «запланируй на сегодня: в 13 …, в 16 …» — дела дня; «я позвонил в банк», «готово, купил хлеб» — отметка (17.10, без модели)

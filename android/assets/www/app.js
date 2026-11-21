@@ -1252,16 +1252,12 @@ myPersonasApply();
 if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try { prefSet("settings", JSON.stringify(S)); } catch (e) { } }
 const personaBase = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
 /* Образы (1.0.55, как на компьютере): тот же персонаж — другие причёска и наряд. Выбор — S.looks {id: {look, auto}};
-   живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени и сезону» — lookAuto (то же правило, что core/personas.py). */
-const SEASON = ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "autumn", "autumn", "autumn", "winter"];
+   живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени» — lookAuto (то же правило, что core/personas.py). */
 function lookAuto(looks, now = new Date()) {
-  const season = SEASON[now.getMonth()], h = now.getHours();
+  const h = now.getHours();
   if (h >= 19 || h < 6) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
-  const fits = looks.filter(x => !(x.when || []).length || x.when.includes(season));
-  const seasonal = fits.filter(x => (x.when || []).includes(season)).map(x => x.id);
   const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + 719163;   // как date.toordinal() в Python
-  if (seasonal.length && day % 2 === 0) return seasonal[Math.floor(day / 2) % seasonal.length];
-  const pool = [""].concat(fits.filter(x => !(x.when || []).length).map(x => x.id));
+  const pool = [""].concat(looks.filter(x => !(x.when || []).length).map(x => x.id));   // сезонных нет (владелец 21.11)
   return pool[day % pool.length];
 }
 function lookOf(p) {
@@ -3915,7 +3911,7 @@ function lookQuick(t) {
   if (m[1]) setLook("next"); else if (m[2]) setLook(undefined, true); else if (m[3]) setLook("");
   else { const w = m[4].slice(0, 3), hit = p.looks.find(x => x.name.toLowerCase().replace(/ё/g, LAT_LOOK.e).slice(0, 3) === w); if (!hit) return null; setLook(hit.id); }
   const cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
-  return { say: auto ? `Хорошо, образ буду выбирать сама — по времени и сезону. Сегодня — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
+  return { say: auto ? `Хорошо, образ буду выбирать сама — по времени дня. Сегодня — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
 }
 async function quick(text) {
   { const bq = await bugQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (bq) return bq; }
@@ -3923,7 +3919,7 @@ async function quick(text) {
   const t = text.toLowerCase().replace(/ё/g, "е").replace(/[.!?,]+$/g, "").replace(/\s+/g, " ").trim()
     .replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m);
   if (NEW_CONV_RX.test(t) || NEW_CONV_RX.test(t.replace(/^\S+\s+/, ""))) { convReset(); return { say: "Хорошо, начинаем с чистого листа." }; }
-  { const lk = lookQuick(t); if (lk) return lk; }      // «смени образ», «надень зимний», «выбирай образ сама» (1.0.55)
+  { const lk = lookQuick(t); if (lk) return lk; }      // «смени образ», «надень локоны», «выбирай образ сама» (1.0.55)
   // «запиши в заметки …», «добавь в заметки …», «заметка: …» — сразу в заметки, без модели: модель иногда отвечала
   // «Записала.», не вызвав save_note, и заметка терялась (отзыв 11.10). Текст — как сказан, заголовок — первые слова.
   // «запланируй на сегодня: в 13 …, в 16 …» — дела дня; «я позвонил в банк», «готово, купил хлеб» — отметка (17.10, без модели)
@@ -6535,7 +6531,7 @@ function galWire() {
     galRemove(id); toast(`«${g ? g.name : id}» больше не в команде`); $("#who").onclick();
   });
 }
-/* образы (1.0.55): у Лиры и Патрика — кружки образов и «Сама — по времени и сезону»; голосом — «смени образ» (11-commands) */
+/* образы (1.0.55): у Лиры и Патрика — кружки образов и «Сама — по времени дня»; голосом — «смени образ» (11-commands) */
 function renderLookPanel() {
   const box = $("#plook"); if (!box) return;
   const p = personaBase(), cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
@@ -6544,7 +6540,7 @@ function renderLookPanel() {
   const all = [{ id: "", name: "Обычная", img: `live/thumbs/${p.live}.webp` }].concat(p.looks.map(x => ({ id: x.id, name: x.name, img: `live/thumbs/${p.live}-${x.id}.webp` })));
   box.innerHTML = `<div class="card plook"><b>Образ ${esc(p.name === "Лира" ? "Лиры" : p.name === "Патрик" ? "Патрика" : p.name)}</b>`
     + `<div class="plg">${all.map(x => `<button class="${x.id === cur ? "on" : ""}" data-l="${esc(x.id)}"><img src="${x.img}" alt="" loading="lazy"><span>${esc(x.name)}</span></button>`).join("")}</div>`
-    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени и сезону<small>Вечером — домашний, зимой — зимний, каждый день — немного другая</small></div>`
+    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени дня<small>Вечером — домашний, а каждый день — немного другая</small></div>`
     + `<label class="tg"><input type="checkbox" id="plook-auto" ${auto ? "checked" : ""}><i></i></label></div></div>`;
   $$("#plook .plg button").forEach(b => b.onclick = () => { setLook(b.dataset.l); renderLookPanel(); });
   $("#plook-auto").onchange = (e) => { setLook(undefined, e.target.checked); renderLookPanel(); };

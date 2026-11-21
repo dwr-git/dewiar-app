@@ -413,7 +413,7 @@ class DirectMixin:
         threading.Thread(target=run, name="learn", daemon=True).start()
 
 
-# «Лира, смени образ», «надень зимний», «образ „Весна“», «выбирай образ сама», «верни обычный образ» (1.0.55)
+# «Лира, смени образ», «надень локоны», «образ „Шёлк“», «выбирай образ сама», «верни обычный образ» (1.0.55)
 # 21.11 (владелец: «Смени облик» — ответ «не могу сменить собственный облик», позвала персонажа): говорят не только «образ»
 LOOK_W = r"(?:образ\w*|облик\w*|внешност\w*|наряд\w*|прич[её]ск\w*)"
 LOOK_RX = re.compile(r"(?i)^(?:[а-яё]+,?\s+)?(?:(?P<next>(?:(?:смени|поменяй|измени|другой|другую|новый|новую|следующий|следующую)\s+"
@@ -426,7 +426,7 @@ LOOK_RX = re.compile(r"(?i)^(?:[а-яё]+,?\s+)?(?:(?P<next>(?:(?:смени|п�
 
 class LookMixin:
     def set_look(self, pid, look=None, auto=None):
-        """Образ персонажа: look — id или "" (обычный), "next" — следующий по кругу; auto — «Сама — по времени и сезону».
+        """Образ персонажа: look — id или "" (обычный), "next" — следующий по кругу; auto — «Сама — по времени дня».
         Хранится в настройках (looks: {pid: {look, auto}}), персонажи заново — окнам. -> public-персонаж или None."""
         p = self.personas.get(pid)
         cur = next((x for x in self.personas.public() if x["id"] == p["id"]), None)
@@ -466,7 +466,7 @@ class LookMixin:
         elif m.group("plain"):
             q = self.set_look(pid, "")
         else:
-            w = m.group("name").lower().replace("ё", "е")         # «зимний» — «Зима», «шелковый» — «Шёлк», «домашний» — «Дома»
+            w = m.group("name").lower().replace("ё", "е")         # «шелковый» — «Шёлк», «домашний» — «Дома»
             hit = next((i for n, i in names.items() if n.replace("ё", "е")[:3] == w[:3]), None)
             if hit is None:
                 return False
@@ -474,7 +474,7 @@ class LookMixin:
         if not q:
             return False
         name = next((x["name"] for x in q["looks"] if x["id"] == q.get("look")), "Обычная")
-        msg = ("Хорошо, образ буду выбирать сама — по времени и сезону. Сегодня — «" + name + "».") if q.get("look_auto") \
+        msg = ("Хорошо, образ буду выбирать сама — по времени дня. Сегодня — «" + name + "».") if q.get("look_auto") \
             else ("Вернула обычный образ." if not q.get("look") else f"Готово — образ «{name}».")
         self._say_quick(msg, text, via)
         return True

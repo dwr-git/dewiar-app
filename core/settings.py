@@ -125,6 +125,7 @@ DEFAULTS = {
         "persona": {},              # id персонажа -> id профиля: свой мозг у персонажа («» — общий, active). 27.10
         "persona_model": {},        # id персонажа -> своя модель того же профиля (№403, 29.10: у Ollama много моделей)
         "history_turns": 8,
+        "xray": True,               # «Рентген» ответа: путь хода, подсказка, действия, проверки (core/xray.py)
         "key_fallback": True,       # сервис по ключу (Gemini, Kimi…) не ответил — мозг Dewiar (15.11, «Кто чем думает»)
         "own_fallback": False,      # своя модель не отвечает — мозг Dewiar (по согласию; engine_answer._own_fallback)
         "scene": False,             # «Ум Лиры», шаг 1: проба сцены разговора (экзамен --scene) — True включает всегда
