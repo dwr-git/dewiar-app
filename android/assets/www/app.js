@@ -677,7 +677,8 @@ async function reportSend(note, auto, summary, extra) {
   const plog = extra && extra.talk === false ? PLOG.filter(l => !TALK_LINE_RX.test(l)) : PLOG;
   note = String(note || "").trim().slice(0, 2000);
   let text = [`Dewiar (телефон) ${info.version || ""} — отчёт ${new Date().toLocaleString("ru-RU")}`,
-    `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`, "",
+    `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`,
+    `TZ: ${(() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return "?"; } })()} (UTC${(() => { const o = -new Date().getTimezoneOffset(); return (o >= 0 ? "+" : "-") + String(Math.floor(Math.abs(o) / 60)).padStart(2, "0") + String(Math.abs(o) % 60).padStart(2, "0"); })()}); UTC ${new Date().toISOString().slice(11, 16)}`, "",
     ...(note ? ["== Со слов человека", note, ""] : []),
     "== Состояние", JSON.stringify({ state, online: navigator.onLine, sync: syncStatus, cloud: cloudInfo, alarms: remHealth() || undefined, audio: audioInfo() }, null, 1), "",
     "== Настройки (без ключей)", JSON.stringify(mask(st), null, 1), "",
@@ -3908,7 +3909,7 @@ const UPD_ASK_RX = new RegExp("^(?:обновить?\\s+" + UPD_WHO
   + "|ты\\s+обновлен[аы]?"
   + "|(?:есть\\s+(?:ли\\s+)?|вышл[аои]\\s+(?:ли\\s+)?|не\\s+вышл[аои]\\s+ли\\s+)?(?:нов(?:ая|ые)\\s+верси[яи]|обновлени[ея])(?:\\s+(?:есть|вышл[аои]|для\\s+(?:тебя|приложения)))?)$");
 /* Образы словами (как core/answer_direct.LOOK_RX): t — уже без имени персонажа в начале, ё → е, без точки в конце. */
-const LOOK_RX = /^(?:(смени|поменяй|другой|новый|следующий)\s+(?:свой\s+)?образ|((?:выбирай|меняй|подбирай)\s+образ\S*\s+(?:сама?|по\s+(?:сезону|погоде|времени))|образ\S*\s+(?:сама?|по\s+сезону))|((?:верни|сними)\s+(?:обычн\S+\s+образ|образ)|обычн\S+\s+образ)|(?:надень|переоденься\s+в|образ)\s+[«"]?([а-я]+))[»"]?$/;
+const LOOK_RX = /^(?:((?:смени|поменяй|измени|другой|другую|новый|новую|следующий|следующую)\s+(?:(?:свой|свою|себе)\s+)?(?:образ\S*|облик\S*|внешност\S*|наряд\S*|прическ\S*)|переоденься)|((?:выбирай|меняй|подбирай)\s+(?:образ\S*|облик\S*|внешност\S*|наряд\S*|прическ\S*)\s+(?:сама?|по\s+(?:сезону|погоде|времени))|(?:образ\S*|облик\S*|внешност\S*|наряд\S*|прическ\S*)\s+(?:сама?|по\s+сезону))|((?:верни|сними)\s+(?:обычн\S+\s+(?:образ\S*|облик\S*|внешност\S*|наряд\S*|прическ\S*)|(?:образ\S*|облик\S*|внешност\S*|наряд\S*|прическ\S*))|обычн\S+\s+(?:образ\S*|облик\S*|внешност\S*|наряд\S*|прическ\S*))|(?:надень|переоденься\s+в|образ|облик)\s+[«"]?([а-я]+))[»"]?$/;   // 21.11: и «облик», «внешность», «наряд», «причёска»
 function lookQuick(t) {
   const m = LOOK_RX.exec(t), p = personaBase(); if (!m || !(p.looks || []).length) return null;
   if (m[1]) setLook("next"); else if (m[2]) setLook(undefined, true); else if (m[3]) setLook("");
@@ -6660,7 +6661,7 @@ function doneHead(s) {
   }
   const streak = s.streak >= 2 ? `🔥 Серия: ${s.streak} ${dnRu(s.streak)} подряд` : s.today ? "Первый день серии — завтра продолжим" : s.total ? "Отметьте сегодня дело — серия продолжится" : "Сделали дело — отметьте его";
   const sub = s.today ? `лучший день — ${s.bestDay} ${delaRu(s.bestDay)}, всего ${s.total}` : "голосом («я позвонила маме, отметь»), ✓ у напоминания или строкой ниже";
-  return `<div class="donehd"><div class="dtop"><div class="dnum"><b>${s.today}</b><small>${s.today ? delaRu(s.today) + " сегодня" : "дел сегодня"}</small></div>`
+  return `<div class="donehd"><div class="dtop"><div class="dnum"><b>${s.today}</b><small>Сделано сегодня</small></div>`
     + `<div class="dside"><span class="dstreak">${streak}</span><small class="dsub">${esc(sub)}</small></div>`
     + `<button class="dwhy${doneWhy ? " on" : ""}" id="done-why" aria-label="Что это за награды" aria-expanded="${doneWhy}">?</button></div>`
     + (goals.length ? `<div class="dgoals"><small class="dlab">Следующие значки</small>${goals.join("")}</div>` : "")

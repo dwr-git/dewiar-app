@@ -44,6 +44,14 @@ _lan = {"public": "", "base": "", "id": "", "ok_until": 0.0, "bad_until": 0.0, "
 # (http://127.0.0.1:порт/dwrapp/) — когда домен не отвечает. Проверка — той же подписью метки, что и «дома».
 _ssh = {"public": "", "base": "", "id": "", "ok_until": 0.0, "bad_until": 0.0, "lock": threading.Lock()}
 on_lan_ok = None                       # engine: «сайт ответил напрямую» — запомнить, что этот компьютер бывает рядом с сервером
+# 21.11 (пакет: сайт отдаёт первое слово модели за 1,2 с, а у людей первый байт — через 5,6 с): адрес сайта в домашней сети
+# сайт сообщает ВСЕМ, у кого есть ключ, — и каждый компьютер раз в 3 минуты проверял 192.168.x.x прямо на пути запроса
+# (соединение до 1,5 с, а чужой сервер по тому же адресу — до 4 с чтения). Голос после паузы платил эти секунды каждый раз.
+# Теперь на пути запроса проверяют только компьютеры, которые уже бывали дома у сервера (lan_seen); остальные — в фоне,
+# только из той же подсети, а не вышло — следующая попытка через LAN_FAR_SEC.
+lan_seen = False
+LAN_FAR_SEC = 6 * 3600
+_lan_bg = {"busy": False}
 
 
 def set_lan(public="", base="", lid=""):
@@ -124,6 +132,37 @@ def _lan_ok(st=None):
         return ok
 
 
+def _same_net(base):
+    """Этот компьютер в той же подсети (/24), что и домашний адрес сайта, — иначе дома у сервера мы точно не сейчас."""
+    host = urlparse(base).hostname or ""
+    ip = my_lan_ip()
+    return bool(ip and re.fullmatch(r"\d+\.\d+\.\d+\.\d+", host) and ip.rsplit(".", 1)[0] == host.rsplit(".", 1)[0])
+
+
+def _lan_try(st):
+    """Можно ли идти домой сейчас, не задерживая запрос. Бывал дома (lan_seen) или туннель SSH — проверка на месте, как
+    раньше (дома по имени сайт может и не открыться). Не бывал — только по свежему «да»; иначе проверка в фоне."""
+    if st is not _lan or lan_seen:
+        return _lan_ok(st)
+    now = time.time()
+    if now < st["ok_until"]:
+        return True
+    if now >= st["bad_until"] and not _lan_bg["busy"]:
+        if not _same_net(st["base"]):
+            st["bad_until"] = now + LAN_FAR_SEC          # другая сеть — дома у сервера нас нет
+            return False
+        _lan_bg["busy"] = True
+
+        def bg():
+            try:
+                if not _lan_ok(st):
+                    st["bad_until"] = time.time() + LAN_FAR_SEC
+            finally:
+                _lan_bg["busy"] = False
+        threading.Thread(target=bg, name="lan-probe", daemon=True).start()
+    return False
+
+
 class _LanFirst(httpx.BaseTransport):
     """Адреса папки сайта — сначала на внутренний адрес (дома), иначе — inner (прокси или напрямую)."""
 
@@ -132,7 +171,7 @@ class _LanFirst(httpx.BaseTransport):
 
     def handle_request(self, request):
         url = str(request.url)
-        st = next((x for x in (_lan, _ssh) if x["public"] and url.startswith(x["public"]) and _lan_ok(x)), None)   # дома, иначе туннель
+        st = next((x for x in (_lan, _ssh) if x["public"] and url.startswith(x["public"]) and _lan_try(x)), None)   # дома, иначе туннель
         if st is not None:
             pub = st["public"]
             new = st["base"] + url[len(pub):]

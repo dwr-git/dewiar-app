@@ -197,7 +197,7 @@ function doneHead(s) {
   }
   const streak = s.streak >= 2 ? `🔥 Серия: ${s.streak} ${dnRu(s.streak)} подряд` : s.today ? "Первый день серии — завтра продолжим" : s.total ? "Отметьте сегодня дело — серия продолжится" : "Сделали дело — отметьте его";
   const sub = s.today ? `лучший день — ${s.bestDay} ${delaRu(s.bestDay)}, всего ${s.total}` : "голосом («я позвонила маме, отметь»), ✓ у напоминания или строкой ниже";
-  return `<div class="donehd"><div class="dtop"><div class="dnum"><b>${s.today}</b><small>${s.today ? delaRu(s.today) + " сегодня" : "дел сегодня"}</small></div>`
+  return `<div class="donehd"><div class="dtop"><div class="dnum"><b>${s.today}</b><small>Сделано сегодня</small></div>`
     + `<div class="dside"><span class="dstreak">${streak}</span><small class="dsub">${esc(sub)}</small></div>`
     + `<button class="dwhy${doneWhy ? " on" : ""}" id="done-why" aria-label="Что это за награды" aria-expanded="${doneWhy}">?</button></div>`
     + (goals.length ? `<div class="dgoals"><small class="dlab">Следующие значки</small>${goals.join("")}</div>` : "")

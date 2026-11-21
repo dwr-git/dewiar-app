@@ -193,6 +193,9 @@ if sync_playwright:
         ok(any(x in txt for x in ("Песочница", "Защита ядра", "Охрана кода", "Без песочницы")), "студия: строка о песочнице кода")
         ok(pg.locator("#t-view .snap").count() == len(d["snaps"]) and "Откатить к шагу 2" in txt and "Вернуть как было" in txt,
            f"студия: список снимков ({pg.locator('#t-view .snap').count()}) с кнопками «Откатить к шагу N» и «Вернуть как было»")
+        # dialog.js задаёт свой window.ask; если он загрузился позже заглушки — вопрос «Вернуть результаты?» ждал ответа
+        # и закрывал кнопки (моргало под нагрузкой, 21.11) — заглушку ставим прямо перед нажатием
+        pg.evaluate("window.ask = async () => true")
         pg.click('#t-view [data-snap="s2"]')
         pg.wait_for_timeout(400)
         calls = pg.evaluate("window.CALLS.filter(c => c[0] === 'task_rewind')")

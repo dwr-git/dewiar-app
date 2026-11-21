@@ -481,6 +481,17 @@ class BrainMixin:
                 if (self.s.get("llm", "active") or "") != active or \
                         (active and time.monotonic() - getattr(self, "_brain_manual", -1e9) < 3600):
                     return                                     # пока проверяли, модель выбрали сами — не спорим
+                # №940 (21.11: «когда падает мой сервер, приложение перекидывает на облако Dewiar… все галочки страховки
+                # сняла, но оно всё равно переключается»): своя модель или свой сервер не отвечает — в облако только с
+                # согласия («Если своя модель не отвечает — через Dewiar»); Dewiar Server дома и сервис по ключу — по «Подстраховке»
+                if active:
+                    from health import brain_kind
+                    kind = brain_kind(profiles.get(active) or {})
+                    home = active == "dewiar-home" or str((profiles.get(active) or {}).get("name") or "").startswith("Dewiar Server")
+                    if self.s.get("llm", "key_fallback") is False or \
+                            (kind in ("local", "server") and not home and not self.s.get("llm", "own_fallback")):
+                        log.info("🧠 «%s» не отвечает — в облако Dewiar не перехожу: подстраховка выключена", was)
+                        return
                 if self.account.logged_in() and (not self.s.get("cloud", "key") or self.s.get("cloud", "account")):
                     self._account_cloud(force_active=True, quiet=True)
                 elif self.s.get("cloud", "key") and PROFILE_ID in profiles:

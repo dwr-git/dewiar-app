@@ -653,6 +653,20 @@ class MusicMixin:
                 return True
         if op == "ask" and self._music_service() == "yandex" and not re.search(r"радио|станци|волн", text.lower()):
             return self._yandex_cmd("", text)
+        q = c.get("query") or ""
+        if op == "ask" and re.search(r"(?<![а-яё])(?:любую|какую-?нибудь|какую-?то)\s+музык", text.lower()) or \
+                op == "play" and not c.get("strict") and re.search(r"люб|нибудь|(?<![а-яё])что-то|какую-то", q.lower()) and not re.sub(
+                r"(?<![а-яё])(?:любую|любой|любое|какую|какой|что|нибудь|то|музыку|музыка|музычку|мне|пожалуйста|уже|ну)(?![а-яё])|\W", "", q.lower()):
+            # №944 (21.11): «включи любую музыку» уходило модели; у человека окно контекста мало, действий нет — и она
+            # «включила радио» словами, а было тихо. «Любую» — это к нам: последняя станция, а нет — первые из списка
+            last = self.radio.last
+            sts = self.music.stations()
+            pick = ([last] if last else []) + [x for x in sts if not last or x["url"] != last.get("url")]
+            if pick:
+                log.info("📻 «%s» — любая музыка: «%s»", text, pick[0].get("name"))
+                self._music_asked = 0.0
+                self._play_station(pick[:4], text, "Включаю «{}».")
+                return True
         if op == "stop":
             if not (self.radio.playing or self.radio.paused):
                 return False                              # играет что-то другое (браузер, плеер) — решит модель

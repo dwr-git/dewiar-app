@@ -548,7 +548,7 @@ function renderDone(d) {
     all.filter(a => a.got).forEach(a => chips.push(`<span class="dach on" title="${dEsc(a.what)} · получено">${a.icon} ${dEsc(a.name)}</span>`));
     if (next) chips.push(`<span class="dach" title="${dEsc(next.what)} · сейчас ${next.val} из ${next.n}">${next.icon} ${Math.min(next.val, next.n)}/${next.n}</span>`);
   }
-  head.innerHTML = `<div class="dnum"><b>${d.today}</b><span>${d.today ? dela(d.today) + " сегодня" : "дел сегодня"}</span></div>`
+  head.innerHTML = `<div class="dnum"><b>${d.today}</b><span>Сделано сегодня</span></div>`
     + `<div class="dmid"><div class="dstreak">${d.streak >= 2 ? `🔥 ${d.streak} ${dney(d.streak)} подряд` : d.today ? "Первый день серии" : d.total ? "Отметьте дело — серия продолжится" : "Сделали дело — отметьте его"}`
     + `<small>всего ${d.total} · лучший день ${d.best_day} · лучшая серия ${d.best_streak}</small></div><div class="dachs">${chips.join("")}</div></div>`
     + `<div class="dweek" aria-label="Дела за неделю">${d.week.map((w, i) => `<div title="${w.day}: ${w.n}"><i style="height:${Math.round(6 + 52 * w.n / max)}px"${i === 6 ? ' class="now"' : ""}></i><small>${WD[new Date(w.day + "T12:00").getDay()]}</small></div>`).join("")}</div>`;

@@ -364,7 +364,13 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         lan = self.s.get("net", "lan") or {}
         net.set_lan(lan.get("public", ""), lan.get("base", ""), lan.get("id", ""))   # дома — напрямую с первого запроса
         # сайт хоть раз ответил напрямую — этот компьютер бывает рядом с сервером: в «Сети» показываем «Запасной вход через SSH»
-        net.on_lan_ok = lambda: None if self.s.get("net", "lan_seen") else self.s.update({"net": {"lan_seen": True}})
+        net.lan_seen = bool(self.s.get("net", "lan_seen"))   # бывал дома у сервера — проверять домашний адрес на месте (21.11)
+
+        def _lan_ok_seen():
+            net.lan_seen = True
+            if not self.s.get("net", "lan_seen"):
+                self.s.update({"net": {"lan_seen": True}})
+        net.on_lan_ok = _lan_ok_seen
         # 0.82.1: коротко и без ссылки (раньше — весь текст «Как пополнить» со ссылкой): где кнопка — и всё
         from cloud import low_text
         self.cloud.on_low = lambda c: self.chat.notify(low_text(c))

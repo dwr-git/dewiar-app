@@ -76,27 +76,50 @@ def find_iris(big, cx, cy):
     return (x0 + xs.mean()) / K, (y0 + ys.mean()) / K
 
 
+def blank_eyes(big, eyes, D, rr=1.04):
+    """Глаз без радужки: каждую строку её круга заполняем переходом между цветами по краям слева и справа — веко, белок
+    и тени макияжа остаются как в этой строке (сплошной «белок» на тёмных тенях Лиры выходил серым пятном)."""
+    arr = np.asarray(big).astype(np.float32).copy()
+    for cx, cy in eyes:
+        X, Y, r = cx * K, cy * K, D / 2 * K * rr
+        for y in range(int(Y - r) - 1, int(Y + r) + 2):
+            dy = y + 0.5 - Y
+            if abs(dy) >= r:
+                continue
+            w = (r * r - dy * dy) ** 0.5
+            xl, xr = int(np.floor(X - w)) - 1, int(np.ceil(X + w)) + 1
+            cl, cr = arr[y, xl - 2:xl + 1, :3].mean(0), arr[y, xr:xr + 3, :3].mean(0)
+            t = (np.arange(xr - xl + 1, dtype=np.float32) / (xr - xl))[:, None]
+            arr[y, xl:xr + 1, :3] = cl * (1 - t) + cr * t
+    return Image.fromarray(arr.clip(0, 255).astype(np.uint8), "RGBA")
+
+
 def build(name, who="lira"):
     W = WHO[who]
     LF.LIP_Y, LF.MOUTH_CX, LF.MOUTH_HALF = W["lip"]
     LF.MOUTH = W["mouth"]
-    src = Image.open(SRC / f"{who}-{name}.jpg").convert("RGB").resize((512, 512), Image.LANCZOS)
+    full = Image.open(SRC / f"{who}-{name}.jpg").convert("RGB")
+    src = full.resize((512, 512), Image.LANCZOS)
     src.save(ROOT / f"data/avatars/{who}-{name}.webp", quality=90, method=6)
-    big = matte(src, W["crop"], W["light_hair"], f"{who}-{name}" in NECK_GAP)
-    # глаза — как на фото, без закраски белком (у Лиры тёмные тени вокруг глаз — «белок» выходил серым пятном):
-    # радужка-слой вырезана из того же места портрета — в покое лицо в точности как на фото, при взгляде сдвигается на 1 px
+    # 21.11 (владелец: «качество ниже… грубоватые пиксели»): портрет режем из исходника 1024, а не из уменьшенного 512 —
+    # меньше растягивания, чётче лицо и волосы
+    k = full.width / 512
+    big = matte(full, tuple(round(v * k) for v in W["crop"]), W["light_hair"], f"{who}-{name}" in NECK_GAP)
     D = W["iris"]
     LF.IRIS, LF.IRIS_D = W["eyes"], D
     pre = f"{who}-{name}"
-    big.resize((360, 360), Image.LANCZOS).save(LIVE / f"{pre}.webp", quality=92, method=6)
+    # радужка-слой — с того же места портрета (в покое лицо в точности как на фото); под ней — «пустой» глаз (21.11, владелец:
+    # «оригинальная Лира смотрит в разные стороны, моргает… на новых образах — статичность»): строки круга радужки — переходом
+    # между цветами по краям (веко, белок, тень), так взгляд ходит по-настоящему, а моргание — веко на миг закрывает глаз
     for side, im in zip("lr", LF.iris_crops(big)):
         im.save(LIVE / f"{pre}-iris-{side}.png", optimize=True)
+    blank_eyes(big, W["eyes"], D).resize((360, 360), Image.LANCZOS).save(LIVE / f"{pre}.webp", quality=94, method=6)
     for i, op in enumerate((0.0, 2.0, 3.6, 5.2)):
         LF.mouth_layer(big, open_px=op).save(LIVE / f"{pre}-mouth-{i}.webp", quality=92, method=6)
     LF.mouth_layer(big, smile_px=W["smile"]).save(LIVE / f"{pre}-smile.webp", quality=92, method=6)
     geo = {"eyes": [[round(x - D / 2, 1), round(y - D / 2, 1)] for x, y in W["eyes"]], "iris": D,
-           "mouth": list(W["mouth"]), "moveX": 1.0, "moveY": 0.35}
-    return {"own": True, "iris": [f"{pre}-iris-l.png", f"{pre}-iris-r.png"], "geo": geo}
+           "mouth": list(W["mouth"]), "moveX": 2.2, "moveY": 0.9}
+    return {"own": True, "soft": True, "iris": [f"{pre}-iris-l.png", f"{pre}-iris-r.png"], "geo": geo}
 
 
 THUMB_BOX = (71, 40, 441, 410)                 # кружок выбора — одинаковый кадр у всех (голова и причёска) в портрете 512

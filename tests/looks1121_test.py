@@ -34,6 +34,22 @@ for who, looks in P.LOOKS.items():
 from PIL import Image  # noqa: E402
 sizes = {Image.open(f).size for f in (ROOT / "ui/assets/live/thumbs").glob("*.webp")}
 ok(len(sizes) == 1, f"владелец 21.11: «миниатюры единообразно, не как первое слишком крупное» — один размер и кадр у всех: {sizes}")
+# 21.11 (владелец: «оригинальная Лира смотрит в разные стороны, моргает… на новых образах — статичность»; «еле заметная
+# круглая полоска внутри»): под радужкой — пустой глаз (иначе взгляд и моргание не видны), взгляд ходит как у обычной
+# Лиры, край портрета в светлом неоморфизме стирается кольцом
+import numpy as _np  # noqa: E402
+for n in ("lira-tails", "patrik-suit"):
+    base = _np.asarray(Image.open(ROOT / f"ui/assets/live/{n}.webp").convert("RGB")).astype(float)
+    iris = Image.open(ROOT / f"ui/assets/live/{n}-iris-l.png").convert("RGBA")
+    m = re.search(r'"' + n + r'": (\{.*\}),$', ent, re.M)
+    conf = json.loads(m.group(1)) if m else {}
+    x, y = conf.get("geo", {}).get("eyes", [[0, 0]])[0]
+    D = conf.get("geo", {}).get("iris", 16)
+    under = base[int(y + D * .35):int(y + D * .65), int(x + D * .35):int(x + D * .65)].mean((0, 1))
+    top = _np.asarray(iris.resize((int(D), int(D))).convert("RGB")).astype(float)[int(D * .35):int(D * .65), int(D * .35):int(D * .65)].mean((0, 1))
+    ok(conf.get("soft") and conf["geo"]["moveX"] >= 2 and abs(under - top).sum() > 20,
+       f"{n}: под радужкой пустой глаз, взгляд ходит ({conf.get('geo', {}).get('moveX')} px), край — мягкий")
+ok("R + lw / 2 - 1" in ent and "L.soft ?" in ent, "неоморфизм: край портрета стирается кольцом, у образов растворяется раньше")
 im = Image.open(ROOT / "ui/assets/live/lira-home.webp").convert("RGBA")
 ok(im.getpixel((5, 5))[3] == 0 and im.getpixel((180, 180))[3] == 255, "фон образа прозрачный, лицо — нет")
 
@@ -63,7 +79,10 @@ ok(A(3, 10) == A(3, 10, 15), "в течение дня образ не мель�
 
 # голосом и командой
 for t, want in (("Лира, смени образ", "next"), ("надень зимний", "name"), ("образ «Весна»", "name"), ("выбирай образ сама", "auto"),
-                ("верни обычный образ", "plain"), ("смени тему", None), ("надень куртку потеплее", None)):
+                ("верни обычный образ", "plain"), ("смени тему", None), ("надень куртку потеплее", None),
+                # 21.11, первая проба владельца: «Смени облик» — ушло модели, та ответила «не могу сменить облик» и позвала персонажа
+                ("Смени облик.", "next"), ("поменяй внешность", "next"), ("переоденься", "next"), ("верни обычный облик", "plain"),
+                ("смени голос", None), ("смени стиль", None)):
     m = AD.LOOK_RX.match(t)
     ok((m and next(k for k, v in m.groupdict().items() if v)) == want, f"«{t}» → {want}")
 
@@ -139,6 +158,14 @@ with sync_playwright() as p:
        "выбранный образ отмечен и назван у имени")
     pg.mouse.click(150, 40); pg.wait_for_timeout(100)
     ok(pg.evaluate("document.getElementById('looks').hidden"), "щелчок мимо — кружки прячутся")
+    # 21.11 (владелец: «как менять облик вручную я не понял»): и в меню персонажа — строка «Образ»
+    pg.evaluate("() => core.emit('state', { state: 'thinking' })"); pg.wait_for_timeout(100)
+    pg.click("#b-team"); pg.wait_for_timeout(200)
+    row = pg.evaluate("() => { const r = document.querySelector('#team button.lkrow'); return r ? r.textContent : ''; }")
+    ok("Образ" in row and "весна — сменить" in row, f"меню персонажа: строка «Образ» с текущим: {row!r}")
+    pg.click("#team button.lkrow"); pg.wait_for_timeout(500)
+    ok(not pg.evaluate("document.getElementById('looks').hidden") and not pg.evaluate("document.getElementById('team').classList.contains('show')"),
+       "из меню персонажа — кружки образов открылись (и когда Лира думает)")
     b.close()
 ok(not errs, f"без ошибок страницы: {errs[:2]}")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

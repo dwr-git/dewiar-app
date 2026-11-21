@@ -841,21 +841,21 @@
   // разреза глаз <имя>-eyes.png (зрачок рисуется только внутри неё — веки его прикрывают), цвет радужки, координаты.
   const LIVE_CONF = {
     // образы Лиры и Патрика (tools/live_looks.py): глаза и губы — свои, с картинки образа
-    "lira-braid": {"own": true, "iris": ["lira-braid-iris-l.png", "lira-braid-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-loose": {"own": true, "iris": ["lira-loose-iris-l.png", "lira-loose-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-hair": {"own": true, "iris": ["lira-hair-iris-l.png", "lira-hair-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-home": {"own": true, "iris": ["lira-home-iris-l.png", "lira-home-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-spring": {"own": true, "iris": ["lira-spring-iris-l.png", "lira-spring-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-silk": {"own": true, "iris": ["lira-silk-iris-l.png", "lira-silk-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-curls": {"own": true, "iris": ["lira-curls-iris-l.png", "lira-curls-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-buns": {"own": true, "iris": ["lira-buns-iris-l.png", "lira-buns-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-winter": {"own": true, "iris": ["lira-winter-iris-l.png", "lira-winter-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-street": {"own": true, "iris": ["lira-street-iris-l.png", "lira-street-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-gamer": {"own": true, "iris": ["lira-gamer-iris-l.png", "lira-gamer-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "lira-tails": {"own": true, "iris": ["lira-tails-iris-l.png", "lira-tails-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "patrik-suit": {"own": true, "iris": ["patrik-suit-iris-l.png", "patrik-suit-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "patrik-home": {"own": true, "iris": ["patrik-home-iris-l.png", "patrik-home-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
-    "patrik-silver": {"own": true, "iris": ["patrik-silver-iris-l.png", "patrik-silver-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 1.0, "moveY": 0.35}},
+    "lira-braid": {"own": true, "soft": true, "iris": ["lira-braid-iris-l.png", "lira-braid-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-loose": {"own": true, "soft": true, "iris": ["lira-loose-iris-l.png", "lira-loose-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-hair": {"own": true, "soft": true, "iris": ["lira-hair-iris-l.png", "lira-hair-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-home": {"own": true, "soft": true, "iris": ["lira-home-iris-l.png", "lira-home-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-spring": {"own": true, "soft": true, "iris": ["lira-spring-iris-l.png", "lira-spring-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-silk": {"own": true, "soft": true, "iris": ["lira-silk-iris-l.png", "lira-silk-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-curls": {"own": true, "soft": true, "iris": ["lira-curls-iris-l.png", "lira-curls-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-buns": {"own": true, "soft": true, "iris": ["lira-buns-iris-l.png", "lira-buns-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-winter": {"own": true, "soft": true, "iris": ["lira-winter-iris-l.png", "lira-winter-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-street": {"own": true, "soft": true, "iris": ["lira-street-iris-l.png", "lira-street-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-gamer": {"own": true, "soft": true, "iris": ["lira-gamer-iris-l.png", "lira-gamer-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-tails": {"own": true, "soft": true, "iris": ["lira-tails-iris-l.png", "lira-tails-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-suit": {"own": true, "soft": true, "iris": ["patrik-suit-iris-l.png", "patrik-suit-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-home": {"own": true, "soft": true, "iris": ["patrik-home-iris-l.png", "patrik-home-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-silver": {"own": true, "soft": true, "iris": ["patrik-silver-iris-l.png", "patrik-silver-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "moveX": 2.2, "moveY": 0.9}},
     // радужка — настоящая, вырезанная с портрета (iris: файлы), в покое лицо в точности как на фото; ходит чуть-чуть
     patrik: { own: true, mask: true, iris: ["patrik-iris-l.png", "patrik-iris-r.png"],
               geo: { eyes: [[140.8, 142.9], [206.5, 143.3]], iris: 12.0, mouth: [143.0, 201.0, 74.0, 44.0], moveX: 1.8, moveY: 0.5 } },
@@ -873,7 +873,7 @@
   function liveSet(name) {                        // слои загружаются один раз на всё окно
     if (LIVE_SETS[name]) return LIVE_SETS[name];
     const C = LIVE_CONF[name] || {}, pre = C.own ? name + "-" : "";
-    const L = LIVE_SETS[name] = { ready: false, failed: false, geo: Object.assign({}, LIVE_GEO, C.geo || {}) };
+    const L = LIVE_SETS[name] = { ready: false, failed: false, soft: !!C.soft, geo: Object.assign({}, LIVE_GEO, C.geo || {}) };
     const load = (f) => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = LIVE_DIR + f; });
     const cols = C.eyes || LIVE_EYES[name];
     Promise.all([load(name + ".webp"), load("iris.png"), load(pre + "smile.webp"), C.mask ? load(name + "-eyes.png") : Promise.resolve(null),
@@ -979,7 +979,10 @@
     const fade = ctx.createLinearGradient(0, R * 0.55, 0, R);   // низ портрета (обрез туловища) растворяется в фоне
     if (neu) {                                    // край без среза: плечи и низ мягко уходят в материал диска
       ctx.globalCompositeOperation = "destination-in";
-      const m = ctx.createRadialGradient(0, -R * 0.12, R * 0.7, 0, -R * 0.12, R * 1.08);
+      // образы (soft): плечи и наряд доходят до края круга — растворяем раньше, иначе край круга виден тонкой линией
+      // (владелец 21.11: «у других — еле заметная круглая полоска внутри», «Хвостики»)
+      const m = L.soft ? ctx.createRadialGradient(0, -R * 0.12, R * 0.62, 0, -R * 0.06, R * 0.97)
+        : ctx.createRadialGradient(0, -R * 0.12, R * 0.7, 0, -R * 0.12, R * 1.08);
       m.addColorStop(0, "rgba(0,0,0,1)"); m.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = m; ctx.fillRect(-R, -R, 2 * R, 2 * R);
       ctx.globalCompositeOperation = "source-over";
@@ -1003,6 +1006,13 @@
       ctx.fillStyle = bg; ctx.fillRect(-R, band - 24, 2 * R, 48);
     }
     ctx.restore();
+    if (neu) {                                    // 21.11 (владелец: «у образов — еле заметная круглая полоска внутри»): край
+      // обрезки сглажен, и «растворение» (destination-in) не достаёт полупрозрачных пикселей самого края — там оставалась
+      // тонкая дуга портрета (у образов с плечами до края — видно). Стираем узкое кольцо по краю, уже без обрезки
+      const lw = Math.max(2, R * 0.03);
+      ctx.save(); ctx.globalCompositeOperation = "destination-out"; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.arc(0, 0, R + lw / 2 - 1, 0, TAU); ctx.stroke(); ctx.restore();
+    }
     portraitRim(g, e, R);
   }
 

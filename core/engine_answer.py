@@ -728,6 +728,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                                               "разговора. В LM Studio или Ollama поставьте длину контекста 16384 или больше: "
                                               "с действиями нужно около 12–16 тыс.")
                             specs = []
+                            turn.no_tools = "ctx" if (ctx_full(e) or CTX_TEXT in str(e)) else "tools"   # №944 — для честного итога
                             # №760 (15.11, своя qwen3-4b, окно мало): без действий модель называла курс евро «по памяти»
                             # и выдумывала, что взяла его с cbr.ru. Без инструментов свежих данных нет — так и сказать
                             system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (поиск в интернете, открыть "
@@ -764,6 +765,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         t_ev = time.monotonic()
                         if getattr(self, "lat", None) is not None:
                             self.lat.mark("ev", t_ev)          # сервер ответил хоть чем-то (первый шаг хода)
+                            # 21.11: где теряются секунды между «сайт: первое слово за 1,2 с» и «у людей — 5,6 с»: заголовки
+                            # ответа и первая строка потока (сеть и посредники) отдельно от первого события (модель)
+                            from llm_hints import wait_info
+                            wi = wait_info(turn.cancel) or {}
+                            for k_ in ("t_hdr", "t_line"):
+                                if wi.get(k_):
+                                    self.lat.mark(k_[2:], wi[k_])
                     if turn.cancel.is_set():
                         break
                     if kind == "tools":
@@ -1148,6 +1156,16 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     # остались полезные сведения (≥ 60 % и 120 знаков) — с ними; почти всё было «сделала» — только честная фраза
                     turn.full = (rest + " " + PROMISE_GIVEUP).strip() if len(rest) >= max(120, 0.6 * whole) else PROMISE_GIVEUP
                     sentences.put(PROMISE_GIVEUP)
+            if getattr(turn, "no_tools", "") and not called and not turn.cancel.is_set():
+                # №944 (21.11, своя модель, окно контекста мало): действия отключены, а модель переписала из разговора
+                # «Включила радио «Groove Salad»» — тишина, человек трижды просил и не понимал почему. Без действий ничего
+                # не включено, не поставлено и не отправлено — так и говорим, с причиной и что сделать
+                from quality import NO_TOOLS_GIVEUP, no_tools_claim
+                if no_tools_claim(text, turn.full):
+                    honest = NO_TOOLS_GIVEUP[turn.no_tools]
+                    log.warning("✋ Действия недоступны, а ответ говорит «включила / поставила» — говорю правду")
+                    turn.full = honest
+                    sentences.put(honest)
             if failed_checked and not turn.cancel.is_set():
                 from quality import failed_claim, failed_note
                 if failed_claim(turn.full, getattr(turn, "tools_err", None), getattr(turn, "tools_ok", None) or []):

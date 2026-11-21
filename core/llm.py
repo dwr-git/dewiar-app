@@ -861,9 +861,12 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 col.net = True                                   # ответил узел «Сети Лиры» (не потоком — по заголовку)
             if st is not None:
                 st["phase"] = "stream"                           # сервер ответил — дальше ждём слов модели
+                st.setdefault("t_hdr", time.monotonic())         # 21.11: заголовки ответа пришли (сеть, сайт)
             for line in _stream_lines(r, col):
                 if cancel is not None and cancel.is_set():
                     return
+                if st is not None and "t_line" not in st:
+                    st["t_line"] = time.monotonic()              # первая строка потока (у сайта — «: dewiar-server»): копит ли кто-то поток
                 if _DONE_RX.match(line):
                     # 04.11: «data: [DONE]» — конец ответа; не ждём, пока сервер закроет соединение (шлюз мог держать его
                     # открытым, а облако — слать «: keepalive»: ход ждал минутами)

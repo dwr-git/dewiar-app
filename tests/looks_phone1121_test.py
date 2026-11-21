@@ -45,7 +45,8 @@ try:
         pg.check("#plook-auto", force=True); pg.wait_for_timeout(200)
         ok(pg.evaluate("S.looks.lira.auto") is True, "«Сама — по времени и сезону» включается")
         pg.evaluate("closeSheets()")
-        for say, want in (("Лира, смени образ", "next"), ("надень зимний", "winter"), ("верни обычный образ", "")):
+        for say, want in (("Лира, смени образ", "next"), ("надень зимний", "winter"), ("верни обычный образ", ""),
+                          ("Смени облик.", "next"), ("верни обычный облик", "")):   # 21.11: владелец говорил «облик»
             out = pg.evaluate("async t => { const before = lookOf(personaBase()); const r = await quick(t); return [r && r.say, lookOf(personaBase()), before]; }", say)
             good = out[0] and (out[1] == want if want != "next" else out[1] != out[2])
             ok(good, f"«{say}» без модели: {out}")

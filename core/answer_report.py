@@ -69,6 +69,7 @@ class ReportMixin:
         fresh — только то, что случилось после прошлого отправленного отчёта (журнал, ошибки, задачи, ui.log): иначе
         давно исправленная ошибка тянется из отчёта в отчёт и мешает увидеть новую. Отметка — report_mark.json."""
         import platform
+        from datetime import timezone
         # в настройках скрываем всё, чьё имя похоже на секрет (ключи, заголовки и переменные окружения MCP-программ)
         # №311 (пакет 27.10): «max_tokens» в отчёте был «***» — числа и флаги вида *_tokens, keys_* не секрет
         # 0.82.1: и номера установки (cloud.dev — по нему сайт отдаёт прежний ключ) и пульса (report.dev)
@@ -81,7 +82,10 @@ class ReportMixin:
                 return [clean(v) for v in x]
             return x
         lines = [f"Dewiar {VERSION} — отчёт {datetime.now():%Y-%m-%d %H:%M}", f"Система: {OS_NAME}; Python {platform.python_version()}; "
-                 f"{platform.machine()}; ядер: {os.cpu_count()}", ""]
+                 f"{platform.machine()}; ядер: {os.cpu_count()}",
+                 # №937 (21.11: напоминание с Mac на 9:00 пришло на телефон на 6:00) — часовой пояс этого компьютера, как его
+                 # видит программа: по нему время напоминаний переводится в общее для всех устройств
+                 f"Часовой пояс: {datetime.now().astimezone():%Z (UTC%z)}; по UTC сейчас {datetime.now(timezone.utc):%H:%M}", ""]
         if note:
             lines += ["== Со слов человека", note, ""]
         lines += ["== Состояние", json.dumps(self.status, ensure_ascii=False, indent=1, default=str), ""]

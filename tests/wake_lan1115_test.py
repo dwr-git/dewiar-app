@@ -22,6 +22,7 @@ import httpx  # noqa: E402
 import net  # noqa: E402
 
 PUB, LAN = "https://dewiar-home.example/dwrapp/", "http://192.168.1.46:9099/dwrapp/"
+net.lan_seen = True                                   # домашний компьютер владельца (бывал дома у сервера)
 net.set_lan(PUB, LAN, "lid-1")
 net._lan["ok_until"], net._lan["bad_until"] = 0.0, time.time() + 170      # проверили при сне — «не дома» ещё 3 минуты
 net.wake_reset()

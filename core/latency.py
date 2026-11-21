@@ -7,7 +7,8 @@
 
 Отсюда этапы: распознавание (stt−end), подготовка (req−stt), модель (tok−req), первая фраза (say−tok), голос (audio−say)
 и итог (audio−end). 20.11 (разбор: облако отвечает первым байтом за 1,1 с, а первые слова у людей — через 6,7 с): ещё
-srv — сервер ответил хоть чем-то (req→ev), acts — сколько действий модель сделала до первых слов; в сводке — модель
+srv — сервер ответил хоть чем-то (req→ev); 21.11 — hdr (заголовки ответа) и line (первая строка потока): сеть и
+посредники отдельно от модели; acts — сколько действий модель сделала до первых слов; в сводке — модель
 отдельно для ответов без действий и с действиями. Ответ без модели (погода, радио, «который час») — без req/tok: только итог. Ход в журнал одной строкой,
 в пульс — медианы и 90-й процентиль за срок (только числа, без слов). Текстовые вопросы (набрали в чате) не меряются."""
 
@@ -68,6 +69,9 @@ class Latency:
                     rec[name] = round(c[b] - c[a], 2)
             if "req" in c and "ev" in c and c["ev"] >= c["req"]:
                 rec["srv"] = round(c["ev"] - c["req"], 2)
+            for k in ("hdr", "line"):                    # 21.11: заголовки ответа и первая строка потока — от запроса
+                if "req" in c and k in c and c[k] >= c["req"]:
+                    rec[k] = round(c[k] - c["req"], 2)
             if "model" in rec:
                 rec["acts"] = int(c.get("acts", 0))
             if how:
@@ -104,6 +108,10 @@ class Latency:
         srv = [x["srv"] for x in xs if "srv" in x]
         if srv:
             out["srv"] = _pct(srv, .5)
+        for k in ("hdr", "line"):
+            v = [x[k] for x in xs if k in x]
+            if v:
+                out[k] = _pct(v, .5)
         plain = [x["model"] for x in xs if "model" in x and not x.get("acts")]
         acts = [x["model"] for x in xs if "model" in x and x.get("acts")]
         if plain:
