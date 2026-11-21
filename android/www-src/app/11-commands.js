@@ -77,8 +77,8 @@ function lookQuick(t) {
   const m = LOOK_RX.exec(t), p = personaBase(); if (!m || !(p.looks || []).length) return null;
   if (m[1]) setLook("next"); else if (m[2]) setLook(undefined, true); else if (m[3]) setLook("");
   else { const w = m[4].slice(0, 3), hit = p.looks.find(x => x.name.toLowerCase().replace(/ё/g, LAT_LOOK.e).slice(0, 3) === w); if (!hit) return null; setLook(hit.id); }
-  const cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
-  return { say: auto ? `Хорошо, образ буду выбирать сама — по времени дня. Сегодня — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
+  const cur = lookOf(p), auto = lookIsAuto(p);
+  return { say: auto ? `Хорошо, образ буду выбирать сама — каждый час новый. Сейчас — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
 }
 async function quick(text) {
   { const bq = await bugQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (bq) return bq; }

@@ -141,7 +141,15 @@ async function handsTool(name, a) {
     if (!id && !a.text) return "Ошибка: укажи id элемента из phone_screen или text — надпись на экране.";
     return handsAfter(id ? D.handsTap(id, !!a.long) : D.handsTapText(String(a.text)));
   }
-  if (name === "phone_type") return handsAfter(D.handsType(Math.round(+a.id || 0), String(a.text || ""), !!a.submit));
+  if (name === "phone_type") {
+    // «Каркас хода» (отзыв из группы 21.11: «открывает телегу, находит контакт, но не пишет текст в поле», а Лира: «Написала,
+    // готово»): ввод проверяем по экрану — текста в поле нет, значит, не сделано, и модель узнаёт это из результата
+    const txt = String(a.text || ""), res = await handsAfter(D.handsType(Math.round(+a.id || 0), txt, !!a.submit));
+    if (a.submit || !txt.trim() || /^Ошибка|^Пароли/.test(res) || !res.includes("Теперь на экране:")) return res;
+    const norm = (x) => String(x).toLowerCase().replace(/\s+/g, " ").trim(), want = norm(txt).slice(0, 24);
+    return norm(res.split("Теперь на экране:")[1] || "").includes(want) ? res
+      : "Ошибка: текст в поле не появился — на экране его нет. Не говори, что написала: попробуй другое поле (phone_screen) или честно скажи, что не вышло.\n\n" + res;
+  }
   if (name === "phone_scroll") return handsAfter(D.handsScroll(Math.round(+a.id || 0), a.dir === "up" ? "up" : "down"));
   if (name === "phone_nav") {
     if (a.action === "dewiar") { D.toFront(); return "Dewiar снова на экране."; }

@@ -216,6 +216,15 @@ def _short(v, n=400):
     return s[:n] + ("…" if len(s) > n else "")
 
 
+_on_finish = []
+
+
+def on_finish(cb):
+    """Подписка на итог хода (рентген целиком): замер качества по «где думает» (health.qual_note) и др."""
+    if cb not in _on_finish:
+        _on_finish.append(cb)
+
+
 def finish(xr=None):
     """Ход окончен: проверки — из журнала («✋»), запись на диск, поток отвязан."""
     xr = xr or current()
@@ -231,6 +240,11 @@ def finish(xr=None):
     with _lock:
         _mem.append(rec)
         _save(rec)
+    for cb in list(_on_finish):
+        try:
+            cb(rec)
+        except Exception:  # noqa: BLE001
+            log.debug("рентген: подписчик", exc_info=True)
     if getattr(_tl, "xr", None) is xr:
         _tl.xr = None
 

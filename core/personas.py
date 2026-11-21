@@ -618,16 +618,33 @@ NO_FACE = {"eva", "nika", "oskar"}
 
 
 def look_auto(looks, now=None):
-    """«Сама — по времени»: вечером — домашний (если есть), иначе образ дня по кругу — один и тот же весь день (не мелькает),
-    каждый день другой. Сезонных образов нет (владелец 21.11). "" — обычный облик."""
+    """«Сама — по времени дня» (владелец 21.11: «включена для всех по умолчанию, каждый час новый образ с минимальными
+    повторениями»): ночью (22–7) — домашний, если есть; днём — каждый час следующий из перемешанного круга всех образов
+    (и обычного облика): пока круг не пройден, образ не повторяется, и на стыке кругов — тоже. Порядок — из номера часа
+    (одинаково на компьютере и телефоне: android/www-src/app/05-talk.js lookAuto). "" — обычный облик."""
     import datetime as _dt
     now = now or _dt.datetime.now()
-    if now.hour >= 19 or now.hour < 6:
+    if now.hour >= 22 or now.hour < 7:
         home = [x["id"] for x in looks if "evening" in (x.get("when") or [])]
         if home:
             return home[0]
     pool = [""] + [x["id"] for x in looks if not x.get("when")]
-    return pool[now.toordinal() % len(pool)]
+    n = len(pool)
+    cycle, i = divmod(now.toordinal() * 24 + now.hour, n)
+    order, prev = _shuffle(n, cycle), _shuffle(n, cycle - 1)
+    if n > 1 and order[0] == prev[-1]:                  # стык кругов: тот же образ два часа подряд — нет
+        order[0], order[1] = order[1], order[0]
+    return pool[order[i]]
+
+
+def _shuffle(n, seed):
+    """Перемешать 0..n-1 по номеру круга — простой генератор (тот же в app.js lookShuffle), чтобы совпадало везде."""
+    x, out = (seed * 2654435761 + 12345) % 2147483648, list(range(n))
+    for j in range(n - 1, 0, -1):
+        x = (x * 1103515245 + 12345) % 2147483648
+        k = x % (j + 1)
+        out[j], out[k] = out[k], out[j]
+    return out
 
 
 def _thumb(path, box=(.17, .08, .83, .74)):
@@ -778,7 +795,7 @@ class Personas:
         if not looks:
             return ""
         pref = pref if pref is not None else ((self.look_pref() or {}).get(p["id"]) or {})
-        if pref.get("auto"):
+        if pref.get("auto", "look" not in pref):          # 21.11: «Сама» — по умолчанию у всех, пока человек не выбрал сам
             return look_auto(looks)
         return pref.get("look") if pref.get("look") in {x["id"] for x in looks} else ""
 
@@ -798,7 +815,7 @@ class Personas:
             if looks:                                 # образы: живое лицо и портрет — выбранного (или «Сама»)
                 pref = (self.look_pref() or {}).get(p["id"]) or {}
                 cur = self.look_now(p, pref)
-                q["looks"], q["look"], q["look_auto"] = looks, cur, bool(pref.get("auto"))
+                q["looks"], q["look"], q["look_auto"] = looks, cur, bool(pref.get("auto", "look" not in pref))
                 if cur:
                     q["live"] = f"{p['live']}-{cur}"
                     q["avatar_url"] = self.avatar_data_url({"id": q["live"]})

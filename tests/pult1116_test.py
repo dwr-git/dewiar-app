@@ -164,6 +164,8 @@ with sync_playwright() as p:
     ok("Подняла заметку «Рецепт торта»" in steps and "Смотрю календарь" in steps and "из памяти" in steps, f"шаги — настоящие: {steps!r}")
     ok(pg.evaluate("document.querySelectorAll('#pu-sky .pu-sweep').length") == 1 and not pg.is_visible("#pu-center"),
        "думает: по кругу бежит свет, в центре — вопрос вместо часов")
+    rq = pg.evaluate("(() => { const q = document.getElementById('pu-q'), r = q.getBoundingClientRect(), cs = getComputedStyle(q); return [Math.round(r.width), Math.round(r.height), cs.borderTopLeftRadius]; })()")
+    ok(abs(rq[0] - rq[1]) <= 2 and rq[2] == "50%", f"владелец 21.11 «квадрат в круге»: вопрос — в круглой линзе посреди циферблата: {rq}")
     shot(pg, "think")
     pg.evaluate('core.emit("tool", { name: "calendar", title: "Нашла в календаре", status: "done" }); core.emit("state", { state: "speaking" })'); pg.wait_for_timeout(200)
     ok("Нашла в календаре" in pg.inner_text("#pu-steps") and "Смотрю календарь" not in pg.inner_text("#pu-steps"), "шаг обновился на месте, а не продублировался")

@@ -116,6 +116,7 @@ function xrDetail(r, k) {
   if (k === "model") {
     if (!m) return `<h3>Модель</h3><p class="xr-mute">Не понадобилась — ответила быстрая команда.</p>`;
     return `<h3>Кто думал</h3><dl class="xr-dl"><dt>Модель</dt><dd><code>${escH(m.model || "")}</code></dd><dt>Профиль</dt><dd>${escH(m.name || "")}</dd>`
+      + (m.served ? `<dt>Ответил</dt><dd>${escH(m.served)}</dd>` : "")   // облако Dewiar: кто ответил на самом деле (21.11)
       + `<dt>Где думает</dt><dd>${escH(XR_KIND[m.kind] || m.kind || "")}</dd><dt>Окно</dt><dd>${m.window ? xrTok(m.window) + " токенов" : "неизвестно"}</dd>`
       + (r.answer && r.answer.tokens ? `<dt>Токены</dt><dd>${Object.entries(r.answer.tokens).map(([a, b]) => `${a} ${xrTok(b)}`).join(", ")}</dd>` : "") + `</dl>` + xrLog(r, "model");
   }

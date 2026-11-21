@@ -464,7 +464,6 @@
                  stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity .15s, transform .2s; }
   #bubble.looks { cursor: pointer; } #bubble.looks .lkc { display: block; } #bubble.looks:hover .lkc, #bubble.lkopen .lkc { opacity: .6; }
   #bubble.lkopen .lkc { transform: rotate(180deg); }
-  #bubble .lkn { opacity: .55; font-weight: 500; }
   #looks { position: absolute; left: 14px; right: 14px; z-index: 22; padding: 12px 8px 10px; border-radius: 20px; background: #16161c;
            box-shadow: 0 18px 40px -12px rgba(0,0,0,.8); animation: tpop .16s ease-out; }
   #looks[hidden] { display: none; }
@@ -491,6 +490,9 @@
   body.neu #looks .lg img { box-shadow: 3px 3px 7px var(--neu-dark), -3px -3px 7px var(--neu-light); }
   body.neu #looks .lg button.cur img { box-shadow: 0 0 0 2px var(--glass), 0 0 0 3.5px var(--ink); }
   body.neu #looks .la { border-top-color: rgba(20,30,60,.08); } body.neu #looks .la input { background: var(--neu-dark); }
+  /* владелец 21.11: «переключатель активный и неактивный выглядит одинаково серо» — фон светлой и мягкой темы перебивал
+     :checked; включён — цветом акцента во всех темах */
+  #looks .la input:checked, body.light #looks .la input:checked, body.neu #looks .la input:checked { background: var(--accent, #8B8CF7); }
   body.kids #looks, body.kids #bubble .lkc { display: none !important; }
   #team { position: absolute; left: 12px; right: 12px; bottom: 58px; max-height: 236px; overflow-y: auto; z-index: 20; display: none;
           padding: 6px; border-radius: 18px; background: #16161c;
@@ -921,8 +923,8 @@ function setState(s) {
   else if (radioNow && (s === "idle" || s === "muted")) { say.innerHTML = ""; const b = document.createElement("b"); b.textContent = "♪ " + radioNow; say.appendChild(b); say.title = "Играет радио. «Пауза», «дальше», «выключи музыку»"; }
   else {
     say.innerHTML = ""; say.title = ""; const b = document.createElement("b"); b.textContent = current ? current.name : "Dewiar"; say.appendChild(b);
-    const ln = lookName(current);
-    if (ln) { const n = document.createElement("span"); n.className = "lkn"; n.textContent = "· " + ln; say.appendChild(n); }
+    // имя образа у имени не пишем (владелец 21.11: «надпись не нужна… дизайн становится сложным и грязным»); образ виден
+    // по лицу, а название — в кружках выбора (стрелка у имени)
     if (hasLooks()) { say.insertAdjacentHTML("beforeend", '<svg class="lkc" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>'); say.title = "Образ — нажмите, чтобы выбрать"; }
   }
   bub.classList.toggle("looks", hasLooks() && !LABEL[s] && !(REST.on && (s === "muted" || s === "idle")) && !radioNow);

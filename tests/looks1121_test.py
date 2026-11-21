@@ -59,8 +59,11 @@ ps = P.Personas()
 ps.look_pref = lambda: s.get("looks") or {}
 pub = {x["id"]: x for x in ps.public()}
 L = pub["lira"]
-ok([x["name"] for x in L["looks"]][:2] == ["Обычная", "Коса"] and L["look"] == "" and L["live"] == "lira",
-   f"Лира: образы с «Обычной» первой, по умолчанию — обычная: {[x['name'] for x in L['looks']]}")
+ok([x["name"] for x in L["looks"]][:2] == ["Обычная", "Коса"] and L["look_auto"] is True,
+   f"Лира: образы с «Обычной» первой; по умолчанию — «Сама — по времени дня» (владелец 21.11): {[x['name'] for x in L['looks']]}")
+s.update({"looks": {"lira": {"look": ""}}})
+L = {x["id"]: x for x in ps.public()}["lira"]
+ok(L["look"] == "" and L["live"] == "lira" and L["look_auto"] is False, "выбрала «Обычную» сама — обычная, без смены по часам")
 ok(L["looks"][0]["img"] == "assets/live/thumbs/lira.webp" and all(x["img"] == f"assets/live/thumbs/lira-{x['id']}.webp" for x in L["looks"][1:])
    and all((ROOT / "ui" / x["img"]).exists() for x in L["looks"])
    and len(json.dumps(L["looks"])) < 12000, f"кружки образов — ссылками на файлы окна, «hello» не тяжелеет ({len(json.dumps(L['looks'])) // 1024} КБ)")
@@ -71,12 +74,14 @@ ok(L["live"] == "lira-silk" and L["look"] == "silk" and L["avatar_url"].startswi
 s.update({"looks": {"lira": {"look": "нет-такого"}}})
 ok({x["id"]: x for x in ps.public()}["lira"]["live"] == "lira", "неизвестный образ — обычный облик, без ошибок")
 A = lambda m, d, h=12: P.look_auto(P.LOOKS["lira"], dt.datetime(2026, m, d, h))
-ok(A(7, 4, 21) == "home" and A(1, 2, 23) == "home", "«Сама»: вечером — домашний")
-days = {A(7, d) for d in range(1, 31)} | {A(1, d) for d in range(1, 31)}
-ok("home" not in days and len(days) >= 5, f"днём — образ дня по кругу, каждый день другой: {sorted(days)}")
+ok(A(7, 4, 23) == "home" and A(1, 2, 6) == "home" and A(7, 4, 21) != "home", "«Сама»: ночью (22–7) — домашний, вечером — ещё нет")
+seq = [A(11, d, h) for d in (20, 21, 22) for h in range(7, 22)]
+ok("home" not in seq and all(a != b for a, b in zip(seq, seq[1:])) and len(set(seq)) == len(P.LOOKS["lira"]),
+   f"днём — каждый час новый образ, подряд не повторяется, круг — все образы (владелец 21.11): {seq[:8]}")
+ok(len(set(A(11, 21, h) for h in range(7, 7 + len(P.LOOKS["lira"])))) >= len(P.LOOKS["lira"]) - 2, "за круг почти без повторов")
 ok({x["id"] for x in P.LOOKS["lira"]}.isdisjoint({"spring", "winter", "loose", "gamer"}) and not any(set(x.get("when") or []) - {"evening"} for x in P.LOOKS["lira"]),
    "владелец 21.11: «Весна», «Зима», «Волны», «Геймер» убраны, выбора по сезону нет")
-ok(A(3, 10) == A(3, 10, 15), "в течение дня образ не мелькает")
+ok(A(3, 10, 15) == P.look_auto(P.LOOKS["lira"], dt.datetime(2026, 3, 10, 15, 59)), "в течение часа образ не мелькает")
 
 # голосом и командой
 for t, want in (("Лира, смени образ", "next"), ("надень локоны", "name"), ("образ «Шёлк»", "name"), ("выбирай образ сама", "auto"),
@@ -149,6 +154,9 @@ with sync_playwright() as p:
     ok(n == len(P.LOOKS["lira"]) + 1, f"нажали на имя — кружки образов под ним: {n}")
     top = pg.evaluate("() => [document.getElementById('looks').getBoundingClientRect().top, document.getElementById('bubble').getBoundingClientRect().bottom]")
     ok(top[0] >= top[1] + 6, f"кружки не примыкают к имени: {top}")
+    bg = lambda on: pg.evaluate("on => { const i = document.getElementById('looks-auto'); i.style.transition = 'none'; const was = i.checked; i.checked = on; "   # noqa: E731
+                                "const c = getComputedStyle(i).backgroundColor; i.checked = was; return c; }", on)
+    ok(bg(True) != bg(False), f"владелец 21.11 «переключатель вкл. и выкл. одинаково серый»: включён — другим цветом: {bg(True)} / {bg(False)}")
     pg.click("#looks-g button:nth-child(2)"); pg.wait_for_timeout(100)
     ok(pg.evaluate("CALLS.filter(c => c[0] === 'persona_look').slice(-1)[0]") == ["persona_look", {"id": "lira", "look": "braid"}], f"выбор образа — в ядро: {pg.evaluate('CALLS.slice(-1)[0]')}")
     pg.click("#looks .la"); pg.wait_for_timeout(100)
@@ -156,8 +164,8 @@ with sync_playwright() as p:
        "«Сама — по времени дня» — в ядро (фоновые вызовы окна, например complaints, не в счёт)")
     s.update({"looks": {"lira": {"look": "braid"}}})
     pg.evaluate("ps => core.emit('personas', { personas: ps })", ps.public()); pg.wait_for_timeout(200)
-    ok(pg.evaluate("document.querySelector('#looks-g button.cur span').textContent") == "Коса" and "Коса" in pg.evaluate("document.getElementById('say').textContent"),
-       "выбранный образ отмечен и назван у имени")
+    ok(pg.evaluate("document.querySelector('#looks-g button.cur span').textContent") == "Коса" and "Коса" not in pg.evaluate("document.getElementById('say').textContent"),
+       "выбранный образ отмечен в кружках, а у имени не подписан (владелец 21.11: «надпись не нужна»)")
     pg.mouse.click(150, 40); pg.wait_for_timeout(100)
     ok(pg.evaluate("document.getElementById('looks').hidden"), "щелчок мимо — кружки прячутся")
     # 21.11 (владелец: «как менять облик вручную я не понял»): и в меню персонажа — строка «Образ»

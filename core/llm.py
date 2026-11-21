@@ -26,6 +26,23 @@ import time
 
 import httpx
 
+_SERVED = threading.local()          # кто ответил на последний запрос в этом потоке (облако Dewiar: X-Dewiar-Server / -Model)
+
+
+def last_served():
+    """-> {"srv": "main"|"lite"|"w3"|"n…", "model": "…"} последнего ответа облака Dewiar в этом потоке или None."""
+    return getattr(_SERVED, "v", None)
+
+
+def served_label(sv):
+    """Кто ответил — для людей: «лёгкий мозг (qwen3-4b)», «основной мозг (…)», «сервер «Мощностей» (…)», «узел «Сети Лиры»»."""
+    if not sv or not sv.get("srv"):
+        return ""
+    srv = sv["srv"]
+    who = ("основной мозг" if srv == "main" else "лёгкий мозг" if srv == "lite" else "узел «Сети Лиры»" if srv.startswith("n")
+           else "сервер «Мощностей»" if srv.startswith("w") else srv)
+    return who + (f" ({sv['model']})" if sv.get("model") else "")
+
 from settings import LLM_PRESETS
 
 # разбор и подготовка разложены по модулям (чистое ядро, 1.0.15 — docs/CORE_PLAN.md): общее — llm_base, ответ модели как текст — llm_text,
@@ -857,6 +874,10 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                         yield from stream_events(p, system, messages, cancel, tools, _retry)
                         return
                 r.raise_for_status()
+            # кто ответил на самом деле (владелец 21.11: «через Лиру ответы как у 4B»): облако Dewiar называет сервер
+            # (main / lite / w<номер> / n<узел>) и модель — к «Подробностям» и «Рентгену»; другие серверы — ничего
+            _SERVED.v = ({"srv": str(r.headers.get("x-dewiar-server") or ""), "model": str(r.headers.get("x-dewiar-model") or "")[:80]}
+                         if r.headers.get("x-dewiar-server") else None)
             if str(r.headers.get("x-dewiar-server") or "").startswith("n"):
                 col.net = True                                   # ответил узел «Сети Лиры» (не потоком — по заголовку)
             if st is not None:

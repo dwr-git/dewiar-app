@@ -352,6 +352,9 @@ section.wide > .lead { max-width: 860px; }
 .wtile.easy:hover { background: rgba(139,140,247,.21); }
 .wtile.easy.cur { background: rgba(139,140,247,.27); }
 .wtile.easy svg { background: var(--brand); }
+/* владелец 21.11: «чёрный глобус в тёмно-синей иконке — некрасиво»: светлые темы красят значки плиток цветом текста —
+   на цветной подложке «простого пути» значок всегда белый */
+html .wtile.easy svg, html.st-light .wtile.easy svg, html.st-neu .wtile.easy svg { stroke: #fff; }
 .wtile b { font-size: 14.5px; line-height: 1.3; } .wtile span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
 .sclist { margin-top: 12px; display: grid; gap: 6px; } .sclist:empty { display: none; }
 .scit { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.05); }
@@ -5322,3 +5325,8 @@ html.st-light .xr-det code, html.st-neu .xr-det code { background: rgba(20,30,60
 @media (max-width: 640px) { .xr-map { grid-template-columns: 1fr; padding: 12px 16px; } .xr-n { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 10px; }
   .xr-i { margin: 0; } .xr-n small { flex-basis: 100%; } .xr-card header { padding-left: 18px; } .xr-det { padding: 6px 16px 24px; } }
 @media (prefers-reduced-motion: reduce) { #xr-ov.on { animation: none; } .xr-n { transition: none; } }
+
+/* «Через прокси» в подключении по ключу (21.11): тихая строка под подсказкой, раскрывается полем */
+.ck-px { margin-top: 6px; } .ck-px summary { cursor: pointer; font-size: 12.5px; color: var(--muted); list-style: none; width: fit-content; }
+.ck-px summary::-webkit-details-marker { display: none; } .ck-px summary::before { content: "+ "; } .ck-px[open] summary::before { content: "− "; }
+.ck-px summary:hover { color: var(--ink); }

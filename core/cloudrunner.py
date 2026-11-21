@@ -134,6 +134,25 @@ class ExamJob(threading.Thread):
         self.home = DIR / "_exam"
         self.where = {}
 
+    def progress(self, line):
+        """Строка exam.py -> ход в кабинет (self.where); True — сценарий сменился. «Стенд гипотез»: прогонов repeat × (до,
+        после), в каждом счёт сценариев с 1. Владелец 21.11: «экзамен ходит по кругу, завершается и снова начинается» — полоса
+        и «Сценарий 2 из 8» начинались заново. Счёт — сквозной по всем прогонам, в названии — какой прогон."""
+        j = self.job
+        two = 2 if j.get("sets") else 1
+        passes = int(j.get("repeat") or 1) * two
+        mp = re.match(r"^=== Прогон (\d+)/(\d+) · (до|после) ===$", line)
+        if mp:
+            self._pno = (int(mp[1]) - 1) * two + (2 if mp[3] == "после" and two == 2 else 1)
+            self._plabel = f"Прогон {self._pno} из {passes} ({mp[3]}): " if passes > 1 else ""
+            return False
+        m = re.match(r"^\[(\d+)/(\d+)\] (.+)$", line)
+        if not m:
+            return False
+        i, n, pno = int(m[1]), int(m[2]), getattr(self, "_pno", 1)
+        self.where = {"i": (pno - 1) * n + i, "n": passes * n, "title": (getattr(self, "_plabel", "") + m[3])[:160]}
+        return True
+
     def post(self, state, **kw):
         if state in ("preparing", "running"):
             self.state = state
@@ -322,9 +341,7 @@ class ExamJob(threading.Thread):
         for line in self.proc.stdout:
             line = line.rstrip()
             tail = (tail + [line])[-40:]
-            m = re.match(r"^\[(\d+)/(\d+)\] (.+)$", line)
-            if m:
-                self.where = {"i": int(m[1]), "n": int(m[2]), "title": m[3][:160]}
+            if self.progress(line):
                 self.post("running")
         code = self.proc.wait()
         self.done.set()

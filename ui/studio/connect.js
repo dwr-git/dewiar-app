@@ -349,6 +349,7 @@ $("#ck-go").onclick = async (ev) => {
   if (!key) { r.className = "res bad"; r.textContent = "Вставьте ключ API"; return; }
   btn.disabled = true; r.className = "res"; r.textContent = "проверяю ключ…"; $("#ck-found").style.display = "none";
   const prof = Object.assign({ api_key: key, model: "" }, ckPreset(prov)); delete prof.models; delete prof.preset;
+  const px = ($("#ck-proxy") && $("#ck-proxy").value || "").trim(); if (px) prof.proxy = px;   // свой прокси сервиса (21.11)
   if (!prof.base_url) {        // список сервисов приходит от ядра с «hello» — студия открылась раньше (пакет 22.10: KeyError 'base_url')
     btn.disabled = false; r.className = "res bad"; r.textContent = "Студия ещё не на связи с ядром — подождите секунду и нажмите снова"; return;
   }

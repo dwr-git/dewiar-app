@@ -36,6 +36,8 @@ const chNum = (v) => Number(v).toLocaleString("ru-RU");
 function chatMeta(s) {
   const m = s.meta || {}, p = chatWho(s.who), rows = [];
   if (m.model) rows.push(["Модель", `<span class="ch-mono">${escH(m.model)}</span>`]);
+  // владелец 21.11 («через Лиру — как у 4B»): у облака профиль один, а отвечать может лёгкий мозг — кто ответил на самом деле
+  if (m.brain) rows.push(["Ответил", escH(m.brain)]);
   if (m.first != null) rows.push(["Первое слово", `через ${chSec(m.first)}`]);
   if (m.total != null) {
     const k = m.first != null && m.total > 0 ? Math.max(4, Math.min(96, m.first / m.total * 100)) : 0;

@@ -428,11 +428,15 @@
   .pu-tip .pu-k.remind, .pu-tip .pu-k.job { color: var(--pu-mem); }
   .pu-tip small { display: block; margin-top: 2px; color: var(--muted); }
   @keyframes pu-spin { to { transform: rotate(360deg); } }
-  .pu-q { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); width: min(calc(100% - 32px), calc(var(--pu-r, 140px) * 1.7), 380px); padding: 14px 16px 12px; border-radius: 18px;
-          background: var(--paper); box-shadow: 0 16px 36px var(--pu-glow), var(--pu-lift); animation: pu-rise .45s cubic-bezier(.2,.8,.2,1) both; z-index: 1; }
-  #pu-qt { font: 600 15px/1.42 "Manrope", sans-serif; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  #pu-steps { list-style: none; display: flex; flex-direction: column; gap: 3px; margin-top: 9px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
-  #pu-steps li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  /* владелец 21.11: «квадрат в круге — не очень эстетично»: вопрос — в круглой линзе посреди циферблата, по центру */
+  .pu-q { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); --d: min(calc(100% - 32px), calc(var(--pu-r, 140px) * 1.56));
+          width: var(--d); aspect-ratio: 1; border-radius: 50%; padding: 0 calc(var(--d) * .14); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+          background: radial-gradient(circle at 50% 30%, var(--paper) 55%, color-mix(in srgb, var(--paper) 88%, var(--pu-think))); box-shadow: 0 16px 36px var(--pu-glow), var(--pu-lift);
+          animation: pu-rise .45s cubic-bezier(.2,.8,.2,1) both; z-index: 1; }
+  #pu-qt { font: 600 14.5px/1.38 "Manrope", sans-serif; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; }
+  #pu-steps { list-style: none; display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 10px; max-width: 100%; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  #pu-steps li { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pu-steps li i { display: inline-block; vertical-align: .1em; margin-right: 7px; }
   #pu-steps li i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pu-think); }
   #pu-steps li.ok i { background: var(--pu-think); opacity: .55; }
   #pu-steps li.mem i { background: var(--pu-mem); opacity: 1; }

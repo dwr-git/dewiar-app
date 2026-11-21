@@ -64,6 +64,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             from settings import STATE_DIR
             xray.setup(STATE_DIR, on=self.s.get("llm", "xray") is not False)
             xray.instrument(self)                          # быстрые команды — путь хода в «Рентгене»
+            xray.on_finish(self.qual_note)                 # шаг 4 «Качества»: замер по «где думает» — в пульс
         except Exception:  # noqa: BLE001
             logging.getLogger("dewiar").debug("рентген", exc_info=True)
         personas.look_pref = lambda: self.s.get("looks") or {}      # образы: выбор человека — в настройках
@@ -363,6 +364,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self._key_gone_lock = threading.Lock()     # ключ dw- удалён — на аккаунт переходим один раз
         import net
         net.bind(self._net_conf)
+        net.bind_hosts(self._host_px_conf)          # свой прокси у профиля модели (21.11)
         # запасной путь сработал (dewiar.pro напрямую не открылся) — сказать один раз, в чат: что случилось и что делать
         net.on_reserve = lambda h: self.chat.notify(
             f"{h} сейчас не открывается напрямую — похоже, его не пускает провайдер или сеть. Я перешёл на запасной путь "
@@ -464,6 +466,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self._diary_loop, name="diary", daemon=True).start()
         threading.Thread(target=self._pay_loop, name="payments", daemon=True).start()
         threading.Thread(target=self._welcome_loop, name="welcome", daemon=True).start()
+        threading.Thread(target=self._look_loop, name="looks", daemon=True).start()     # «Сама — по времени дня»: образ раз в час
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()
         threading.Thread(target=lambda: self.stopping.wait(20) or self.mailing.resume(), name="mailing-resume", daemon=True).start()
@@ -485,6 +488,20 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             self.sites.start()                                      # заявки с опубликованных сайтов — раз в 2 минуты
         if (self.s.get("sshlink") or {}).get("on"):
             self.sshlink.start()                                    # домен не отвечает — к сайту через SSH-туннель
+
+    def _look_loop(self):
+        """Образы (владелец 21.11: «каждый час новый образ»): сменился час — окна получают персонажей заново, у кого «Сама»
+        (по умолчанию у всех, пока человек не выбрал образ сам), — новое лицо без перезапуска."""
+        last = None
+        while not self.stopping.wait(60):
+            try:
+                pub = self.personas.public()
+                key = tuple((p.get("id"), p.get("look")) for p in pub if p.get("looks"))
+                if last is not None and key != last:
+                    self.emit("personas", personas=pub)
+                last = key
+            except Exception:  # noqa: BLE001
+                log.debug("образы: смена по часу", exc_info=True)
 
     def _writing_loop(self):
         """«Пишу»: раз в 10 минут пересчитать прирост слов в своих текстах (дёшево: только изменившиеся файлы)."""

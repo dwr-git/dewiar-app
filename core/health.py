@@ -312,6 +312,27 @@ class HealthMixin:
         if what == "turns" and hasattr(self, "first_mark"):
             self.first_mark("answer")
 
+    def qual_note(self, rec):
+        """Шаг 4 плана «Качество» (21.11): качество ответа модели по «где думает» — ходов, сколько поправили проверки ответа
+        («✋»: сказала, что сделала, а нет; пообещала; выдумала…), сколько вышли пустыми. Из рентгена хода (xray.on_finish).
+        Только числа: {kind: [ходов, поправлено, пусто]}."""
+        try:
+            if (rec.get("route") or {}).get("kind") != "model" or rec.get("cancelled") or self._health_lock is None:
+                return
+            kind = str((rec.get("model") or {}).get("kind") or "?")[:12]
+            srv = str((rec.get("model") or {}).get("srv") or "")
+            if srv:                                    # облако Dewiar: кто ответил — основной, лёгкий, сервер «Мощностей» (21.11)
+                kind = f"{kind}_{srv}"[:24]
+            ans = (rec.get("answer") or {}).get("text") or ""
+            with self._health_lock:
+                q = self._h.setdefault("qual", {})
+                v = q.setdefault(kind, [0, 0, 0])
+                v[0] += 1
+                v[1] += 1 if rec.get("checks") else 0
+                v[2] += 0 if ans.strip() else 1
+        except Exception:  # noqa: BLE001
+            log.debug("качество по мозгам", exc_info=True)
+
     def health_cache(self, u, prof=None):
         """«Голос без пауз» (04.11): запрос к модели — сколько токенов в подсказке и сколько сервер взял из кэша начала
         запроса (llm.last_usage). Для пульса — суммы: n — запросов с подсчётом, k — из них сервер сказал про кэш, ptok и
@@ -467,7 +488,8 @@ class HealthMixin:
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
                 "problems": [{"sig": k, "text": mask_personal(v["text"]), "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
                 "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}, "first": h.get("first") or {},
-                "misses": {k[5:]: v for k, v in h.items() if k.startswith("miss_") and isinstance(v, int)}}   # «Ум Лиры», шаг 3: замер
+                "misses": {k[5:]: v for k, v in h.items() if k.startswith("miss_") and isinstance(v, int)},   # «Ум Лиры», шаг 3: замер
+                "qual": h.get("qual") or {}}                     # «Качество», шаг 4: по «где думает» [ходов, поправлено, пусто]
 
     def _lat_how(self):
         """Чем думает ассистент — для разбивки задержки голоса (dewiar, local, cloud…)."""
@@ -531,6 +553,12 @@ class HealthMixin:
                     pr[sig]["n"] -= n
                     if pr[sig]["n"] <= 0:
                         del pr[sig]
+            q = self._h.get("qual") or {}
+            for kind, v in (body.get("qual") or {}).items():           # качество по мозгам — вычесть отправленное
+                if kind in q:
+                    q[kind] = [max(0, int(q[kind][i]) - int(v[i])) for i in range(3)]
+                    if not q[kind][0]:
+                        del q[kind]
             self._h["starts"] = (self._h.get("starts") or [])[len(body["starts"]):]
             st = getattr(self, "_h_start", None) or {}
             if body.get("first") and time.time() - st.get("ts", 0) > 600:

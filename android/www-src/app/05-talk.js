@@ -201,17 +201,28 @@ if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try {
 const personaBase = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
 /* Образы (1.0.55, как на компьютере): тот же персонаж — другие причёска и наряд. Выбор — S.looks {id: {look, auto}};
    живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени» — lookAuto (то же правило, что core/personas.py). */
+function lookShuffle(n, seed) {      // как core/personas._shuffle — один порядок на компьютере и телефоне
+  let x = ((seed * 2654435761 + 12345) % 2147483648 + 2147483648) % 2147483648; const out = [...Array(n).keys()];
+  for (let j = n - 1; j > 0; j--) { x = Number((BigInt(x) * 1103515245n + 12345n) % 2147483648n); const k = x % (j + 1); [out[j], out[k]] = [out[k], out[j]]; }
+  return out;
+}
 function lookAuto(looks, now = new Date()) {
   const h = now.getHours();
-  if (h >= 19 || h < 6) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
+  if (h >= 22 || h < 7) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
   const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + 719163;   // как date.toordinal() в Python
-  const pool = [""].concat(looks.filter(x => !(x.when || []).length).map(x => x.id));   // сезонных нет (владелец 21.11)
-  return pool[day % pool.length];
+  const pool = [""].concat(looks.filter(x => !(x.when || []).length).map(x => x.id)), n = pool.length;
+  const hn = day * 24 + h, cycle = Math.floor(hn / n), i = hn % n;     // 21.11: каждый час — следующий из перемешанного круга
+  const order = lookShuffle(n, cycle), prev = lookShuffle(n, cycle - 1);
+  if (n > 1 && order[0] === prev[n - 1]) [order[0], order[1]] = [order[1], order[0]];
+  return pool[order[i]];
 }
+let lookHour = -1;          // «Сама — по времени дня»: сменился час — новое лицо без перезапуска (владелец 21.11)
+setInterval(() => { const h = new Date().getHours(); if (lookHour !== -1 && h !== lookHour && typeof applyPersona === "function") { try { applyPersona(); } catch (e) { } } lookHour = h; }, 60000);
+function lookIsAuto(p) { const pr = (S.looks || {})[p.id] || {}; return pr.auto !== undefined ? !!pr.auto : !("look" in pr); }
 function lookOf(p) {
   if (!p || !(p.looks || []).length || p.kids) return "";
   const pr = (S.looks || {})[p.id] || {};
-  if (pr.auto) return lookAuto(p.looks);
+  if (lookIsAuto(p)) return lookAuto(p.looks);       // 21.11: «Сама» — по умолчанию у всех, пока человек не выбрал сам
   return p.looks.some(x => x.id === pr.look) ? pr.look : "";
 }
 function persona() {

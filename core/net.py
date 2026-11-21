@@ -532,6 +532,47 @@ class _DirectFirst(httpx.BaseTransport):
         self.lazy.close()
 
 
+_host_px = {"provider": None}
+
+
+def bind_hosts(provider):
+    """provider() -> {имя сервера: прокси} — свой прокси у профиля модели (владелец 21.11: «сервер стоит в стране, где
+    запросы к модели заблокированы… возможность ставить свой прокси»). Только к этим адресам; остальное — как было."""
+    _host_px["provider"] = provider
+
+
+def _host_proxies():
+    out = {}
+    f = _host_px.get("provider")
+    if f:
+        try:
+            out = {h: px for h, px in dict(f() or {}).items() if h and px}
+        except Exception:  # noqa: BLE001
+            log.debug("net: прокси профилей не прочитались", exc_info=True)
+    out.update(getattr(_tl, "host_px", None) or {})
+    return out
+
+
+class profile_proxy:
+    """with net.profile_proxy(профиль): запросы этого потока к серверу профиля — через его прокси, ещё до сохранения
+    (студия: «Подключить» по ключу через прокси — список моделей и проверка). Нет прокси — ничего не меняет;
+    прокси не разобран — NetError с понятным текстом."""
+
+    def __init__(self, prof):
+        px = str((prof or {}).get("proxy") or "").strip()
+        h = host_of((prof or {}).get("base_url") or "")
+        self.map = {h: normalize_proxy(px)} if px and h else {}
+
+    def __enter__(self):
+        self.prev = getattr(_tl, "host_px", None)
+        _tl.host_px = {**(self.prev or {}), **self.map}
+        return self
+
+    def __exit__(self, *exc):
+        _tl.host_px = self.prev
+        return False
+
+
 def _patched_init(self, *a, **kw):
     """Замена httpx.Client.__init__: адреса Dewiar (и их поддомены) — через прокси.
     mounts, переданные вызывающим явно, важнее наших."""
@@ -543,6 +584,8 @@ def _patched_init(self, *a, **kw):
         for h in hosts:
             m[f"all://{h}"] = t
             m[f"all://*.{h}"] = t
+    for h, hp in (_host_proxies().items() if not off else ()):      # свой прокси у профиля модели — к его серверу
+        m[f"all://{h}"] = _Lazy(hp, kw.get("verify", True), kw.get("cert"))
     lh = host_of(_lan["public"] if _lan["base"] else _ssh["public"]) if (_lan["base"] or _ssh["base"]) and not off else ""
     if lh:                                            # дома — к папке сайта напрямую (остальное — как выше)
         inner = m.get(f"all://{lh}") or _Plain(kw.get("verify", True), kw.get("cert"), kw.get("trust_env", True))

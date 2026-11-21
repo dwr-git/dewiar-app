@@ -137,13 +137,13 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
       if (!hold) { emitT(held + out); held = ""; } else held += out;
     }
   };
-  let srv = "";                             // какой сервер облака отвечал (строка-комментарий «: dewiar-server …», 0.81)
+  let srv = "", srvModel = "";              // какой сервер облака отвечал и какая модель (21.11) (строка-комментарий «: dewiar-server …», 0.81)
   let netHeld = "";                         // ответ узла «Сети Лиры» — придерживаем целиком, решаем в конце (NET_SUSPECT_RX)
   const emitT = (t) => { if (/^n\d/.test(srv)) netHeld += t; else if (onText) onText(t); };
   const line = (l) => {
     l = l.trim(); if (!l) return;
     if (!tFirst) tFirst = Date.now();
-    if (!ollama && l.startsWith(":")) { const m = /^:\s*dewiar-server\s+(\S+)/.exec(l); if (m) srv = m[1]; return; }   // и «: keepalive» — поток жив
+    if (!ollama && l.startsWith(":")) { const m = /^:\s*dewiar-server\s+(\S+)(?:\s+(\S+))?/.exec(l); if (m) { srv = m[1]; srvModel = m[2] || ""; } return; }   // и «: keepalive» — поток жив
     if (!ollama) { if (!l.startsWith("data:")) return; l = l.slice(5).trim(); if (l === "[DONE]") return; }
     let o; try { o = JSON.parse(l); } catch (e) { return; }
     if (o.error) throw new Error(typeof o.error === "string" ? o.error : (o.error.message || "ошибка модели"));
@@ -239,7 +239,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
       throw Object.assign(new Error(`${brainName()}: сервис не знает модель «${model}» (${clip(err.message, 100)}). Проверьте имя модели: Настройки → Мозг.`), { human: true });
     const again = retryRejected(err.message); if (again) return again;
   }
-  if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
+  if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}${srvModel ? " (" + srvModel + ")" : ""}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
   if (usage && usage.prompt) { plog("info", usageLine(usage, ((tFirst || Date.now()) - tAsk) / 1000)); hCache(usage); }
   if (err) throw err;
   if (inTool && tcBuf.trim()) tcRaw.push(tcBuf);

@@ -80,6 +80,7 @@ async def session():
         R["remind"] = await ask("напомни проверить чайник")
         R["hello"] = await ask("расскажи что-нибудь интересное")
         R["list"] = await call("xray_list")
+        R["chat"] = await call("chat_list", limit=20)
         for k in ("clock", "remind", "hello"):
             a = R[k]
             xid = ((a or {}).get("meta") or {}).get("xray")
@@ -98,6 +99,10 @@ async def session():
 try:
     asyncio.run(session())
     res = lambda k: ((R.get(k) or {}).get("data") or {})        # noqa: E731
+    items = ((R.get("chat") or {}).get("data") or {}).get("items") or []
+    mine = [x for x in items if x.get("role") == "assistant"]
+    ok(mine and all((x.get("meta") or {}).get("xray") for x in mine),
+       f"владелец 21.11 «рентгена нигде не вижу»: в ленте «Чата» у каждого ответа номер рентгена (кнопка): {[x.get('meta') for x in mine]}")
     c = res("clock_x")
     ok(c.get("route", {}).get("kind") == "cmd" and c["route"].get("label") == "Часы и дата",
        f"быстрая команда без модели — путь назван: {c.get('route')}")

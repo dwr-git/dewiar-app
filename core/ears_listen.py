@@ -145,6 +145,12 @@ class ListenMixin:
                         # виджета и сигнала. Цена — доля секунды до «слушаю».
                         log.info("🎤 «%s»? Проверю точной моделью%s", phrase, " — вокруг разговор" if self._noisy() else "")
                         self.vosk_wake_check, self._vosk_wake_word = (self.utt_id if in_speech else self.utt_id + 1), phrase
+                        if not self._noisy():
+                            # владелец 21.11: «говорю „Лира“ — команда проваливается в тишину… как у умных колонок, звук сразу
+                            # после имени, а сверка пусть идёт после». Сигнал «слушаю» — на паузе после имени, как без
+                            # проверки; подтвердится — второй раз не звучит (listen_for_command), не подтвердится — молча.
+                            # Вокруг разговор — без сигнала: там быстрый слух ошибается чаще
+                            self._wake_tone_due, self._wake_soft = now, True
                         continue
                     self.emit("wake", phrase=phrase)
                     if self.state in ("speaking", "thinking") and barge != "off":
@@ -195,8 +201,10 @@ class ListenMixin:
             due = getattr(self, "_wake_tone_due", 0.0)
             if due and ((not in_speech and p < 0.5) or silence >= 8 or now - due > 6):
                 self._wake_tone_due = 0.0                      # после имени замолчали — теперь «слушаю»
-                if self.state in ("listening", "thinking") and now - due <= 6:
+                soft, self._wake_soft = getattr(self, "_wake_soft", False), False
+                if (self.state in ("listening", "thinking") or (soft and self.vosk_wake_check >= 0)) and now - due <= 6:
                     self.play_tone("wake")
+                    self._wake_tone_at = now                   # на само имя уже прозвучало — после сверки не повторять
             a = np.frombuffer(frame, dtype=np.int16).astype(np.float32)
             rms = float(np.sqrt(np.mean(a * a)))
             if self.state == "listening":                  # для журнала: насколько громко было, пока ждали вопрос

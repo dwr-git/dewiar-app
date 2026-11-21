@@ -37,6 +37,7 @@ function renderProfiles() {
       <div class="mpick" id="mp-${id}" hidden></div>
       ${p.cloud ? "" : `<div class="f econ"><span>Экономный режим</span><div class="econ-row"><input type="text" data-f="economy" list="ml-${id}" placeholder="выключен">
         <button class="btn small" data-a="econ">Подобрать</button></div><span class="hint">Недорогая модель того же сервиса для простых вопросов — «привет», «что такое…». Поручения, длинное и сложное — основной модели; не ответит — ответит основная.</span></div>`}
+      ${p.cloud ? "" : `<label class="f">Прокси<input type="text" data-f="proxy" placeholder="не нужен — напрямую" autocomplete="off" spellcheck="false"><span class="hint">Если сервис не открывается из вашей страны: socks5://логин:пароль@адрес:порт, http://адрес:порт или адрес:порт:логин:пароль. Только для этого сервиса.</span></label>`}
       <label class="f">Максимум токенов в ответе<input type="number" data-f="max_tokens" placeholder="600"></label>
       <label class="f">Температура<input type="number" step="0.1" min="0" max="2" data-f="temperature" placeholder="0.7"></label>
       <label class="f" style="justify-content:end"><span><input type="checkbox" data-f="disable_thinking"> отключать «размышления» (Qwen3 и подобные в vLLM)</span></label>

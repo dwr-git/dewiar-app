@@ -43,6 +43,24 @@ class BrainMixin:
         rv = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "reserve") is not False and not stale else ""
         return own or dw, extra, rv, bool(dw and not own)       # 4-е — прокси выдан Dewiar: в подсказках его адрес не показываем
 
+    def _host_px_conf(self):
+        """Для net.bind_hosts: {сервер модели: прокси} из профилей моделей (поле «Прокси» в студии → «Мозг»). Облако Dewiar —
+        мимо (у него свой путь: «Сеть»), свой компьютер и домашняя сеть — тоже."""
+        import net
+        out = {}
+        for p in (self.s.get("llm", "profiles") or {}).values():
+            px = str((p or {}).get("proxy") or "").strip()
+            if not px or p.get("cloud"):
+                continue
+            h = net.host_of(p.get("base_url") or "")
+            if not h or h in ("localhost", "127.0.0.1", "::1") or net._private_host(h) or h.endswith("dewiar.pro"):
+                continue
+            try:
+                out[h] = net.normalize_proxy(px)
+            except net.NetError:
+                log.debug("прокси профиля «%s» не разобран", p.get("name"))
+        return out
+
     def _lan_fetch(self):
         """Дома — напрямую: спросить у сайта его адрес в домашней сети (cloud.php ?p=/lan, со входом или ключом) и
         передать net.set_lan; сохраняется в net.lan — после перезапуска действует сразу. Раз в 10 минут (_brain_watch)."""

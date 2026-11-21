@@ -474,7 +474,7 @@ class LookMixin:
         if not q:
             return False
         name = next((x["name"] for x in q["looks"] if x["id"] == q.get("look")), "Обычная")
-        msg = ("Хорошо, образ буду выбирать сама — по времени дня. Сегодня — «" + name + "».") if q.get("look_auto") \
+        msg = ("Хорошо, образ буду выбирать сама — каждый час новый. Сейчас — «" + name + "».") if q.get("look_auto") \
             else ("Вернула обычный образ." if not q.get("look") else f"Готово — образ «{name}».")
         self._say_quick(msg, text, via)
         return True

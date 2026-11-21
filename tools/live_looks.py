@@ -24,9 +24,9 @@ K = LF.K
 # (линия смыкания, середина, полуширина) и рамка слоя рта — всё в пикселях живого портрета 360
 WHO = {
     "lira": {"crop": (26, 54, 484, 512), "eyes": [(147.5, 162.6), (212.6, 163.2)], "iris": 16.0,
-             "lip": (227.0, 180.0, 23.5), "mouth": (147.0, 206.0, 66.0, 44.0), "smile": 2.2, "light_hair": True},
+             "lip": (227.0, 180.0, 23.5), "mouth": (147.0, 206.0, 66.0, 44.0), "smile": 5.5, "open": (0.0, 3.2, 5.6, 8.0), "light_hair": True},   # улыбка 5,5 (владелец 21.11: «у образов почти не видна»)
     "patrik": {"crop": (0, 0, 512, 512), "eyes": [(146.8, 148.9), (212.5, 149.3)], "iris": 15.0,
-               "lip": (221.4, 180.0, 28.5), "mouth": (143.0, 201.0, 74.0, 44.0), "smile": 2.4, "light_hair": False},
+               "lip": (221.4, 180.0, 28.5), "mouth": (143.0, 201.0, 74.0, 44.0), "smile": 4.8, "open": (0.0, 2.8, 4.8, 7.0), "light_hair": False},
 }
 CROP = WHO["lira"]["crop"]
 
@@ -137,7 +137,9 @@ def build(name, who="lira"):
     for side, im in zip("lr", LF.iris_crops(big)):
         im.save(LIVE / f"{pre}-iris-{side}.png", optimize=True)
     blank_eyes(big, W["eyes"], D).resize((360, 360), Image.LANCZOS).save(LIVE / f"{pre}.webp", quality=94, method=6)
-    for i, op in enumerate((0.0, 2.0, 3.6, 5.2)):
+    # раскрытие рта — по WHO["open"] (владелец 21.11: «рот открывается плохо, хуже, чем у оригинальной Лиры»: лицо в образе
+    # мельче, и 5,2 пикселя на портрете — едва щель)
+    for i, op in enumerate(W["open"]):
         LF.mouth_layer(big, open_px=op).save(LIVE / f"{pre}-mouth-{i}.webp", quality=92, method=6)
     LF.mouth_layer(big, smile_px=W["smile"]).save(LIVE / f"{pre}-smile.webp", quality=92, method=6)
     geo = {"eyes": [[round(x - D / 2, 1), round(y - D / 2, 1)] for x, y in W["eyes"]], "iris": D,

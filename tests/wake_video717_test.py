@@ -20,7 +20,7 @@ def ok(c, m):
 import engine as E  # noqa: E402
 
 
-def run(sound_s, checker, verify=None):
+def run(sound_s, checker, verify=None, noisy=False):
     e = E.Engine.__new__(E.Engine)
     e.calls, e.tones = [], []
     e.play_tone = lambda k: e.tones.append(k)
@@ -33,7 +33,7 @@ def run(sound_s, checker, verify=None):
     e._pending_media_stop, e.check_q, e.stt_q = 0.0, queue.Queue(), queue.Queue()
     e.radio = SimpleNamespace(playing=False)
     e._meeting_ignores = lambda p: False
-    e._noisy = lambda: False
+    e._noisy = lambda: noisy
     e.wake_checker = lambda: checker
     e._level = lambda *a: None
     e.interrupt = lambda *a, **k: None
@@ -72,11 +72,15 @@ ok(e.state == "idle" and e.tones == [] and e.vosk_wake_check not in (-1, None) a
 ok(got and got[0] < 3.0, f"на проверку — фраза с имени, а не 16 с ролика ({got[0] if got else '—'})")
 e, got = run(4.0, GIGA, verify=False)
 ok(e.state == "listening" and e.tones == ["wake"] and e.vosk_wake_check == -1, "проверка выключена: имя после 4 с звука — слушаю сразу, как раньше")
-# 19.11 (владелец: «десяток ложных срабатываний за день»): по умолчанию каждое имя от быстрого слуха проверяет точная модель —
-# до подтверждения ни сигнала, ни «слушаю»
+# 19.11 (владелец: «десяток ложных срабатываний за день»): по умолчанию каждое имя от быстрого слуха проверяет точная модель.
+# 21.11 (владелец: «команда проваливается в тишину… звук сразу после имени, а сверка пусть идёт после»): сигнал «слушаю» —
+# на паузе после имени, ещё до подтверждения; состояние — после проверки
 e, got = run(4.0, GIGA)
-ok(e.state == "idle" and e.tones == [] and e.vosk_wake_check not in (-1, None) and ("wake_spot",) in e.calls,
-   f"имя после 4 с звука — сначала проверка точной моделью, молча: {e.state}, {e.tones}")
+ok(e.state == "idle" and e.tones == ["wake"] and e.vosk_wake_check not in (-1, None) and ("wake_spot",) in e.calls,
+   f"имя после 4 с звука — сигнал сразу, «слушаю» — после проверки точной моделью: {e.state}, {e.tones}")
+ok(getattr(e, "_wake_tone_at", 0) > 0, "время сигнала запомнено — после подтверждения он не повторится (listen_for_command)")
+e, got = run(4.0, GIGA, noisy=True)
+ok(e.state == "idle" and e.tones == [], f"вокруг разговор — сигнала до проверки нет (там быстрый слух ошибается чаще): {e.tones}")
 ok(got and got[0] < 3.0, f"и на проверку — фраза с имени ({got[0] if got else '—'})")
 e, got = run(16.5, None)
 ok(e.state == "listening", "нечем проверить (нет точной модели) — как раньше, слушаю с имени")

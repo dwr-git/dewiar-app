@@ -845,6 +845,15 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     for s_ in split.feed(codef.feed(val)):         # код и команды вслух не читаем
                         say(s_)
                 self._usage_note(prof, (t_ev or time.monotonic()) - t_step, turn)
+                from llm import last_served, served_label
+                sv_ = served_label(last_served())
+                if sv_ and sv_ not in turn.__dict__.setdefault("brains", []):
+                    turn.brains.append(sv_)                  # кто ответил на этом шаге на самом деле (облако Dewiar)
+                    log.info("🧠 Ответил %s", sv_)
+                    xr_m = (xray_current() or {}).get("model")
+                    if isinstance(xr_m, dict):
+                        xr_m["served"] = " → ".join(turn.brains)
+                        xr_m["srv"] = re.sub(r"[^a-z0-9]", "", str((last_served() or {}).get("srv") or ""))[:8]   # для замера по мозгам
                 if probing and probe and not ack_seen and ack_again(turn.full, probe, fin=True):
                     probe = probe[ack_again(turn.full, probe, fin=True):]       # «Записала.» и всё — уже сказано
                 if probing and probe and not repeat_head(turn.full, probe, fin=True):   # короткий новый хвост — не терять
@@ -1200,6 +1209,26 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     log.warning("Действие с ошибкой так и выдано за сделанное — говорю правду")
                     turn.full = (turn.full.rstrip() + " " + note).strip()
                     sentences.put(note)
+            if self.s.get("llm", "ledger") and not turn.cancel.is_set() and turn.full.strip():
+                # «Каркас хода» (план «Качество», шаг 3; отзыв Alex 21.11: «сказала, что сделала, а на самом деле нет»): ответ
+                # сверяется с журналом хода — что программа сделала на самом деле (рентген: действия и итог); утверждает
+                # сделанное без основания — правдой из журнала. Решает модель коротким вопросом, не словарь фраз (core/ledger.py)
+                import ledger
+                xr_ = xray_current()
+                acts_ = list((xr_ or {}).get("acts") or [])
+
+                def _ask_(sys_, user_):
+                    out_ = ""
+                    for kind_, val_ in stream_events(prof, sys_, [{"role": "user", "content": user_}], cancel=turn.cancel, tools=None):
+                        if kind_ == "text":
+                            out_ += val_
+                    return out_
+                bad_ = ledger.check(text, turn.full, acts_, _ask_)
+                if bad_ and not turn.cancel.is_set():
+                    fix_ = ledger.honest(bad_, acts_)
+                    log.warning("✋ Ответ утверждает сделанное, которого нет в журнале хода (%s) — говорю правду", "; ".join(bad_))
+                    turn.full = (turn.full.rstrip() + " " + fix_).strip()
+                    sentences.put(fix_)
             if remind_asked and "set_reminder" not in called and not turn.cancel.is_set() and not turn.full.rstrip().endswith("?"):
                 # попросили поставить — и всё равно нет: человек должен знать, что напоминания нет (а не ждать утром)
                 log.warning("Обещала напомнить, но напоминание так и не поставлено — говорю об этом прямо")
@@ -1236,6 +1265,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     # «Подробности» под ответом в «Чате» (0.86): модель, время до первого слова и всего, токены (если сервер сказал)
                     meta = {"model": turn.model, "first": getattr(turn, "t_first", None), "total": time.monotonic() - t_start,
                             **(getattr(turn, "tok", None) or {})}
+                    if getattr(turn, "brains", None):
+                        meta["brain"] = " → ".join(turn.brains)   # владелец 21.11: профиль «DWR Chat» — а ответил кто?
                     self.emit("answer", text=turn.full, done=True, model=True, sources=turn.src_done, meta=meta)
                 self.health_count("turns")
                 self.health_count("net_ok")

@@ -74,13 +74,13 @@ function galWire() {
 /* образы (1.0.55): у Лиры и Патрика — кружки образов и «Сама — по времени дня»; голосом — «смени образ» (11-commands) */
 function renderLookPanel() {
   const box = $("#plook"); if (!box) return;
-  const p = personaBase(), cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
+  const p = personaBase(), cur = lookOf(p), auto = lookIsAuto(p);
   if (!(p.looks || []).length || kidsOn()) { box.innerHTML = ""; return; }
   // кружки — один кадр и размер у всех (live/thumbs, tools/live_looks.py), обычный облик тоже
   const all = [{ id: "", name: "Обычная", img: `live/thumbs/${p.live}.webp` }].concat(p.looks.map(x => ({ id: x.id, name: x.name, img: `live/thumbs/${p.live}-${x.id}.webp` })));
   box.innerHTML = `<div class="card plook"><b>Образ ${esc(p.name === "Лира" ? "Лиры" : p.name === "Патрик" ? "Патрика" : p.name)}</b>`
     + `<div class="plg">${all.map(x => `<button class="${x.id === cur ? "on" : ""}" data-l="${esc(x.id)}"><img src="${x.img}" alt="" loading="lazy"><span>${esc(x.name)}</span></button>`).join("")}</div>`
-    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени дня<small>Вечером — домашний, а каждый день — немного другая</small></div>`
+    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени дня<small>Каждый час — новый образ, ночью — домашний</small></div>`
     + `<label class="tg"><input type="checkbox" id="plook-auto" ${auto ? "checked" : ""}><i></i></label></div></div>`;
   $$("#plook .plg button").forEach(b => b.onclick = () => { setLook(b.dataset.l); renderLookPanel(); });
   $("#plook-auto").onchange = (e) => { setLook(undefined, e.target.checked); renderLookPanel(); };

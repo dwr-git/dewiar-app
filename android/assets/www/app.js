@@ -1253,17 +1253,28 @@ if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try {
 const personaBase = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
 /* Образы (1.0.55, как на компьютере): тот же персонаж — другие причёска и наряд. Выбор — S.looks {id: {look, auto}};
    живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени» — lookAuto (то же правило, что core/personas.py). */
+function lookShuffle(n, seed) {      // как core/personas._shuffle — один порядок на компьютере и телефоне
+  let x = ((seed * 2654435761 + 12345) % 2147483648 + 2147483648) % 2147483648; const out = [...Array(n).keys()];
+  for (let j = n - 1; j > 0; j--) { x = Number((BigInt(x) * 1103515245n + 12345n) % 2147483648n); const k = x % (j + 1); [out[j], out[k]] = [out[k], out[j]]; }
+  return out;
+}
 function lookAuto(looks, now = new Date()) {
   const h = now.getHours();
-  if (h >= 19 || h < 6) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
+  if (h >= 22 || h < 7) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
   const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + 719163;   // как date.toordinal() в Python
-  const pool = [""].concat(looks.filter(x => !(x.when || []).length).map(x => x.id));   // сезонных нет (владелец 21.11)
-  return pool[day % pool.length];
+  const pool = [""].concat(looks.filter(x => !(x.when || []).length).map(x => x.id)), n = pool.length;
+  const hn = day * 24 + h, cycle = Math.floor(hn / n), i = hn % n;     // 21.11: каждый час — следующий из перемешанного круга
+  const order = lookShuffle(n, cycle), prev = lookShuffle(n, cycle - 1);
+  if (n > 1 && order[0] === prev[n - 1]) [order[0], order[1]] = [order[1], order[0]];
+  return pool[order[i]];
 }
+let lookHour = -1;          // «Сама — по времени дня»: сменился час — новое лицо без перезапуска (владелец 21.11)
+setInterval(() => { const h = new Date().getHours(); if (lookHour !== -1 && h !== lookHour && typeof applyPersona === "function") { try { applyPersona(); } catch (e) { } } lookHour = h; }, 60000);
+function lookIsAuto(p) { const pr = (S.looks || {})[p.id] || {}; return pr.auto !== undefined ? !!pr.auto : !("look" in pr); }
 function lookOf(p) {
   if (!p || !(p.looks || []).length || p.kids) return "";
   const pr = (S.looks || {})[p.id] || {};
-  if (pr.auto) return lookAuto(p.looks);
+  if (lookIsAuto(p)) return lookAuto(p.looks);       // 21.11: «Сама» — по умолчанию у всех, пока человек не выбрал сам
   return p.looks.some(x => x.id === pr.look) ? pr.look : "";
 }
 function persona() {
@@ -2633,13 +2644,13 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
       if (!hold) { emitT(held + out); held = ""; } else held += out;
     }
   };
-  let srv = "";                             // какой сервер облака отвечал (строка-комментарий «: dewiar-server …», 0.81)
+  let srv = "", srvModel = "";              // какой сервер облака отвечал и какая модель (21.11) (строка-комментарий «: dewiar-server …», 0.81)
   let netHeld = "";                         // ответ узла «Сети Лиры» — придерживаем целиком, решаем в конце (NET_SUSPECT_RX)
   const emitT = (t) => { if (/^n\d/.test(srv)) netHeld += t; else if (onText) onText(t); };
   const line = (l) => {
     l = l.trim(); if (!l) return;
     if (!tFirst) tFirst = Date.now();
-    if (!ollama && l.startsWith(":")) { const m = /^:\s*dewiar-server\s+(\S+)/.exec(l); if (m) srv = m[1]; return; }   // и «: keepalive» — поток жив
+    if (!ollama && l.startsWith(":")) { const m = /^:\s*dewiar-server\s+(\S+)(?:\s+(\S+))?/.exec(l); if (m) { srv = m[1]; srvModel = m[2] || ""; } return; }   // и «: keepalive» — поток жив
     if (!ollama) { if (!l.startsWith("data:")) return; l = l.slice(5).trim(); if (l === "[DONE]") return; }
     let o; try { o = JSON.parse(l); } catch (e) { return; }
     if (o.error) throw new Error(typeof o.error === "string" ? o.error : (o.error.message || "ошибка модели"));
@@ -2735,7 +2746,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
       throw Object.assign(new Error(`${brainName()}: сервис не знает модель «${model}» (${clip(err.message, 100)}). Проверьте имя модели: Настройки → Мозг.`), { human: true });
     const again = retryRejected(err.message); if (again) return again;
   }
-  if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
+  if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}${srvModel ? " (" + srvModel + ")" : ""}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
   if (usage && usage.prompt) { plog("info", usageLine(usage, ((tFirst || Date.now()) - tAsk) / 1000)); hCache(usage); }
   if (err) throw err;
   if (inTool && tcBuf.trim()) tcRaw.push(tcBuf);
@@ -3910,8 +3921,8 @@ function lookQuick(t) {
   const m = LOOK_RX.exec(t), p = personaBase(); if (!m || !(p.looks || []).length) return null;
   if (m[1]) setLook("next"); else if (m[2]) setLook(undefined, true); else if (m[3]) setLook("");
   else { const w = m[4].slice(0, 3), hit = p.looks.find(x => x.name.toLowerCase().replace(/ё/g, LAT_LOOK.e).slice(0, 3) === w); if (!hit) return null; setLook(hit.id); }
-  const cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
-  return { say: auto ? `Хорошо, образ буду выбирать сама — по времени дня. Сегодня — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
+  const cur = lookOf(p), auto = lookIsAuto(p);
+  return { say: auto ? `Хорошо, образ буду выбирать сама — каждый час новый. Сейчас — «${lookName(p, cur)}».` : !cur ? "Вернула обычный образ." : `Готово — образ «${lookName(p, cur)}».` };
 }
 async function quick(text) {
   { const bq = await bugQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (bq) return bq; }
@@ -4721,7 +4732,15 @@ async function handsTool(name, a) {
     if (!id && !a.text) return "Ошибка: укажи id элемента из phone_screen или text — надпись на экране.";
     return handsAfter(id ? D.handsTap(id, !!a.long) : D.handsTapText(String(a.text)));
   }
-  if (name === "phone_type") return handsAfter(D.handsType(Math.round(+a.id || 0), String(a.text || ""), !!a.submit));
+  if (name === "phone_type") {
+    // «Каркас хода» (отзыв из группы 21.11: «открывает телегу, находит контакт, но не пишет текст в поле», а Лира: «Написала,
+    // готово»): ввод проверяем по экрану — текста в поле нет, значит, не сделано, и модель узнаёт это из результата
+    const txt = String(a.text || ""), res = await handsAfter(D.handsType(Math.round(+a.id || 0), txt, !!a.submit));
+    if (a.submit || !txt.trim() || /^Ошибка|^Пароли/.test(res) || !res.includes("Теперь на экране:")) return res;
+    const norm = (x) => String(x).toLowerCase().replace(/\s+/g, " ").trim(), want = norm(txt).slice(0, 24);
+    return norm(res.split("Теперь на экране:")[1] || "").includes(want) ? res
+      : "Ошибка: текст в поле не появился — на экране его нет. Не говори, что написала: попробуй другое поле (phone_screen) или честно скажи, что не вышло.\n\n" + res;
+  }
   if (name === "phone_scroll") return handsAfter(D.handsScroll(Math.round(+a.id || 0), a.dir === "up" ? "up" : "down"));
   if (name === "phone_nav") {
     if (a.action === "dewiar") { D.toFront(); return "Dewiar снова на экране."; }
@@ -6534,13 +6553,13 @@ function galWire() {
 /* образы (1.0.55): у Лиры и Патрика — кружки образов и «Сама — по времени дня»; голосом — «смени образ» (11-commands) */
 function renderLookPanel() {
   const box = $("#plook"); if (!box) return;
-  const p = personaBase(), cur = lookOf(p), auto = !!((S.looks || {})[p.id] || {}).auto;
+  const p = personaBase(), cur = lookOf(p), auto = lookIsAuto(p);
   if (!(p.looks || []).length || kidsOn()) { box.innerHTML = ""; return; }
   // кружки — один кадр и размер у всех (live/thumbs, tools/live_looks.py), обычный облик тоже
   const all = [{ id: "", name: "Обычная", img: `live/thumbs/${p.live}.webp` }].concat(p.looks.map(x => ({ id: x.id, name: x.name, img: `live/thumbs/${p.live}-${x.id}.webp` })));
   box.innerHTML = `<div class="card plook"><b>Образ ${esc(p.name === "Лира" ? "Лиры" : p.name === "Патрик" ? "Патрика" : p.name)}</b>`
     + `<div class="plg">${all.map(x => `<button class="${x.id === cur ? "on" : ""}" data-l="${esc(x.id)}"><img src="${x.img}" alt="" loading="lazy"><span>${esc(x.name)}</span></button>`).join("")}</div>`
-    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени дня<small>Вечером — домашний, а каждый день — немного другая</small></div>`
+    + `<div class="sw" style="margin:12px 0 0"><div>Сама — по времени дня<small>Каждый час — новый образ, ночью — домашний</small></div>`
     + `<label class="tg"><input type="checkbox" id="plook-auto" ${auto ? "checked" : ""}><i></i></label></div></div>`;
   $$("#plook .plg button").forEach(b => b.onclick = () => { setLook(b.dataset.l); renderLookPanel(); });
   $("#plook-auto").onchange = (e) => { setLook(undefined, e.target.checked); renderLookPanel(); };

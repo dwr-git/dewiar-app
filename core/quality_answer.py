@@ -1307,3 +1307,4 @@ def hold_sentence(ask, text, sentence, called=(), names=(), known="", agenda="")
     if agenda and agenda_invented(s, agenda):
         return True
     return bool("money_add" not in c and money_claim(text, s, c))
+
