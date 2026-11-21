@@ -74,9 +74,13 @@ ok(len(seen) == n + 1, "после проверки — прокси не ост
 cmd = (ROOT / "core/commands_brain.py").read_text(encoding="utf-8")
 ok(cmd.count("net.profile_proxy(") >= 3, "проверка, список моделей и подбор экономной — через прокси профиля")
 html = (ROOT / "ui/settings.html").read_text(encoding="utf-8"); cj = (ROOT / "ui/studio/connect.js").read_text(encoding="utf-8")
-ok('id="ck-proxy"' in html and "prof.proxy = px" in cj, "«Облачная модель по ключу» → «Через прокси» — поле прокси сразу при подключении")
+ok('id="ck-pxbox"' in html and "prof.proxy = px" in cj and 'pxFields("ck", "")' in cj, "«Облачная модель по ключу» → «Через прокси» — поля прокси сразу при подключении")
 ui = (ROOT / "ui/studio/brain.js").read_text(encoding="utf-8")
-ok('data-f="proxy"' in ui and "p.cloud ? \"\" : `<label class=\"f\">Прокси" in ui, "студия → «Мозг» → профиль: поле «Прокси» (у облака Dewiar его нет)")
+ok("pxFields(id, p.proxy)" in ui and "p.cloud ? \"\" : `<div class=\"f px-f\">" in ui, "студия → «Мозг» → профиль: прокси — у облака Dewiar его нет")
+import shutil as _sh, subprocess as _sp  # noqa: E402
+if _sh.which("node"):
+    o = _sp.run(["node", str(ROOT / "tests/proxy_fields1121.js"), str(ROOT / "ui/studio/brain.js")], capture_output=True, text=True, timeout=30).stdout
+    ok(o.strip().endswith("OK"), f"владелец 21.11 «вносится отдельно IP, порт, логин и пароль»: тип, адрес, порт, логин, пароль — поля; строка от продавца прокси в «Адресе» разбирается сама: {o.strip()[-200:]}")
 ok("net.bind_hosts(self._host_px_conf)" in (ROOT / "core/engine.py").read_text(encoding="utf-8"), "ядро подключает прокси профилей")
 srv.shutdown()
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} не прошло")

@@ -43,7 +43,26 @@ function xrNodes(r) {
   const a = r.answer;
   n.push({ k: "answer", s: r.cancelled ? "skip" : a ? "ok" : "fail", t: r.cancelled ? "Остановлено" : a ? `за ${xrSec(r.t != null ? r.t : a.t)}` : "Ответа нет",
     d: a ? (a.first != null ? `первое слово через ${xrSec(a.first)}` : (a.text || "").slice(0, 90)) : "" });
+  // приборчик узла (владелец 21.11: «блоки пути — технологичнее, разнообразнее»): у каждого шага — своя маленькая шкала
+  const parts = p ? XR_PARTS.map(([key]) => [key, +((p.parts || {})[key] || 0)]).filter(x => x[1] > 0) : [];
+  const meter = {
+    prompt: parts.length ? `<span class="xr-m bar">${parts.map(x => `<i class="p-${x[0]}" style="flex:${x[1]}"></i>`).join("")}${win && win > total ? `<i class="p-free" style="flex:${win - total}"></i>` : ""}</span>` : "",
+    model: m && m.served ? `<span class="xr-m chip">${escH(m.served.split(" (")[0])}</span>` : "",
+    acts: acts.length ? `<span class="xr-m dots">${acts.slice(0, 12).map(x => `<i class="${x.ok ? "ok" : "fail"}"></i>`).join("")}</span>` : "",
+    checks: ch.length ? `<span class="xr-m dots">${ch.slice(0, 8).map(() => `<i class="warn"></i>`).join("")}</span>` : "",
+    answer: a && a.first != null && (r.t || a.t) ? `<span class="xr-m time"><i style="width:${Math.max(4, Math.min(100, a.first / (r.t || a.t) * 100)).toFixed(1)}%"></i></span>` : "",
+  };
+  n.forEach(x => { x.m = meter[x.k] || ""; });
   return n;
+}
+
+function xrExport(btn) {
+  const r = XR.cur; if (!r || !r.id) return;
+  btn.disabled = true;
+  core.call("xray_export", { id: r.id }).then(x => {
+    toast(`Сохранено в «Мои файлы» → «Рентген»: ${x.rel.split("/").pop()} и .md рядом — их можно прислать разработчику целиком`, 6000);
+    core.call("ws_open", { path: "Рентген" }).catch(() => {});
+  }).catch(e => toast(e.message)).finally(() => { btn.disabled = false; });
 }
 
 function xrOpen(id) {
@@ -56,11 +75,14 @@ function xrShow() {
   let ov = $("#xr-ov");
   if (!ov) {
     ov = document.createElement("div"); ov.id = "xr-ov"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "xr-h");
-    ov.innerHTML = `<article class="xr-card"><header><div><h2 id="xr-h">Рентген ответа</h2><p class="xr-q"></p></div><button class="xr-x" aria-label="Закрыть">✕</button></header>
+    ov.innerHTML = `<article class="xr-card"><header><div><h2 id="xr-h">Рентген ответа</h2><p class="xr-q"></p></div>`
+      + `<button class="xr-save" type="button" title="Весь ход одним файлом: подсказка целиком, действия, проверки, журнал, кто ответил, настройки — без паролей и ключей">Сохранить для разработчика</button>`
+      + `<button class="xr-x" aria-label="Закрыть">✕</button></header>
       <ol class="xr-map" aria-label="Как Лира шла к ответу"></ol><div class="xr-det" aria-live="polite"></div></article>`;
     document.body.appendChild(ov);
     ov.addEventListener("click", (e) => {
       if (e.target === ov || e.target.closest(".xr-x")) return xrClose();
+      if (e.target.closest(".xr-save")) return xrExport(e.target.closest(".xr-save"));
       const nd = e.target.closest(".xr-n"); if (nd) { XR.sel = nd.dataset.k; xrShow(); return; }
       const fb = e.target.closest("[data-xfull]"); if (fb) { const pre = $(".xr-full", ov); if (pre) pre.hidden = !pre.hidden; fb.setAttribute("aria-expanded", pre && !pre.hidden ? "true" : "false"); }
     });
@@ -74,9 +96,12 @@ function xrShow() {
   }
   $(".xr-q", ov).textContent = `«${(r.q || "").length > 160 ? r.q.slice(0, 160).trim() + "…" : r.q}»`;
   const nodes = xrNodes(r);
-  $(".xr-map", ov).innerHTML = nodes.map(n => `<li><button type="button" class="xr-n ${n.s}${XR.sel === n.k ? " sel" : ""}" data-k="${n.k}" aria-pressed="${XR.sel === n.k}">`
-    + `<span class="xr-i"><svg viewBox="0 0 24 24" aria-hidden="true">${XR_ICO[n.k]}</svg></span><b>${XR_ST[n.k]}</b><span class="xr-t">${escH(n.t)}</span>`
-    + `<small>${escH(n.d || "")}</small></button></li>`).join("");
+  const fresh = $(".xr-map", ov).dataset.id !== r.id;              // новый рентген — сигнал проходит путь один раз
+  $(".xr-map", ov).dataset.id = r.id;
+  $(".xr-map", ov).classList.toggle("run", fresh);
+  $(".xr-map", ov).innerHTML = nodes.map((n, i) => `<li style="--i:${i}"><button type="button" class="xr-n ${n.s}${XR.sel === n.k ? " sel" : ""}" data-k="${n.k}" aria-pressed="${XR.sel === n.k}">`
+    + `<span class="xr-top"><span class="xr-i"><svg viewBox="0 0 24 24" aria-hidden="true">${XR_ICO[n.k]}</svg></span><span class="xr-no">${String(i + 1).padStart(2, "0")}</span></span>`
+    + `<b>${XR_ST[n.k]}</b><span class="xr-t">${escH(n.t)}</span>${n.m}<small>${escH(n.d || "")}</small></button></li>`).join("");
   $(".xr-det", ov).innerHTML = xrDetail(r, XR.sel);
   ov.classList.add("on");
   const sel = $(".xr-n.sel", ov); if (sel && !ov.contains(document.activeElement)) sel.focus({ preventScroll: true });
@@ -111,7 +136,8 @@ function xrDetail(r, k) {
     const full = r.full ? `<button class="btn small" type="button" data-xfull aria-expanded="false">Что ушло в модель — целиком</button><div class="xr-full" hidden>`
       + `<h4>Инструкция модели</h4><pre>${escH(r.full.system || "")}</pre>${(r.full.msgs || []).map(mm => `<h4>${mm.role === "user" ? "Человек" : mm.role === "assistant" ? "Лира" : escH(mm.role)}</h4><pre>${escH(mm.text)}</pre>`).join("")}</div>`
       : `<p class="xr-mute">Полный текст подсказки хранится только для последних ответов.</p>`;
-    return `<h3>Из чего собрана подсказка · ≈ ${xrTok(total)} токенов${win ? ` из ${xrTok(win)}` : ""}</h3>${bar}${legend}${ctx}${tools}${full}` + xrLog(r, "prompt");
+    return `<h3>Из чего собрана подсказка · ≈ ${xrTok(total)} токенов${win ? ` из ${xrTok(win)}` : ""}</h3>`
+      + (p.lean ? `<p class="xr-mute">Просто разговор — без правил действий: характер, разговор и главное. Понадобится дело — модель попросит действия.</p>` : "") + `${bar}${legend}${ctx}${tools}${full}` + xrLog(r, "prompt");
   }
   if (k === "model") {
     if (!m) return `<h3>Модель</h3><p class="xr-mute">Не понадобилась — ответила быстрая команда.</p>`;

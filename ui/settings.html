@@ -2302,7 +2302,7 @@
       <!-- владелец 21.11: «часто нужно, чтобы работало через прокси… назначать его за конкретным вендором» — прокси только
            этого сервиса; позже — в профиле («Настроить» → «Прокси») -->
       <details class="ck-px" id="ck-px"><summary>Через прокси — если сервис не открывается из вашей страны</summary>
-        <label class="f" style="max-width:520px;margin-top:8px">Прокси<input type="text" id="ck-proxy" placeholder="socks5://логин:пароль@адрес:порт или адрес:порт:логин:пароль" spellcheck="false" autocomplete="off"><span class="hint">Через него пойдут только запросы к этому сервису; всё остальное — как обычно.</span></label>
+        <div id="ck-pxbox" style="margin-top:8px"></div><p class="hint">Данные прокси дал ваш продавец прокси или VPN. Через него пойдут только запросы к этому сервису; всё остальное — как обычно.</p>
       </details>
       <div id="ck-found" style="display:none;margin-top:10px;align-items:flex-end" class="actions">
         <label class="f" style="min-width:280px" id="ck-sel-f">Модель<select id="ck-model"></select></label>
@@ -2326,7 +2326,7 @@
       <div class="chips" id="presets" style="margin-top:10px"></div>
     </details>
     <div class="switch"><div>Думать над сложными просьбами<span>Стихи, расчёты, анализ, планы, код — модель сначала обдумывает ответ: дольше, зато лучше. Простые вопросы — как раньше, сразу.</span></div><label class="tg"><input type="checkbox" data-k="llm.think_auto"><i></i></label></div>
-    <div class="switch"><div>Короткая инструкция для модели — проба<span>Описания навыков (около четверти инструкции) идут не к каждому вопросу, а только к подходящему. Своей модели на компьютере — меньше читать перед каждым ответом. Включите, прогоните экзамен и сравните оценки и время с выключенным.</span></div><label class="tg"><input type="checkbox" data-k="llm.lean_prompt"><i></i></label></div>
+    <div class="switch"><div>Короткая инструкция для модели — проба<span>В обычной беседе модель получает характер Лиры и сам разговор — без правил действий (втрое легче); попросите дело — получит всё нужное. Описания навыков — только к подходящему вопросу. Включите, поговорите и сравните.</span></div><label class="tg"><input type="checkbox" data-k="llm.lean_prompt"><i></i></label></div>
     <h2>Память разговора</h2>
     <div class="row">
       <label class="f">Последних реплик — дословно (раньше — кратко)<input type="number" min="0" max="50" data-k="llm.history_turns"></label>

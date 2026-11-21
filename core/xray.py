@@ -20,6 +20,7 @@ import re
 import threading
 import time
 from collections import deque
+from pathlib import Path
 
 log = logging.getLogger("dewiar.xray")
 
@@ -333,3 +334,59 @@ def _wrap(name, fn):
     w.__name__ = name
     w.__wrapped__ = fn
     return w
+
+
+def export(xid, folder, meta=None):
+    """Рентген хода — файлом для разработчика (владелец 21.11: «не хватает выгрузки, чтобы показывать результаты не скриншотом,
+    а полным файлом со всеми техническими подробностями»). Пишет в folder два файла: .json (всё: путь, подсказка целиком, если
+    она ещё в памяти, действия с аргументами и итогом, проверки, журнал хода, кто ответил) и .md (то же для чтения глазами).
+    Пароли, ключи и карты — звёздочками (как в журнале). meta — версия, система, настройки ядра без ключей. -> путь к .json"""
+    rec = get(xid, full=True)
+    if rec is None:
+        raise ValueError("рентген этого ответа уже не хранится — он помнит последние 60 ответов")
+    try:
+        from engine_base import redact
+    except Exception:  # noqa: BLE001
+        redact = (lambda t: t)                   # noqa: E731
+
+    def clean(v):
+        if isinstance(v, str):
+            return redact(v)
+        if isinstance(v, list):
+            return [clean(x) for x in v]
+        if isinstance(v, dict):
+            return {k: clean(x) for k, x in v.items() if not str(k).startswith("_")}
+        return v
+    rec = clean(rec)
+    body = {"dewiar_xray": 1, "meta": clean(meta or {}), "turn": rec}
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d-%H%M%S", time.localtime(rec.get("ts") or time.time()))
+    base = folder / f"xray-{stamp}-{re.sub(r'[^0-9a-z-]', '', str(xid))}"
+    js = base.with_suffix(".json")
+    js.write_text(json.dumps(body, ensure_ascii=False, indent=1), encoding="utf-8")
+    m, p = rec.get("model") or {}, rec.get("prompt") or {}
+    md = [f"# Рентген ответа · {time.strftime('%d.%m.%Y %H:%M:%S', time.localtime(rec.get('ts') or time.time()))}", "",
+          f"Вопрос ({rec.get('src') or ''}): {rec.get('q') or ''}", "",
+          "## Кратко", "",
+          f"- путь: {(rec.get('route') or {}).get('label') or (rec.get('route') or {}).get('kind') or '?'}"
+          + (f"; по пути: {', '.join(rec.get('path') or [])}" if rec.get("path") else ""),
+          f"- модель: {m.get('model') or '—'} ({m.get('name') or ''}, {m.get('kind') or ''}); ответил: {m.get('served') or '—'}; окно: {m.get('window') or 'неизвестно'}",
+          f"- подсказка: {sum((p.get('parts') or {}).values()) if p else 0} ток. — " + ", ".join(f"{k} {v}" for k, v in (p.get("parts") or {}).items())
+          + (f"; действий на выбор {len(p.get('tools') or [])}; реплик {p.get('turns')}" if p else "") + ("; «чистый разговор»" if p.get("lean") else ""),
+          f"- действия: " + ("; ".join(f"{a.get('name')} — {'ок' if a.get('ok') else 'НЕ ВЫШЛО'}" for a in rec.get("acts") or []) or "нет"),
+          f"- проверки: " + ("; ".join(rec.get("checks") or []) or "ничего не нашли"),
+          f"- время: весь ход {rec.get('t')} с; первое слово {((rec.get('answer') or {}).get('first'))} с", "",
+          "## Ответ", "", str((rec.get("answer") or {}).get("text") or "—"), "",
+          "## Настройки и среда", "", "```json", json.dumps(body["meta"], ensure_ascii=False, indent=1), "```", "",
+          "## Журнал хода", "", "```"] + [f"{x.get('t'):>6} {x.get('lv')} {x.get('m')}" for x in rec.get("log") or []] + ["```", ""]
+    for a in rec.get("acts") or []:
+        md += [f"### Действие {a.get('name')} — {'ок' if a.get('ok') else 'не вышло'}", "", f"аргументы: {a.get('args')}", "", f"итог: {a.get('result')}", ""]
+    full = rec.get("full") or {}
+    if full:
+        md += ["## Что ушло в модель — целиком", "", "### Инструкция", "", "```", str(full.get("system") or ""), "```", ""]
+        for mm in full.get("msgs") or []:
+            md += [f"### {mm.get('role')}", "", "```", str(mm.get("text") or ""), "```", ""]
+        md += [f"### Действия на выбор ({len(full.get('tools') or [])})", "", ", ".join(full.get("tools") or []), ""]
+    base.with_suffix(".md").write_text("\n".join(md), encoding="utf-8")
+    return str(js)

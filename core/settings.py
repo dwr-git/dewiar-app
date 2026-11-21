@@ -126,6 +126,7 @@ DEFAULTS = {
         "persona_model": {},        # id персонажа -> своя модель того же профиля (№403, 29.10: у Ollama много моделей)
         "history_turns": 8,
         "xray": True,               # «Рентген» ответа: путь хода, подсказка, действия, проверки (core/xray.py)
+        "talk_lean": None,          # «Чистый разговор» (core/talk_lean.py): None — как lean_prompt («Короткая инструкция — проба»)
         "ledger": False,            # «Каркас хода»: ответ сверяется с журналом сделанного (core/ledger.py) — проба, стенд
         "key_fallback": True,       # сервис по ключу (Gemini, Kimi…) не ответил — мозг Dewiar (15.11, «Кто чем думает»)
         "own_fallback": False,      # своя модель не отвечает — мозг Dewiar (по согласию; engine_answer._own_fallback)

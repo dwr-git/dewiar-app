@@ -86,6 +86,8 @@ async def session():
             xid = ((a or {}).get("meta") or {}).get("xray")
             R[k + "_x"] = await call("xray_get", id=xid or "", full=True) if xid else None
         R["missing"] = await call("xray_get", id="nope")
+        xid_ = ((R["remind"] or {}).get("meta") or {}).get("xray")
+        R["exp"] = await call("xray_export", id=xid_ or "")
         rd.cancel()
         await ws_.close()
     finally:
@@ -103,6 +105,15 @@ try:
     mine = [x for x in items if x.get("role") == "assistant"]
     ok(mine and all((x.get("meta") or {}).get("xray") for x in mine),
        f"владелец 21.11 «рентгена нигде не вижу»: в ленте «Чата» у каждого ответа номер рентгена (кнопка): {[x.get('meta') for x in mine]}")
+    ex = res("exp")
+    import json as _j
+    jp = Path(ex.get("path") or "/nonexistent")
+    body = _j.loads(jp.read_text(encoding="utf-8")) if jp.exists() else {}
+    mdp = jp.with_suffix(".md")
+    ok(jp.exists() and mdp.exists() and ex.get("rel", "").startswith("Рентген/"), f"«Сохранить для разработчика» — .json и .md в «Мои файлы» → «Рентген»: {ex}")
+    ok(body.get("turn", {}).get("q") and (body.get("turn", {}).get("full") or {}).get("system") and body.get("meta", {}).get("version")
+       and "api_key" not in jp.read_text(encoding="utf-8"), "в файле — весь ход с подсказкой целиком, версия и настройки, без ключей")
+    ok(mdp.exists() and "## Что ушло в модель — целиком" in mdp.read_text(encoding="utf-8"), "и то же для чтения глазами (.md)")
     c = res("clock_x")
     ok(c.get("route", {}).get("kind") == "cmd" and c["route"].get("label") == "Часы и дата",
        f"быстрая команда без модели — путь назван: {c.get('route')}")

@@ -931,7 +931,9 @@
     A.wasSpeaking = speaking;
     if (A.smileTill && now > A.smileTill) A.smileTill = 0;
     const talking = A.mTarget !== 0 || (A.mPrev !== 0 && A.mBlend < 1);
-    const smileGoal = !talking && A.smileTill && (e.state === "idle" || e.state === "listening") ? 1 : 0;
+    // образы (L.soft): улыбка из сдвига губ выходила гримасой (владелец 21.11: «если не так симпатично, как у оригинальной
+    // Лиры, — лучше вообще без улыбки») — у образов её нет; у обычной Лиры и Патрика — как была
+    const smileGoal = !L.soft && !talking && A.smileTill && (e.state === "idle" || e.state === "listening") ? 1 : 0;
     A.smile += (smileGoal - A.smile) * Math.min(1, dt * 3);
 
     const neu = e.tone === "neu";

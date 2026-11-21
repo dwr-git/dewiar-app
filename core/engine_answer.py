@@ -419,6 +419,18 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 # «С возвращением» — по готовым фактам, без инструментов (владелец 20.11: вечером позвала done_report — и в итог
                 # попали «обед с картой», «серия» и «всего 65 дел»; поручение «без инструментов» модель не держала)
                 specs = []
+            turn.lean = False
+            # переключатель — llm.talk_lean (стенд; не задан — как «Короткая инструкция для модели — проба» в студии, llm.lean_prompt)
+            tl_ = self.s.get("llm", "talk_lean")
+            if specs and (tl_ if tl_ is not None else self.s.get("llm", "lean_prompt")) and not getattr(turn, "via_job", False) and not getattr(turn, "raw", False) \
+                    and not images:
+                # «Чистый разговор» (владелец 21.11: «через Лиру — как у 4B»): просто беседа — характер, разговор и главное, без
+                # правил действий и почти без самих действий; понадобилось дело — модель попросит (more_tools, core/talk_lean.py)
+                import modules as _mods
+                import talk_lean
+                if talk_lean.talk_turn(ask_core(text), self.history, _mods.wanted(ask_core(text))):
+                    specs, turn.lean = talk_lean.lean_specs(specs), True
+                    log.info("🍃 Просто разговор — подсказка без правил действий (%d действия)", len(specs))
             mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(prof))
             if mode in ("native", "prompt"):
                 prof = dict(prof, tools_mode=mode)
@@ -428,8 +440,12 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             # справкой в начале разговора, подсказки к роду просьбы (стихи, советы, схема, грубость) — в справке к вопросу.
             # Иначе каждая такая добавка ломала кэш начала запроса и для всех инструментов после подсказки (tools/prefix_audit.py)
             pmsg = self._profile_in_msgs(prof)
-            system = self._system(bool(specs), personal=not pmsg)
-            personal = self._personal(bool(specs)).strip() if pmsg else ""
+            full_ = bool(specs) and not turn.lean       # «Чистый разговор» — подсказка как без действий, плюс короткое правило
+            system = self._system(full_, personal=not pmsg, talk=turn.lean)
+            if turn.lean:
+                import talk_lean
+                system += talk_lean.LEAN_RULE
+            personal = self._personal(full_).strip() if pmsg else ""
             pdelta = ""
             if personal:                               # 0.87: справка в начале разговора — снимок, изменения — к вопросу
                 personal, pdelta = self._profile_snap(personal, msgs)
@@ -544,7 +560,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 import xray
                 from llm import context_window
                 xray.prompt(system, specs, msgs, parts=self._pparts, prof=prof, ctx_window=context_window(prof),
-                            extra={"ctx": [c.split("\n", 1)[0][:120] for c in ctx if c]})
+                            extra={"ctx": [c.split("\n", 1)[0][:120] for c in ctx if c], "lean": bool(getattr(turn, "lean", False))})
             except Exception:  # noqa: BLE001
                 log.debug("рентген", exc_info=True)
         except LLMError as e:
@@ -1103,7 +1119,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     break
                 more = [str(g) for c, r in zip(calls, results) if c.get("name") == "more_tools" and str(r).startswith("Добавлены")
                         for g in (c.get("args") or {}).get("packs") or []]
-                if more and specs:                      # модель попросила группу действий — следующий шаг уже с ними
+                if more and getattr(turn, "lean", False):   # из беседы — к делу: полная подсказка и нужные действия
+                    turn.lean = False
+                    turn.packs = set(getattr(turn, "packs", None) or ()) | (set(more) - {"core"})
+                    specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    system = self._system(True, personal=not pmsg)
+                    log.info("🧰 Из разговора — к делу: полная подсказка и действия (%s)", ", ".join(sorted(more)))
+                elif more and specs:                    # модель попросила группу действий — следующий шаг уже с ними
                     turn.packs = set(getattr(turn, "packs", None) or ()) | set(more)
                     specs = self.toolbox.specs(slim_text, keep=turn.packs)
                     log.info("🧰 Модель попросила действия: %s", ", ".join(sorted(turn.packs)))

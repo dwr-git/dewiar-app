@@ -54,6 +54,20 @@ class FilesCommands:
             if r is None:
                 raise ValueError("рентген этого ответа уже не хранится — он помнит последние 60 ответов")
             return r
+        if cmd == "xray_export":                                # «Рентген» → «Сохранить для разработчика» (владелец 21.11)
+            import xray
+            from version import VERSION
+            llm_ = self.s.get("llm") or {}
+            act = (llm_.get("profiles") or {}).get(llm_.get("active")) or {}
+            meta = {"version": VERSION, "os": OS_NAME, "persona": self.s.get("persona"), "lang": self.s.get("ui", "lang"),
+                    "model": {k: act.get(k) for k in ("name", "kind", "model", "cloud", "title", "economy", "disable_thinking",
+                                                      "max_tokens", "temperature") if act.get(k) not in (None, "")},
+                    "base_host": (act.get("base_url") or "").split("/")[2] if "://" in (act.get("base_url") or "") else "",
+                    "switches": {k: llm_.get(k) for k in ("talk_lean", "lean_prompt", "ledger", "scene", "xray", "think_auto")},
+                    "tools_slim": (self.s.get("tools") or {}).get("slim", True), "history_turns": len(getattr(self, "history", []) or [])}
+            folder = self.workspace.root / "Рентген"
+            path = xray.export(str(a.get("id") or ""), folder, meta)
+            return {"path": path, "rel": "Рентген/" + Path(path).name, "folder": str(folder)}
         if cmd == "xray_list":
             import xray
             return {"items": xray.recent(int(a.get("n") or 20))}

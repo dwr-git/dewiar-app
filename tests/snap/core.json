@@ -557,6 +557,7 @@
   "ws_set_path",
   "ws_tree",
   "ws_write",
+  "xray_export",
   "xray_get",
   "xray_list"
  ],

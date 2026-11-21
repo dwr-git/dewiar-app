@@ -109,6 +109,7 @@ def t_more_tools(args, ctx):
     (engine_answer — следующий шаг уже с ними); здесь — ответ, что добавлено."""
     ids = [str(x) for x in (args.get("packs") or []) if str(x)]
     known = {g["id"]: g["title"] for g in modules.groups()}
+    known["core"] = "главные действия"           # «Чистый разговор» (talk_lean): из беседы — к делу
     got = [known[i] for i in ids if i in known]
     if not got:
         raise ToolError("таких групп нет — смотри список в описании more_tools")
