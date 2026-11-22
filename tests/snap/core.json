@@ -241,6 +241,8 @@
   "max_set",
   "max_shared",
   "max_test",
+  "mcp_oauth",
+  "mcp_oauth_forget",
   "mcp_status",
   "memory_add",
   "memory_find",

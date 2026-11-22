@@ -1,6 +1,6 @@
 /* Студия Dewiar: «Подключение» (готовые настройки по адресу, ключу или файлу), «Навыки» и серверы MCP, «Научить имени»
    и монитор услышанного, мастер «Мозг» (где думает ассистент), «Проверить всё».
-   Команды ядра: config_preview/apply/export, skill_*, skills_catalog, skills_folder, mcp_status, calib_start/cancel/reset,
+   Команды ядра: config_preview/apply/export, skill_*, skills_catalog, skills_folder, mcp_status, mcp_oauth/forget, calib_start/cancel/reset,
    llm_models, llm_test, self_check; события calib (шаги обучения имени) и hearing (что распознано и чьё имя услышано).
    Файлы студии подключаются по порядку из ui/settings.html и делят одну глобальную область: при загрузке здесь
    заполняются подсказки мастера (IS_WIN, clHint() — объявлена выше вызова); S_presets (dewiar.js) нужен по клику.
@@ -158,16 +158,27 @@ function renderMcp(st) {
   if (!Object.keys(servers).length) box.innerHTML = '<p class="hint">Пока не подключено ни одного. Начните с готовых ниже — для них нужен Node.js (npx) или uv (uvx).</p>';
   Object.entries(servers).forEach(([n, c]) => {
     const s = mcpStatus[n] || {}, el = document.createElement("div"); el.className = "tool";
-    const stTxt = c.enabled === false ? "выключен" : s.status === "ok" ? `подключён · инструментов: ${s.tools.length}` : s.status === "error" ? `ошибка: ${s.error}` : "подключаюсь…";
+    const stTxt = c.enabled === false ? "выключен" : c.auth === "oauth" && !s.authed ? "нужен вход OAuth" : s.status === "ok" ? `подключён · инструментов: ${s.tools.length}` : s.status === "error" ? `ошибка: ${s.error}` : "подключаюсь…";
     el.innerHTML = `<div><b></b><div class="d"></div><div class="d" style="color:${s.status === "error" ? "var(--bad)" : s.status === "ok" ? "var(--good)" : "var(--muted)"}"></div></div>
       <label class="tg"><input type="checkbox" ${c.enabled === false ? "" : "checked"}><i></i></label>
       <label class="ask"><input type="checkbox" ${c.trust ? "checked" : ""}> доверять — не спрашивать разрешения</label>
-      <button class="btn small danger" style="justify-self:end">Удалить</button>`;
+      ${c.type === "http" && c.auth === "oauth" ? `<button class="btn small" data-a="oauth">${s.authed ? "Выйти" : "Войти"}</button>` : ""}
+      <button class="btn small danger" data-a="delete" style="justify-self:end">Удалить</button>`;
     $("b", el).textContent = n; $$(".d", el)[0].textContent = c.type === "http" ? c.url : [c.command, ...(c.args || [])].join(" "); $$(".d", el)[1].textContent = stTxt;
     const [on, trust] = $$("input", el);
     on.onchange = () => { servers[n] = Object.assign({}, c, { enabled: on.checked }); saveServers(servers); };
     trust.onchange = () => { servers[n] = Object.assign({}, c, { trust: trust.checked }); saveServers(servers); };
-    $(".btn", el).onclick = () => { delete servers[n]; saveServers(servers).then(() => renderMcp()); };
+    const login = $('[data-a="oauth"]', el);
+    if (login) login.onclick = async () => {
+      login.disabled = true;
+      try {
+        const r = await core.call(s.authed ? "mcp_oauth_forget" : "mcp_oauth", { name: n });
+        if (r.url) { openExt(r.url); toast("Завершите вход в браузере на компьютере с Dewiar"); }
+        else core.call("mcp_status").then(renderMcp).catch(() => {});
+      } catch (e) { toast(e.message || String(e)); }
+      finally { login.disabled = false; }
+    };
+    $('[data-a="delete"]', el).onclick = () => { delete servers[n]; saveServers(servers).then(() => renderMcp()); };
     box.appendChild(el);
   });
   const pr = $("#mcp-presets"); pr.innerHTML = "";
@@ -175,7 +186,15 @@ function renderMcp(st) {
     const b = document.createElement("button"); b.className = "chip"; b.textContent = "+ " + label;
     b.onclick = () => { servers[p.name] = p.cfg; saveServers(servers).then(() => renderMcp()); }; pr.appendChild(b); });
 }
-$("#m-type").onchange = () => { const h = $("#m-type").value === "http"; $$(".m-http").forEach(x => x.style.display = h ? "" : "none"); $$(".m-stdio").forEach(x => x.style.display = h ? "none" : ""); };
+function mcpAuthFields() {
+  const h = $("#m-type").value === "http", oauth = $("#m-auth").value === "oauth";
+  $$(".m-http").forEach(x => x.style.display = h ? "" : "none");
+  $$(".m-stdio").forEach(x => x.style.display = h ? "none" : "");
+  $$(".m-token").forEach(x => x.style.display = h && !oauth ? "" : "none");
+  $$(".m-oauth").forEach(x => x.style.display = h && oauth ? "" : "none");
+}
+$("#m-type").onchange = $("#m-auth").onchange = mcpAuthFields;
+core.on("mcp_oauth", e => toast(e.error || `OAuth: вход для «${e.name}» обновлён`));
 $("#m-save").onclick = () => {
   const name = $("#m-name").value.trim().replace(/[^\w-]+/g, "_"), res = $("#m-res");
   if (!name) { res.className = "res bad"; res.textContent = "Введите название"; return; }
@@ -183,7 +202,10 @@ $("#m-save").onclick = () => {
   if ($("#m-type").value === "http") {
     if (!/^https?:\/\//.test($("#m-url").value.trim())) { res.className = "res bad"; res.textContent = "Нужен адрес вида https://…"; return; }
     cfg = { type: "http", url: $("#m-url").value.trim() };
-    if ($("#m-tok").value) cfg.headers = { Authorization: "Bearer " + $("#m-tok").value };   // токен хранится в настройках, как ключи API
+    if ($("#m-auth").value === "oauth") {
+      cfg.auth = "oauth";
+      if ($("#m-cid").value.trim()) cfg.client_id = $("#m-cid").value.trim();
+    } else if ($("#m-tok").value) cfg.headers = { Authorization: "Bearer " + $("#m-tok").value };   // токен хранится в настройках, как ключи API
   } else {
     // команда делится на слова как в оболочке, но упрощённо: кавычки только целым словом, без экранирования
     const parts = $("#m-cmd").value.trim().match(/"[^"]*"|'[^']*'|\S+/g) || [];
