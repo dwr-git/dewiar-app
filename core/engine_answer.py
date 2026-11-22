@@ -420,9 +420,11 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 # попали «обед с картой», «серия» и «всего 65 дел»; поручение «без инструментов» модель не держала)
                 specs = []
             turn.lean = False
-            # переключатель — llm.talk_lean (стенд; не задан — как «Короткая инструкция для модели — проба» в студии, llm.lean_prompt)
+            # переключатель — llm.talk_lean (стенд: llm.talk_lean=false — как раньше)
             tl_ = self.s.get("llm", "talk_lean")
-            if specs and (tl_ if tl_ is not None else self.s.get("llm", "lean_prompt")) and not getattr(turn, "via_job", False) and not getattr(turn, "raw", False) \
+            # не задан (None) — включён: у обновившихся с 1.0.59 в настройках сохранилось прежнее «null», и оно перебивало новое
+            # «включено для всех» (отчёт №959, 22.11); выключает только явное False
+            if specs and tl_ is not False and not getattr(turn, "via_job", False) and not getattr(turn, "raw", False) \
                     and not images:
                 # «Чистый разговор» (владелец 21.11: «через Лиру — как у 4B»): просто беседа — характер, разговор и главное, без
                 # правил действий и почти без самих действий; понадобилось дело — модель попросит (more_tools, core/talk_lean.py)
@@ -510,6 +512,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                            + (" (to: max)." if src == "MAX" else "."))
             if mode == "none" and specs:
                 specs = []
+                turn.lean = False
                 system = self._system(False, personal=not pmsg) + ("\n\nЭта модель не умеет выполнять действия (музыка, скриншоты, "
                                                 "программы). Если просят действие — честно скажи одной фразой, что с этой "
                                                 "моделью действия недоступны, и предложи выбрать другую модель в «Мозге».")
@@ -518,6 +521,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 # своя модель только что не дождалась ответа с инструментами (180 с) — 20 минут спрашиваем без них, а не
                 # ждём те же 180 с на каждом вопросе и потом ещё ответ без них (№133, 20.10: 4 ядра, Ollama, «вечно в думках»)
                 specs = []
+                turn.lean = False                      # действий нет совсем — и переделка по проверке их не вернёт
                 system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: модель на "
                                                 "этом компьютере не успевает с ними. Если просят действие — честно скажи "
                                                 "это одной фразой.")

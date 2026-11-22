@@ -61,11 +61,13 @@ class NameMixin:
                     self.vosk_wake_check = -1
                     self._wake_count("wake_no")
                     self.wake_time = 0.0                            # следующая фраза — не «по имени»
-                    log.info("🎧 «%s» от быстрого слуха не подтвердилось — это не обращение, молча жду дальше", self._vosk_wake_word)
+                    log.info("🎧 «%s» от быстрого слуха не подтвердилось — это не обращение, жду дальше", self._vosk_wake_word)
                     self.set_state("idle")
+                    self._wake_dismiss()
                 continue
             if self.vosk_wake_check == uid:
                 self.vosk_wake_check = -1
+                self._wake_soft_tone = 0.0                  # подтвердилось — «отбоя» не будет
                 self._wake_count("wake_ok")
                 self._voice_turn_t = time.monotonic()
             log.info("🎤 Имя распознано точной моделью: «%s»", text)
@@ -99,6 +101,16 @@ class NameMixin:
                 self.health_use(what)
         except Exception:  # noqa: BLE001
             pass
+
+    def _wake_dismiss(self):
+        """Второй сигнал — «отбой» (владелец 22.11: «как в умных колонках, два звука: на ложное срабатывание — звук отбоя,
+        иначе нет ощущения, что всё закончилось»). Звучит, только если «слушаю» уже прозвучало до сверки, а точная модель имя
+        не подтвердила; подтвердилось или сигнала не было (вокруг разговор) — тишина."""
+        at = getattr(self, "_wake_soft_tone", 0.0)
+        self._wake_soft_tone = 0.0
+        if at and time.monotonic() - at < 15:
+            self.play_tone("dismiss")
+            log.info("🔕 Отбой: имя не подтвердилось")
 
     def _wake_was_false(self, why):
         """Человек сказал, что это было не ему («не тебе», «я не с тобой»), или остановил кнопкой ответ, начатый голосом:

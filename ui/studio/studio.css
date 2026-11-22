@@ -1389,6 +1389,14 @@ dialog.nwdlg::backdrop { background: rgba(6,6,14,.55); backdrop-filter: blur(4px
 .nwi p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 .nwi small { display: block; margin-top: 7px; font-size: 13px; color: var(--accent); }
 html.st-light dialog.nwdlg { background: #fff; }
+/* №959 (22.11: «окно невозможно скрыть нажатием рядом, только Esc»): крестик всегда виден, «Понятно» — внизу окна, а не
+   после всех 220 выпусков; нажатие мимо окна — закрыть */
+.nw-x { position: sticky; top: -12px; float: right; margin: -12px -14px 0 8px; width: 36px; height: 36px; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: var(--frost); color: var(--muted); cursor: pointer; z-index: 2; }
+.nw-x:hover { color: var(--ink); } .nw-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.nwdlg .nw-foot { position: sticky; bottom: -22px; margin: 16px -28px -22px; padding: 14px 28px 18px; justify-content: flex-end;
+  background: linear-gradient(transparent, #1b1b2e 30%); }
+html.st-light .nwdlg .nw-foot { background: linear-gradient(rgba(255,255,255,0), #fff 30%); }
 /* объявление для всех (news.js annShow) */
 dialog.anndlg { width: min(560px, calc(100% - 32px)); }
 .anndlg #an-img { display: block; width: calc(100% + 56px); margin: -26px -28px 18px; max-height: 300px; object-fit: cover; }

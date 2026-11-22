@@ -795,5 +795,9 @@
  "nav.learn.tip": "A week with Lira, video lessons, questions and answers, short phrases",
  "nav.memsoul": "Memory and soul",
  "nav.memsoul.tip": "What Lira remembers, the diary, soul, constitution and what she knows about you",
- "nav.diary.tab": "Diary"
+ "nav.diary.tab": "Diary",
+ "insight.mind.acc.wait": "forecasts not checked yet: {n} waiting for their date, the nearest — {d}",
+ "insight.mind.acc.none": "no forecasts yet — they appear after an evolution",
+ "insight.mind.evolved": "Mind v{v}: theses {th}, new forecasts {h}, checked {c}",
+ "insight.mind.evolve.same": "The mind thought it over — nothing new yet: forecasts are checked when their date comes"
 }

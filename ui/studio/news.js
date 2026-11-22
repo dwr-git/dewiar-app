@@ -15,6 +15,12 @@ function newsShow(r) {
 }
 $("#nw-ideas-go").onclick = () => { $("#news-dlg").close(); core.call("news_seen").catch(() => {}); const b = $('nav button[data-p="ideas"]'); if (b) b.click(); };   // 0.61: «Что нового» → «Идеи Лиры»
 $("#nw-ok").onclick = () => { $("#news-dlg").close(); core.call("news_seen").catch(() => {}); };
+$("#nw-x").onclick = () => $("#nw-ok").click();
+// №959: нажали мимо окна (на затемнение) — закрыть, как «Понятно»; клик внутри окна, у края, — не в счёт
+$("#news-dlg").addEventListener("click", (e) => {
+  const d = e.currentTarget, r = d.getBoundingClientRect();
+  if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("#nw-ok").click();
+});
 $("#news-dlg").addEventListener("cancel", () => core.call("news_seen").catch(() => {}));
 $("#ab-news").onclick = () => core.call("news", { all: true }).then(r => { if (!newsShow(r)) toast("Новостей пока нет"); }).catch(e => toast(e.message));
 core.on("hello", () => setTimeout(() => core.call("news").then(newsShow).catch(() => {}), 600));

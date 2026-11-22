@@ -352,6 +352,12 @@
     let d; try { d = await call("insight_mind"); } catch (e) { toast(e.message); return; }
     const acc = d.accuracy || {}, rate = acc.rate == null ? null : Math.round(acc.rate * 100), C = 2 * Math.PI * 30;
     const open = (d.hyps || []).filter(h => h.state === "open");
+    // №958 (22.11: «всегда 0 подтвердились, 0 нет — кнопка не работает»): прогноз проверяется, когда наступит его срок
+    // (через 1–8 недель), поэтому до первого срока честно пишем, сколько ждут и когда ближайший
+    const near = open.map(h => h.due).filter(Boolean).sort()[0];
+    const accLine = (acc.confirmed || 0) + (acc.refuted || 0) ? T("mind.acc", { a: acc.confirmed || 0, b: acc.refuted || 0 })
+      : open.length ? T("mind.acc.wait", { n: open.length, d: near ? new Date(near + "T12:00").toLocaleDateString(loc(), { day: "numeric", month: "long" }) : "—" })
+      : T("mind.acc.none");
     const P = pal(), nodes = [["mission", 50, 52, 26, P.c1hex], ["theses", 76, 26, 9, clColor(1)], ["hyps", 32, 20, 8, clColor(4)], ["lenses", 20, 70, 7, clColor(5)], ["watch", 66, 82, 8, clColor(3)]];
     el.innerHTML = `<div class="rd-mind"><div class="rd-card rd-constel"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(T("mind.map"))}">
         <defs><radialGradient id="rd-core"><stop offset="0" stop-color="${P.c1hex}" stop-opacity=".35"/><stop offset="1" stop-color="${P.c1hex}" stop-opacity="0"/></radialGradient></defs>
@@ -365,7 +371,7 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn rd-btn" id="rd-misb">${esc(T("mind.mission.edit"))}</button><span class="rd-chip">${esc(T("mind.v", { v: d.v }))}</span></div></div>
         <div class="rd-card"><div class="rd-acc"><svg viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30" stroke="${P.grid}" stroke-width="6" fill="none"/>
           <circle cx="36" cy="36" r="30" stroke="${P.c1hex}" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - (rate || 0) / 100)}" transform="rotate(-90 36 36)"/></svg>
-          <div><b>${rate == null ? "—" : rate + "%"}</b><small>${esc(T("mind.acc", { a: acc.confirmed || 0, b: acc.refuted || 0 }))}</small></div></div>
+          <div><b>${rate == null ? "—" : rate + "%"}</b><small>${esc(accLine)}</small></div></div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn primary rd-btn" id="rd-evo">${esc(T("mind.evolve"))}</button><small style="color:var(--dim)">${esc(T("mind.evolve.t"))}</small></div></div></div></div>
       <div class="rd-mgrid"><div class="rd-card"><h3>${esc(T("mind.theses"))} <small>${esc(T("mind.n", { n: (d.theses || []).length }))}</small></h3>
           ${(d.theses || []).length ? d.theses.map(t => `<div class="rd-thesis">${esc(t.text)}<small>${t.refs.map(r => `<a href="#" data-url="${esc(r.url)}">${esc(r.title.slice(0, 60))}</a>`).join(" · ")}</small></div>`).join("") : `<p class="rd-hint">${esc(T("mind.theses.none"))}</p>`}</div>
@@ -377,7 +383,17 @@
     q("#rd-misb").onclick = async () => {
       const v = await askText(T("mind.mission.ask"), d.mission || "", { ok: T("save") }); if (v == null) return;
       try { await call("insight_mission", { text: v }); toast(T("saved")); renderMind(); } catch (e) { toast(e.message); } };
-    q("#rd-evo").onclick = async () => { q("#rd-evo").disabled = true; try { await call("insight_evolve"); toast(T("mind.evolving")); setTimeout(renderMind, 9000); } catch (e) { toast(e.message); } };
+    // №958: после «Эволюционировать» — что изменилось (версия, тезисы, прогнозы, проверено) или честное «нового пока нет»
+    q("#rd-evo").onclick = async () => {
+      q("#rd-evo").disabled = true;
+      try { await call("insight_evolve"); toast(T("mind.evolving")); } catch (e) { toast(e.message); q("#rd-evo").disabled = false; return; }
+      for (const wait of [9000, 20000, 30000]) {
+        await new Promise(r => setTimeout(r, wait));
+        let n; try { n = await call("insight_mind"); } catch (e) { continue; }
+        if ((n.v || 0) > (d.v || 0)) { const x = (n.diary || []).slice(-1)[0] || {}; toast(T("mind.evolved", { v: n.v, th: x.theses || 0, h: x.new_hyps || 0, c: x.closed || 0 }), 6000); renderMind(); return; }
+      }
+      toast(T("mind.evolve.same"), 6000); renderMind();
+    };
   }
 
   /* ---------- galaxy ---------- */

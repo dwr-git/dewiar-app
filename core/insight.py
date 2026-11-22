@@ -593,6 +593,19 @@ def clean_hyps(mind):
     return dict(mind, hyps=keep), len(hs) - len(keep)
 
 
+def no_echo(title, text):
+    """Суть без пересказа заголовка (№954, 22.11: «задвоение предложений в сообщениях из „Радар: важное“ — лишние токены,
+    достаточно заголовка»): из сути убираются предложения, которые повторяют заголовок (две трети их слов — из заголовка)."""
+    words = lambda s: {w for w in re.findall(r"\w{3,}", str(s).lower().replace("ё", "е"))}
+    tw = words(title)
+    keep = []
+    for s in re.split(r"(?<=[.!?…])\s+", str(text or "").strip()):
+        sw = words(s)
+        if s and not (sw and len(sw & tw) >= 2 / 3 * len(sw)) and not (tw and len(sw & tw) >= 0.8 * len(tw)):
+            keep.append(s)
+    return " ".join(keep).strip()
+
+
 def accuracy(mind):
     hs = [h for h in (mind.get("hyps") or []) if h.get("state") in ("confirmed", "refuted")]
     ok = sum(1 for h in hs if h["state"] == "confirmed")

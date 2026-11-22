@@ -918,6 +918,7 @@ def tone(kind: str, rate=22050) -> bytes:
            "turn": [(1318.5, 0.0), (1046.5, 0.11)],          # ми → до, мягко: «я договорила, ваша очередь»
            "done": [(1318.5, 0.0), (1760.0, 0.06)],
            "sleep": [(784.0, 0.0), (523.3, 0.08)],           # соль → до октавой ниже: «перестала слушать»
+           "dismiss": [(1568.0, 0.0), (1046.5, 0.09)],       # соль → до, вниз — зеркало «слушаю»: «это было не мне» (отбой)
            "error": [(440.0, 0.0), (349.2, 0.12)]}.get(kind, [(1000.0, 0.0)])
     total = max(t for _, t in seq) + 0.26
     n = int(rate * total)
@@ -927,7 +928,7 @@ def tone(kind: str, rate=22050) -> bytes:
         t = np.arange(n - i0) / rate
         env = np.minimum(1.0, t / 0.004) * np.exp(-t / 0.075)            # щелчка нет, хвост — короткий
         wave = np.sin(2 * math.pi * f * t) + 0.28 * np.sin(2 * math.pi * 2 * f * t) + 0.08 * np.sin(2 * math.pi * 3.01 * f * t)
-        a[i0:] += ((0.11 if kind == "turn" else 0.17) * env * wave).astype(np.float32)   # «ваша очередь» звучит часто — тише
+        a[i0:] += ((0.11 if kind in ("turn", "dismiss") else 0.17) * env * wave).astype(np.float32)   # частые — тише
     fade = min(n, int(rate * 0.01))
     a[-fade:] *= np.linspace(1, 0, fade)
     return (np.clip(a, -1, 1) * 32767).astype(np.int16).tobytes()

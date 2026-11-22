@@ -143,5 +143,14 @@ ok("Continue in chat" in en["ans"], "ответ и по-английски — �
 e = run("ru", EMPTY)
 ok(not e["home"], "источников нет — карточки Радара на «Главной» нет")
 ok("Радар пока пуст" in e["pulse"] and "Добавить источники" in e["pulse"], f"пустой Радар — приглашение добавить источники: {e['pulse'][:80]!r}")
+# №958 (22.11: «всегда 0 подтвердились, 0 нет — кнопка не работает»): пока ни один прогноз не дошёл до срока — честно, сколько
+# ждут и когда ближайший, а не «0 и 0»
+m0 = dict(R["insight_mind"], accuracy={"confirmed": 0, "refuted": 0, "rate": None},
+          hyps=[h for h in R["insight_mind"]["hyps"] if h["state"] == "open"])
+o = run("ru", dict(R, insight_mind=m0))
+ok("прогнозы ещё не проверены: ждут срока 2, ближайший — 30 ноября" in o["mind"] and "0 подтвердились" not in o["mind"],
+   f"«Разум» без проверенных прогнозов — сколько ждут и ближайший срок: {o['mind'][:700]!r}")
+js = (ROOT / "ui/studio/insight.js").read_text(encoding="utf-8")
+ok('T("mind.evolved", {' in js and 'T("mind.evolve.same")' in js, "«Эволюционировать сейчас» — потом сказано, что изменилось, или что нового пока нет")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} ошибок")
 sys.exit(1 if fails else 0)

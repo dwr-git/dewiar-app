@@ -80,7 +80,8 @@ mock = subprocess.Popen([sys.executable, str(tmp / "mock.py"), str(UP), str(BODI
 (tmp / "cfg").mkdir()
 (tmp / "cfg/settings.json").write_text(json.dumps({
     "persona": "lira", "stt": {"engine": "vosk"}, "tts": {"engine": "off"}, "audio": {"sounds": False},
-    "llm": {"active": "mock", "talk_lean": True, "profiles": {"mock": {"name": "Проба", "kind": "openai",
+    # None — как у обновившихся с 1.0.59 (в настройках сохранилось «null»): «Чистый разговор» всё равно включён (№959, 22.11)
+    "llm": {"active": "mock", "talk_lean": None, "profiles": {"mock": {"name": "Проба", "kind": "openai",
                                                                       "base_url": f"http://127.0.0.1:{UP}/v1", "model": "chat"}}}}))
 env = dict(os.environ, DEWIAR_CONFIG_DIR=str(tmp / "cfg"), DEWIAR_STATE_DIR=str(tmp / "st"), DEWIAR_PORT=str(PORT),
            DEWIAR_ASSUME_AEC="1", DEWIAR_WORKSPACE_DIR=str(tmp / "ws"), DEWIAR_FAKE_RAM_GB="16", DEWIAR_FAKE_CORES="8")

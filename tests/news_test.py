@@ -79,6 +79,20 @@ for case, ui in (("обновились", {"welcome": "done", "news_seen": "0.38
                 ok(pg.evaluate("document.getElementById('news-dlg').open"), "«О программе» → «Что нового» — открывает снова")
                 if os.environ.get("NEWS_SHOT"):
                     pg.screenshot(path=os.environ["NEWS_SHOT"].replace(".png", "-studio.png"))
+                # №959 (22.11: «невозможно скрыть нажатием рядом, только Esc»): крестик и «Понятно» видны без прокрутки всех
+                # выпусков; нажатие мимо окна — закрывает, нажатие внутри у края — нет
+                vis = pg.evaluate("() => { const d = document.getElementById('news-dlg').getBoundingClientRect(); "
+                                  "const inside = (s) => { const r = document.querySelector(s).getBoundingClientRect(); "
+                                  "return r.top >= d.top - 1 && r.bottom <= d.bottom + 1 && r.height > 0; }; return [inside('#nw-x'), inside('#nw-ok')]; }")
+                ok(vis == [True, True], f"«Что нового»: крестик и «Понятно» видны сразу, без прокрутки: {vis}")
+                pg.evaluate("document.getElementById('news-dlg').scrollTop = 99999"); time.sleep(0.2)
+                ok(pg.evaluate("(() => { const d = document.getElementById('news-dlg').getBoundingClientRect(), r = document.getElementById('nw-x').getBoundingClientRect(); "
+                               "return r.top >= d.top - 1 && r.height > 0; })()"), "прокрутили вниз — крестик всё равно на месте")
+                bx = pg.evaluate("(() => { const r = document.getElementById('news-dlg').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })()")
+                pg.mouse.click(bx[0] + 6, bx[1] + bx[3] / 2); time.sleep(0.3)
+                ok(pg.evaluate("document.getElementById('news-dlg').open"), "нажатие внутри окна, у края, — не закрывает")
+                pg.mouse.click(max(2, bx[0] - 30), bx[1] + bx[3] / 2); time.sleep(0.3)
+                ok(not pg.evaluate("document.getElementById('news-dlg').open"), "нажатие мимо окна (на затемнение) — закрывает")
             else:
                 ok(not g["open"] and json.loads((cfg / "settings.json").read_text())["ui"].get("news_seen") == VERSION, "новая установка — без окна, отмечено увиденным")
             ok(not errs, f"{case}: студия без ошибок: {errs[:2]}")

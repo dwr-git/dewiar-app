@@ -205,6 +205,8 @@ class ListenMixin:
                 if (self.state in ("listening", "thinking") or (soft and self.vosk_wake_check >= 0)) and now - due <= 6:
                     self.play_tone("wake")
                     self._wake_tone_at = now                   # на само имя уже прозвучало — после сверки не повторять
+                    if soft and self.state not in ("listening", "thinking"):
+                        self._wake_soft_tone = now             # сигнал прозвучал до сверки — не подтвердится, будет «отбой»
             a = np.frombuffer(frame, dtype=np.int16).astype(np.float32)
             rms = float(np.sqrt(np.mean(a * a)))
             if self.state == "listening":                  # для журнала: насколько громко было, пока ждали вопрос
@@ -316,6 +318,7 @@ class ListenMixin:
                 self.check_q.put(("utt", pcm, uid))
             else:
                 self.vosk_wake_check = -1
+                self._wake_dismiss()
             return
         if self.barge_sent == uid and self.barge_hit != uid:
             # по этой фразе уже идёт ранняя проверка — решит она; звук оставляем ей

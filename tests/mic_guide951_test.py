@@ -23,6 +23,10 @@ for q in ("как выключить микрофон, чтобы ты не сл
 src = (ROOT / "ui/assets/entities.js").read_text(encoding="utf-8")
 ok("const smileGoal = (!L.soft || L.geo.smile) && !talking" in src, "у образа улыбка — только настоящая, из кадра с улыбкой (geo.smile); у обычной Лиры и Патрика — как была")
 import json as _j, re as _re  # noqa: E402
+# 22.11 (владелец: «улыбаются слишком часто… раза в 3 реже», базовая Лира — как была): все три повода — с множителем rare
+ok("const rare = L.geo && L.geo.smile ? 1 / 3 : 1;" in src and "Math.random() < 0.3 * rare" in src
+   and "tnWarm ? Math.random() < rare : !tnSoft && Math.random() < 0.5 * rare" in src,
+   "образы с настоящей улыбкой улыбаются втрое реже (в тишине, после ответа, на радостное), базовая Лира — как была")
 conf = _re.findall(r'"(lira-\w+|patrik-\w+)": \{[^\n]*"smile": (\[[^\]]*\])', src)
 ok(len(conf) == 19 and all((ROOT / "ui/assets/live" / f"{k}-smile.webp").exists() for k, _ in conf),
    f"владелец 21.11 прислал кадры с улыбкой — у всех 19 образов настоящая улыбка (рамка низа лица): {len(conf)}")

@@ -899,13 +899,16 @@
     // тон ответа (19.11, эмоции): радость, шутка, удивление — улыбка после фразы; сочувствие и серьёзное — без случайных улыбок
     const TN = (typeof window !== "undefined" && window.DEWIAR_TONE) || null, tnFresh = !!TN && Date.now() - TN.at < 30000;
     const tnWarm = tnFresh && /^(joy|playful|surprise)$/.test(TN.tone), tnSoft = tnFresh && /^(sympathy|calm)$/.test(TN.tone);
+    // образы с настоящей улыбкой (geo.smile — кадр с улыбкой) улыбаются втрое реже базовой Лиры: улыбка у них сильнее и
+    // заметнее (владелец 22.11: «улыбается слишком часто… раза в 3 реже»); базовая — как была
+    const rare = L.geo && L.geo.smile ? 1 / 3 : 1;
     if (speaking || e.state === "listening") { A.tx = vx; A.ty = vy; }
     else if (thinking) { A.tx = 0.9; A.ty = -0.9; }
     else if (e._looking && now <= A.nextEye) { A.tx = vx + (A.rx || 0) * 0.4; A.ty = vy + (A.ry || 0) * 0.4; }
     else if (now > A.nextEye) {
       A.rx = (Math.random() * 2 - 0.5) * L.geo.moveX / 2; A.ry = (Math.random() * 2 - 0.5) * L.geo.moveY / 2;
       A.tx = vx + A.rx * (e._looking ? 0.4 : 1); A.ty = vy + A.ry * (e._looking ? 0.4 : 1);
-      if (!A.smileTill && !tnSoft && Math.random() < 0.3) A.smileTill = now + 2000 + Math.random() * 2000;   // в тишине иногда улыбается
+      if (!A.smileTill && !tnSoft && Math.random() < 0.3 * rare) A.smileTill = now + 2000 + Math.random() * 2000;   // в тишине иногда улыбается
       A.nextEye = now + (Math.random() > 0.8 ? 500 : 3000 + Math.random() * 2000);
     }
     const ease = Math.min(1, dt * 10);
@@ -927,7 +930,7 @@
     else want = 0;
     if (want !== A.mTarget) { A.mPrev = A.mTarget; A.mTarget = want; A.mBlend = 0; }
     A.mBlend = Math.min(1, A.mBlend + dt * (e.lipsync ? 18 : 9));
-    if (A.wasSpeaking && !speaking && (tnWarm || (!tnSoft && Math.random() < 0.5))) A.smileTill = now + (tnWarm ? 3000 : 1500);   // договорила — улыбка
+    if (A.wasSpeaking && !speaking && (tnWarm ? Math.random() < rare : !tnSoft && Math.random() < 0.5 * rare)) A.smileTill = now + (tnWarm ? 3000 : 1500);   // договорила — улыбка
     A.wasSpeaking = speaking;
     if (A.smileTill && now > A.smileTill) A.smileTill = 0;
     const talking = A.mTarget !== 0 || (A.mPrev !== 0 && A.mBlend < 1);

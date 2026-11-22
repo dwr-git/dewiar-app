@@ -359,7 +359,8 @@ class Radar:
         en = self.lang().startswith("en")
         if top["kind"] == "item":
             title = ("⚡ Radar: important" if en else "⚡ Радар: важное")
-            text = f"{top['title']} — {top['text']}"
+            top = dict(top, text=I.no_echo(top["title"], top.get("text") or ""))   # №954: без пересказа заголовка
+            text = f"{top['title']} — {top['text']}" if top["text"] else top["title"]
         else:
             title = ("⚡ Radar: topic surging" if en else "⚡ Радар: тема резко растёт")
             text = (f"«{top['title']}»: {top['day']} materials in 24h" if en else f"«{top['title']}»: {top['day']} материалов за сутки")

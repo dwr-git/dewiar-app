@@ -79,8 +79,23 @@ e, got = run(4.0, GIGA)
 ok(e.state == "idle" and e.tones == ["wake"] and e.vosk_wake_check not in (-1, None) and ("wake_spot",) in e.calls,
    f"имя после 4 с звука — сигнал сразу, «слушаю» — после проверки точной моделью: {e.state}, {e.tones}")
 ok(getattr(e, "_wake_tone_at", 0) > 0, "время сигнала запомнено — после подтверждения он не повторится (listen_for_command)")
+# 22.11 (владелец: «как в умных колонках — два звука: при ложном срабатывании нужен второй звук отбоя, иначе нет ощущения,
+# что всё закончилось»): «слушаю» прозвучало до сверки, а точная модель имя не подтвердила — «отбой»
+ok(getattr(e, "_wake_soft_tone", 0) > 0, "сигнал до сверки запомнен — если не подтвердится, прозвучит «отбой»")
+E.Engine._wake_dismiss(e)
+ok(e.tones == ["wake", "dismiss"] and not e._wake_soft_tone, f"не подтвердилось — второй звук, «отбой»: {e.tones}")
+E.Engine._wake_dismiss(e)
+ok(e.tones == ["wake", "dismiss"], "«отбой» — один раз")
+import audio_io as AU  # noqa: E402
+ok(len({AU.tone(k) for k in ("wake", "dismiss", "sleep", "turn")}) == 4, "«отбой» на слух отличается от «слушаю», «сплю» и «ваша очередь»")
+src = (ROOT / "core/ears_name.py").read_text(encoding="utf-8")
+w = src[src.index("от быстрого слуха не подтвердилось"):][:200]
+ok("self._wake_dismiss()" in w and "self._wake_soft_tone = 0.0                  # подтвердилось" in src,
+   "«отбой» — при «не подтвердилось»; подтвердилось — «отбоя» не будет")
 e, got = run(4.0, GIGA, noisy=True)
 ok(e.state == "idle" and e.tones == [], f"вокруг разговор — сигнала до проверки нет (там быстрый слух ошибается чаще): {e.tones}")
+E.Engine._wake_dismiss(e)
+ok(e.tones == [], "сигнала не было (вокруг разговор) — и «отбоя» нет")
 ok(got and got[0] < 3.0, f"и на проверку — фраза с имени ({got[0] if got else '—'})")
 e, got = run(16.5, None)
 ok(e.state == "listening", "нечем проверить (нет точной модели) — как раньше, слушаю с имени")
