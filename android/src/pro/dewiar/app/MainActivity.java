@@ -143,6 +143,7 @@ public class MainActivity extends Activity implements Net.Sink {
             fileCb.onReceiveValue(out);
             fileCb = null;
         }
+        if (req == SafeKey.REQ) SafeKey.onResult(this, res == RESULT_OK);   // сейф: подтвердили себя экраном блокировки
         if (req == HtmlView.REQ) {                              // окно чужого HTML закрыли: «В «Загрузки»» — сохраняет интерфейс
             try { event("htmlview", new JSONObject().put("save", res == RESULT_OK && data != null && data.getBooleanExtra("save", false))); }
             catch (Exception ignored) { }

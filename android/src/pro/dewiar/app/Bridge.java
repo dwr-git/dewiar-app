@@ -377,6 +377,18 @@ public final class Bridge {
     }
 
     /** Открыт «Сейф» — экран без снимков: ни скриншота, ни картинки в «недавних приложениях» (FLAG_SECURE). */
+    /** Сейф отпечатком (SafeKey): none | off | on. */
+    @JavascriptInterface public String safeBioState() { return SafeKey.state(a); }
+    /** Включить: ключ сейфа (base64) — под защиту экрана блокировки; ответ — событием safebio {op: save}. */
+    @JavascriptInterface public void safeBioSave(final String keyB64) {
+        a.runOnUiThread(new Runnable() { @Override public void run() { SafeKey.save(a, keyB64); } });
+    }
+    /** Открыть: системное подтверждение (отпечаток, лицо, PIN) → событие safebio {op: open, ok, key}. */
+    @JavascriptInterface public void safeBioOpen() {
+        a.runOnUiThread(new Runnable() { @Override public void run() { SafeKey.open(a); } });
+    }
+    @JavascriptInterface public void safeBioForget() { SafeKey.forget(a); }
+
     @JavascriptInterface public void secureScreen(final boolean on) {
         a.runOnUiThread(new Runnable() { @Override public void run() {
             try {

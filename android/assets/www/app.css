@@ -1958,6 +1958,16 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sf-ib:active, .sf-item:active, .sf-add:active { transform: scale(.97); }
 .sf-fine { text-align: center; margin: 14px 8px 0; font-size: 12.5px; color: var(--dim, var(--muted)); }
 #sf-gate .res { text-align: center; }
+.sf-biob { width: 100%; max-width: 420px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.sf-biob svg, .sf-offer > svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; flex: none; }
+.sf-or { color: var(--muted); font-size: 13px; margin: 10px 0 8px; }
+.sf-gate > .res { margin: 0 0 10px; }
+.sf-offer { display: flex; align-items: center; gap: 12px; padding: 12px 8px 12px 14px; margin: 0 0 10px; border-radius: 16px;
+  background: var(--frost); box-shadow: inset 0 0 0 1px var(--glass-line); color: var(--accent); }
+.sf-offer span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.sf-offer small { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+.sf-offer .btn { flex: none; padding: 9px 14px; }
+.sf-fine a { color: var(--accent); } .sf-bioline { margin-top: 4px; }
 
 .sf-bar { display: flex; gap: 8px; position: sticky; top: -8px; z-index: 1; padding: 2px 0 10px; }
 .sf-find { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 16px; background: var(--field); box-shadow: inset 0 0 0 1px var(--glass-line); }

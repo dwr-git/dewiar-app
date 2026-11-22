@@ -146,7 +146,7 @@ async function ask(text, opts = {}) {
   let final = "", switchTo = null, ranTools = false;
   lastDone = "";
   try {
-    let guided = false;                                      // руководство приложено к вопросу (как вызов app_help)
+    let guided = false, dayPlans = false;                   // руководство приложено к вопросу (как вызов app_help); планы дня — справкой
     const ctxParts = [turnContext(text)].concat(turnNotes);   // меняющееся — в справку к вопросу, подсказка остаётся прежней
     if (!opts.hidden) {
       const kb = await personaKnowledge(text);
@@ -159,13 +159,18 @@ async function ask(text, opts = {}) {
         guided = true; plog("info", "📖 вопрос о приложении — руководство приложено к вопросу");
         if (SANDBOX) SANDBOX.dev.push({ name: "app_help", args: clip(text, 80), argsObj: { query: text }, result: "руководство приложено к вопросу приложением", t: Date.now() });
       }
-      const pl = agendaPlans(text);                    // «что у меня в среду?» — запомненное и напоминания на этот день сразу
+      const pl = agendaPlans(text); dayPlans = !!pl;                    // «что у меня в среду?» — запомненное и напоминания на этот день сразу
       if (pl) ctxParts.push("ПЛАНЫ ПОЛЬЗОВАТЕЛЯ на этот день (кроме календаря):" + pl);
       if (DIAGRAM_ASK.test(text))                      // экзамен 15.10: «Схема готова, она уже на экране» — а схемы нет
         ctxParts.push("СЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши «схема готова» или «на экране», не нарисовав её, и не делай схему через make_app. Сначала блок, потом одна-две фразы о главном.");
     }
     // фото в вопросе (или только что снятое): перевод, документ, еда — как отвечать (идеи пользователей 24.10; компьютер — VISION_HINT)
     { const lm = msgs[msgs.length - 1]; if (lm && Array.isArray(lm.content) && lm.content.some(x => x.type === "image_url")) ctxParts.push(VISION_HINT); }
+    // «Чистый разговор» (1.0.61): беседа без дел — модели характер, разговор и главное; дело — модель просит действия (more_tools),
+    // и следующий круг идёт с полной подсказкой. Справка к вопросу и личное — те же, что и всегда
+    let lean = talkLeanOn() && !opts.hidden && !att.length && !kidsOn() && !guided && !dayPlans && !deep && !longGen && !photoTurn
+      && !DIAGRAM_ASK.test(text) && talkTurn(text, liveHistory()), leanKeep = false;
+    if (lean) { msgs[0].content = systemStable(true); plog("info", `🍃 чистый разговор: подсказка ${Math.round(msgs[0].content.length / 1000)} тыс. знаков, действия — по просьбе модели`); }
     putContext(msgs, ctxParts.filter(Boolean).join("\n\n"));
     putProfile(msgs, systemPersonal());               // личное — справкой в начале разговора, не в подсказке
     const called = new Set(); let nudged = false;      // какие инструменты уже вызваны в этом ходе; напоминали ли «сделай по-настоящему»
@@ -200,13 +205,18 @@ async function ask(text, opts = {}) {
     let xAsked = false;                              // экзамен 0.9.18: одна дополнительная проверка за ход (xfix)
     for (let round = 0; round < maxRounds; round++) {
       let r;
+      if (round && lean && !leanKeep) {               // понадобилось дело (more_tools или поправка) — дальше полная подсказка и все действия
+        lean = false; msgs[0].content = systemStable(); plog("info", "🍃 → полная подсказка: нужны действия");
+      }
+      leanKeep = false;
+      const specs = () => round < maxRounds - 1 ? (lean ? talkLeanSpecs() : toolSpecs()) : null;
       if (round) sink.round();                       // №435: следующий круг не повторяет уже сказанное
       try {
-        try { r = await round1(round < maxRounds - 1 ? toolSpecs() : null); }
+        try { r = await round1(specs()); }
         catch (e0) {                                  // недорогая модель не ответила — тот же вопрос основной
           if (!econ || round || sink.text().trim() || turnAbort !== ctl || ctl.signal.aborted) throw e0;
           plog("warn", `💸 недорогая модель ${econ} не ответила (${clip(e0.message || e0, 80)}) — отвечает основная`);
-          econ = ""; modelOnce = ""; r = await round1(round < maxRounds - 1 ? toolSpecs() : null);
+          econ = ""; modelOnce = ""; r = await round1(specs());
         }
         const lm = msgs[msgs.length - 1];
         if (lm && Array.isArray(lm.content) && !String(r.text || "").trim() && !r.calls.length) throw new Error("пустой ответ на снимок");
@@ -272,6 +282,7 @@ async function ask(text, opts = {}) {
         || (!nudged ? orderUndone(text, r.text || "", called) : "")) : "";
       if (xfix) { xAsked = true; msgs.push(aMsg(r.text), { role: "user", content: xfix }); sink.push(" "); continue; }
       if (!r.calls.length) break;
+      leanKeep = r.calls.every(c => TALK_LEAN_KEEP.has(c.name));   // только «запомнить» и «коллега» — беседа продолжается налегке
       msgs.push({ role: "assistant", content: (r.fromNet ? NET_WRAP : "") + (r.text || ""), tool_calls: r.calls.map(c => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.args || "{}" } })) });
       const shots = [];
       if (r.calls.some(c => HANDS_SET.has(c.name))) maxRounds = 30;
@@ -284,7 +295,8 @@ async function ask(text, opts = {}) {
         once.add(key);
         ranTools = true;
         if (!cueArmed && !opts.hidden) { cueArmed = true; actCueArm(c.name, ctl, sink); }
-        try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
+        if (c.name === "more_tools") res = "Действия подключены — следующим шагом вызови нужное и только потом говори о сделанном.";
+        else try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
         plog("info", `🔧 ${c.name} → ${clip(String((res && res.text) || res || "").split("\n")[0], 90)}`);   // что сделано — видно в отчёте (№56)
         if (c.name === "calendar_add" && /^Записано/.test(String(res))) called.add("calendar_write");   // правда записано, а не только спросили
         if (c.name === "call_persona" && res && res.switchTo) { switchTo = res.switchTo; res = res.text; }
@@ -342,6 +354,7 @@ async function ask(text, opts = {}) {
     plog("info", `💬 ответ ${((sink.text() || final).trim() || quiet).length} симв.${quiet ? " (сам: " + clip(quiet) + ")" : ""} за ${((Date.now() - t0) / 1000).toFixed(1)} с`);
     if (!opts.hidden) history.push({ role: "user", content: text + (att.length ? ` [приложено: ${att.map(a => a.kind === "image" ? "фото" : "файл «" + a.name + "»").join(", ")}]` : "") });
     history.push(Object.assign({ role: "assistant", content: (sink.text() || final).trim() || quiet, who: persona().id, t: Date.now() },
+      ranTools ? { acts: [...called].filter(n => !TALK_LEAN_KEEP.has(n) && n !== "more_tools").slice(0, 8) } : {},
       photoTurn ? { note: "[снимок с камеры показан на экране; показать снова — show_photo, новый — take_photo]" } : {}, netTurn ? { net: true } : {},
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }

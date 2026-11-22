@@ -601,6 +601,7 @@ async function examScenario(sc) {
 function examMarkdown(rep) {
   const s = rep.summary, L = [`# Экзамен Dewiar ${rep.version} — ${rep.started.slice(0, 16).replace("T", " ")}`, "",
     `Модель: **${rep.model}**. Сдано **${s.passed} из ${s.total}**` + (s.avg_score != null ? `, средняя оценка судьи ${s.avg_score}` : "") + `, ${Math.round(rep.duration_s / 60)} мин.`, ""];
+  if ((rep.sets || []).length) L.push(`Переключатель: ${rep.sets.join("; ")}.`, "");
   for (const [g, v] of Object.entries(s.by_group)) L.push(`- ${g}: ${v.passed} из ${v.total}`);
   for (const r of rep.scenarios) {
     L.push("", `## ${r.passed ? "✅" : "❌"} ${r.group} — ${r.title}`, `_${r.time_s} с` + (r.score != null ? `, судья: ${r.score}/10 — ${r.judge.why}` : "") + "_");
@@ -629,6 +630,16 @@ async function examReport(job, o) {
 }
 
 /* Весь экзамен: песочница → сценарии → итог в кабинет → перезагрузка (всё как было). onStep(i, n, title) — ход. */
+/* «llm.talk_lean=false; llm.scene=true» -> { talk_lean: false, scene: true }: только ключи мозга (llm.*), значения — true/false/число/слово */
+function examSets(raw) {
+  const out = {};
+  for (const x of (Array.isArray(raw) ? raw : String(raw || "").split(/[;\n,]+/))) {
+    const m = /^llm\.([a-z_][a-z0-9_]*)=([^\s;]{1,60})$/.exec(String(x).trim());
+    if (!m || ["base_url", "api_key", "model", "cloud", "account", "kind", "name"].includes(m[1])) continue;
+    out[m[1]] = m[2] === "true" ? true : m[2] === "false" ? false : /^-?\d+(\.\d+)?$/.test(m[2]) ? +m[2] : m[2];
+  }
+  return out;
+}
 async function examRun(onStep, job) {
   if (EXAM) return null;
   let info = {}; try { info = JSON.parse(D.info() || "{}"); } catch (e) { }
@@ -636,23 +647,27 @@ async function examRun(onStep, job) {
   SANDBOX = { prefs: {}, files: {}, dev: [] };                                           // eslint-disable-line no-global-assign
   EXAM = { tools: [], alarms: [], calendar: [], stop: false };
   const keepText = S.textMode; S.textMode = true;                               // ничего не озвучивать
+  // 1.0.61 — стенд на телефоне: группы и переключатель llm.* из кабинета («llm.talk_lean=false»); после — как было
+  const groups = Array.isArray(job && job.groups) ? job.groups.map(String) : [], sets = examSets(job && job.sets);
+  const list = groups.length ? EXAM_PHONE.filter(sc => groups.includes(sc.group)) : EXAM_PHONE;
+  const keepLlm = Object.assign({}, S.llm); Object.assign(S.llm, sets);
   const results = [];
   try {
-    for (let i = 0; i < EXAM_PHONE.length && !EXAM.stop; i++) {
-      const sc = EXAM_PHONE[i];
-      onStep && onStep(i + 1, EXAM_PHONE.length, sc.title);
-      await examReport(job, { state: "running", i: i + 1, n: EXAM_PHONE.length, title: sc.title });
+    for (let i = 0; i < list.length && !EXAM.stop; i++) {
+      const sc = list[i];
+      onStep && onStep(i + 1, list.length, sc.title);
+      await examReport(job, { state: "running", i: i + 1, n: list.length, title: sc.title });
       if (EXAM.stop) break;
       results.push(await examScenario(sc));
     }
-  } finally { S.textMode = keepText; }
+  } finally { S.textMode = keepText; S.llm = keepLlm; }
   const by = {};
   for (const r of results) { const g = by[r.group] = by[r.group] || { passed: 0, total: 0 }; g.total++; if (r.passed) g.passed++; }
   const sc = results.map(r => r.score).filter(x => x != null);
   const model = (S.llm.cloud ? "Dewiar " : "") + (S.llm.model || S.llm.name || "модель");
   const rep = { version: "телефон " + (info.version || ""), started: new Date(started.getTime() - started.getTimezoneOffset() * 6e4).toISOString().slice(0, 19),
     duration_s: Math.round((Date.now() - started) / 1000), model: model + " · телефон", host: String(info.device || "").slice(0, 40),
-    os: "Android " + (info.android || ""), long: false, app: "phone", scenarios: results,
+    os: "Android " + (info.android || ""), long: false, app: "phone", scenarios: results, sets: Object.keys(sets).map(k => `llm.${k}=${sets[k]}`), groups,
     summary: { passed: results.filter(r => r.passed).length, total: results.length, by_group: by, avg_score: sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length * 10) / 10 : null } };
   rep.md = examMarkdown(rep);
   let sent = null, err = "";
