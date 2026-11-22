@@ -426,6 +426,36 @@ def reserve():
     return "" if px else rv
 
 
+try:
+    from socksio.exceptions import ProtocolError as _SocksProto      # «Malformed reply» приходит отсюда, мимо httpx
+except ImportError:  # noqa: BLE001 — без socksio SOCKS5 нет вовсе
+    class _SocksProto(Exception):
+        pass
+
+
+_px_alt = {}                           # прокси -> тот же адрес другим типом, если так он отвечает (SOCKS5 ↔ HTTP)
+
+
+def _wrong_type(e, px):
+    """Прокси ответил не на языке своего типа: SOCKS5-клиент получил «Malformed reply» (там HTTP-прокси), HTTP-клиент —
+    обрыв без ответа или мусор вместо строки статуса (там SOCKS5)."""
+    m, sch = str(e), (px or "").split(":", 1)[0].lower()
+    if sch.startswith("socks"):
+        return isinstance(e, httpx.ProxyError) and bool(re.search(r"malformed|protocol|invalid|unexpected", m, re.I))
+    return isinstance(e, (httpx.RemoteProtocolError, httpx.ProxyError)) and bool(
+        re.search(r"disconnected without sending|illegal status line|invalid http|malformed|protocol", m, re.I))
+
+
+def _px_other(px):
+    """socks5://… -> http://… и обратно (логин и пароль те же)."""
+    sch = (px or "").split(":", 1)[0].lower()
+    if sch.startswith("socks"):
+        return "http" + px[len(sch):]
+    if sch in ("http", "https"):
+        return "socks5" + px[len(sch):]
+    return ""
+
+
 class _Lazy(httpx.BaseTransport):
     """Транспорт через прокси, который создаётся только при первом запросе (обычные запросы не платят за него)."""
 
@@ -464,13 +494,41 @@ class _Lazy(httpx.BaseTransport):
         """Платные и общие прокси нередко отвечают на соединение «502 Bad Gateway» или обрывают его — со второго-третьего
         раза проходит. Повторяем сами, пока запрос не ушёл дальше прокси (до сервера ничего не дошло — повтор безопасен);
         чтение ответа оборвалось — повторяем только запросы без последствий (GET/HEAD)."""
+        if self.proxy in _px_alt:                       # тип прокси уже угадан (SOCKS5 ↔ HTTP) — сразу верный
+            self.proxy, self.t = _px_alt[self.proxy], None
         if self.t is None:
             self.t = httpx.HTTPTransport(proxy=self.proxy, verify=self.verify, cert=self.cert)
         safe = request.method in ("GET", "HEAD", "OPTIONS")
         for attempt in range(RETRIES + 1):
             try:
                 return self.t.handle_request(request)
-            except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout) as e:
+            except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError, _SocksProto) as e:
+                if isinstance(e, _SocksProto):                # socksio не оборачивается в httpx — сами: это ошибка прокси
+                    e = httpx.ProxyError(f"SOCKS5: {e}")
+                alt = _px_other(self.proxy) if attempt == 0 and _wrong_type(e, self.proxy) else ""
+                if alt:
+                    # владелец 22.11: Gemini через купленный прокси — «Malformed reply». Продавцы дают SOCKS5 и HTTP на разных
+                    # портах, а тип в настройках выбирают наугад: прокси ответил не на своём языке — пробуем тот же адрес
+                    # другим типом и, если прошло, дальше ходим им (до сервера ничего не ушло — повтор безопасен)
+                    t2 = httpx.HTTPTransport(proxy=alt, verify=self.verify, cert=self.cert)
+                    try:
+                        r = t2.handle_request(request)
+                    except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError, _SocksProto):
+                        t2.close()
+                    else:
+                        log.warning("🌐 Прокси %s отвечает как %s, а не %s — дальше хожу так", hide(self.proxy),
+                                    alt.split(":", 1)[0].upper(), self.proxy.split(":", 1)[0].upper())
+                        _px_alt[self.proxy] = alt
+                        self.proxy, self.t = alt, t2
+                        return r
+                if str(e).startswith("SOCKS5: "):             # ответ не по протоколу — повтор ничего не изменит
+                    raise e from None
+                if isinstance(e, httpx.RemoteProtocolError):
+                    if not safe or attempt >= RETRIES:
+                        raise e
+                    log.info("Прокси оборвал ответ (%s) — повтор %d", e or type(e).__name__, attempt + 1)
+                    time.sleep(BACKOFF[min(attempt, len(BACKOFF) - 1)])
+                    continue
                 if "407" in str(e):
                     # владелец 12.11, утренняя сводка: «Не получилось: 407 Proxy Authentication Required» дважды — логин
                     # прокси Dewiar, полученный заранее, устарел; повтор с ним бесполезен — взять свежий и не повторять
@@ -479,11 +537,11 @@ class _Lazy(httpx.BaseTransport):
                             on_proxy_auth()
                         except Exception:  # noqa: BLE001
                             log.debug("net: on_proxy_auth", exc_info=True)
-                    raise
+                    raise e
                 if attempt >= (1 if isinstance(e, httpx.ConnectTimeout) else RETRIES):   # молчащий прокси — один повтор (каждый ждёт таймаут)
-                    raise
+                    raise e
                 log.info("Прокси: %s — повтор %d (%s)", e or type(e).__name__, attempt + 1, request.url.host)
-            except (httpx.RemoteProtocolError, httpx.ReadError) as e:
+            except httpx.ReadError as e:
                 if not safe or attempt >= RETRIES:
                     raise
                 log.info("Прокси оборвал ответ (%s) — повтор %d", e or type(e).__name__, attempt + 1)

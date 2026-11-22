@@ -65,7 +65,13 @@ final class SafeKey {
             if ("save".equals(op)) {
                 Cipher ci = Cipher.getInstance("AES/GCM/NoPadding");
                 ci.init(Cipher.ENCRYPT_MODE, key(mayAsk));         // повтор после подтверждения — тот же ключ, не новый
-                byte[] ct = ci.doFinal(Base64.decode(keyB64, Base64.NO_WRAP));
+                // №961 (22.11): интерфейс шлёт base64 «для ссылок» (- и _ вместо + и /), а Base64.decode молча ПРОПУСКАЕТ
+                // незнакомые знаки — ключ сохранялся порченым, и сейф потом «мастер-пароль сменился». Принимаем оба вида
+                // и проверяем длину: ключ сейфа — 32 байта
+                byte[] raw = Base64.decode(keyB64.replace('-', '+').replace('_', '/'), Base64.NO_WRAP);
+                if (raw.length != 32) { reply(a, op, false, null, "bad_key"); return; }
+                byte[] ct = ci.doFinal(raw);
+                java.util.Arrays.fill(raw, (byte) 0);
                 prefs(a).edit().putString("iv", Base64.encodeToString(ci.getIV(), Base64.NO_WRAP))
                         .putString("ct", Base64.encodeToString(ct, Base64.NO_WRAP)).apply();
                 reply(a, op, true, null, null);

@@ -83,5 +83,42 @@ if _sh.which("node"):
     ok(o.strip().endswith("OK"), f"владелец 21.11 «вносится отдельно IP, порт, логин и пароль»: тип, адрес, порт, логин, пароль — поля; строка от продавца прокси в «Адресе» разбирается сама: {o.strip()[-200:]}")
 ok("net.bind_hosts(self._host_px_conf)" in (ROOT / "core/engine.py").read_text(encoding="utf-8"), "ядро подключает прокси профилей")
 srv.shutdown()
+# владелец 22.11: Gemini через купленный прокси — «Malformed reply»: в настройках SOCKS5, а на этом порту HTTP-прокси.
+# Прокси ответил не на своём языке — тот же адрес другим типом, дальше так (и в «Мозге» — понятная ошибка, если не помогло)
+import socket  # noqa: E402
+raw = socket.socket(); raw.bind(("127.0.0.1", 0)); raw.listen(8)
+RPORT = raw.getsockname()[1]
+
+
+def raw_proxy():                                  # HTTP-прокси, который на приветствие SOCKS5 отвечает «400» (как у продавцов)
+    while True:
+        c, _ = raw.accept()
+        try:
+            first = c.recv(1, socket.MSG_PEEK)
+            if first == b"\x05":
+                c.recv(64); c.sendall(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n"); c.close(); continue
+            buf = b""
+            while b"\r\n\r\n" not in buf:
+                buf += c.recv(4096)
+            head, body = buf.split(b"\r\n\r\n", 1)
+            ln = int((([x for x in head.split(b"\r\n") if x.lower().startswith(b"content-length:")] or [b"0:0"])[0]).split(b":")[1])
+            while len(body) < ln:
+                body += c.recv(4096)
+            seen.append((head.split(b" ")[1].decode(), ""))
+            c.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 12\r\n\r\n{"ok": true}'); c.close()
+        except OSError:
+            c.close()
+
+
+threading.Thread(target=raw_proxy, daemon=True).start()
+n = len(seen)
+with net.profile_proxy({"base_url": "http://gem.example.invalid/v1", "proxy": f"socks5://u:p@127.0.0.1:{RPORT}"}):
+    r = httpx.post("http://gem.example.invalid/v1/chat/completions", json={"x": 1}, timeout=10)
+ok(r.status_code == 200 and len(seen) == n + 1 and seen[-1][0].startswith("http://gem.example.invalid/")
+   and net._px_alt.get(f"socks5://u:p@127.0.0.1:{RPORT}") == f"http://u:p@127.0.0.1:{RPORT}",
+   "SOCKS5 в настройках, а прокси — HTTP: запрос прошёл тем же адресом как HTTP, тип запомнен")
+import llm  # noqa: E402
+ok("SOCKS5 или HTTP" in llm._humanize(httpx.ProxyError("Malformed reply"), "https://generativelanguage.googleapis.com/v1beta/openai"),
+   "не помог и другой тип — понятная ошибка вместо «Malformed reply»")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} не прошло")
 sys.exit(1 if fails else 0)

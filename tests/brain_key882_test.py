@@ -55,10 +55,10 @@ with sync_playwright() as p:
     connect("custom", "sk-list", "https://router.example/v1")
     opts = pg.evaluate("() => [...document.querySelectorAll('#ck-model option')].map(o => o.textContent)")
     calls = [c for c, a in pg.evaluate("() => _calls")]
-    ok("llm_test" not in calls and "Ключ принят: моделей — 5, из них бесплатных — 2" in pg.inner_text("#ck-res"),
+    ok("llm_test" not in calls and "Ключ принят: моделей — 4, из них бесплатных — 2" in pg.inner_text("#ck-res"),
        f"№882 ключ принят — ни одного настоящего запроса к модели, пока не выбрали: {calls} | {pg.inner_text('#ck-res')}")
-    ok(opts[:2] == ["qwen/qwen3-coder:free — бесплатная", "z-ai/glm-4.5-air:free — бесплатная"] and opts[-1] == "text-embedding-3",
-       f"бесплатные — первыми и подписаны, не для разговора — в конце: {opts}")
+    ok(sorted(opts[:2]) == ["qwen/qwen3-coder:free — бесплатная", "z-ai/glm-4.5-air:free — бесплатная"] and not any("embedding" in o for o in opts),
+       f"бесплатные — первыми и подписаны, не для разговора — не показываем (владелец 22.11): {opts}")
     pg.select_option("#ck-model", "qwen/qwen3-coder:free"); pg.click("#ck-use"); pg.wait_for_timeout(500)
     tested = [a["profile"]["model"] for c, a in pg.evaluate("() => _calls") if c == "llm_test"]
     ok(tested == ["qwen/qwen3-coder:free"] and "Готово" in pg.inner_text("#w-done") and pg.evaluate("() => S.llm.profiles[S.llm.active].model") == "qwen/qwen3-coder:free",

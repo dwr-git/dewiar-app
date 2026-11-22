@@ -144,7 +144,7 @@ if ($("#pr-new")) {
 /* редактор */
 let ed = null, pv = new DewiarEntity($("#pv"), { style: "nexus", color: "#8A9BFF" }), styleEnts = [];
 function openEditor(p) {
-  ed = p ? JSON.parse(JSON.stringify(p)) : { name: "", gender: "female", wake: [], tagline: "", character: "", style: "particles", color: COLORS[Math.floor(Math.random() * COLORS.length)], voice: { piper: "ru_RU-irina-medium", length_scale: 1, remote: "" } };
+  ed = p ? JSON.parse(JSON.stringify(p)) : { name: "", gender: "female", wake: [], tagline: "", character: "", style: "particles", color: COLORS[Math.floor(Math.random() * (COLORS.length - 1))], voice: { piper: "ru_RU-irina-medium", length_scale: 1, remote: "" } };
   ed.avatar_data = null;
   // №766 (16.11): персонаж, записанный в обход студии (Кодером), — без голоса: редактор падал на ed.voice.piper и не
   // открывался вовсе. Чего нет — по умолчанию
@@ -378,7 +378,10 @@ function renderKb(open) {
 function voiceHint() {
   const el = $("#e-vhint"); if (!el) return;
   const eng = (S.tts || {}).engine, pv = $("#e-piper").selectedOptions[0], pn = pv ? pv.textContent.replace(/\s*\(.*\)$/, "") : "Piper";
-  el.textContent = eng === "remote" ? "Сейчас звучит голос сервера (поле «Голос на сервере»); Piper — запасной, если сервер молчит."
+  el.textContent = eng === "remote" ? ($("#e-remote").value.trim()
+      ? "Сейчас звучит голос сервера «" + $("#e-remote").value.trim() + "»; Piper — запасной, если сервер молчит."
+      : "Сейчас звучит голос сервера — " + (/мужск/.test(pv ? pv.textContent : "") || (!/женск/.test(pv ? pv.textContent : "") && $("#e-gender").value === "male") ? "мужской" : "женский")
+        + ", как выбранный голос Piper; свой голос сервера (клон) можно вписать в поле выше.")
     : eng === "elevenlabs" ? "Сейчас звучит ElevenLabs; Piper — запасной."
     : eng === "off" ? "Голос выключен — студия → «Голос»."
     // GitHub №31: при eSpeak / голосе Windows подсказка говорила «звучит Piper»
@@ -391,6 +394,7 @@ $("#e-piper").onchange = () => {
   voiceHint();
 };
 $("#e-vosk").onchange = voiceHint;
+$("#e-remote").oninput = voiceHint; $("#e-gender").addEventListener("change", voiceHint);
 $("#e-cancel").onclick = closeEditor;
 $("#e-save").onclick = async () => {
   const name = $("#e-name").value.trim(); if (!name) { $("#e-res").className = "res bad"; $("#e-res").textContent = "Введите имя"; return; }

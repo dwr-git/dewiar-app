@@ -129,7 +129,7 @@ let S = null, personas = [], active = "lira", entities = [];
 // логотип в меню виден всегда — в покой (~6 кадров/с) уже через 4 с тишины, а не через 20 (03.11: на слабом компьютере
 // живой логотип один занимал до половины времени страницы)
 const brand = new DewiarEntity($("#brand"), { style: "nexus", color: "#8A9BFF", ring: false, restAfter: 4000 });
-const COLORS = ["#FFB547", "#3DF5C8", "#4FC3FF", "#9BD4FF", "#B78CFF", "#FF7AB6", "#FF6B5A", "#9BE15D", "#F5E663", "#7C8CFF", "#E6EEFF"];
+const COLORS = ["#FFB547", "#3DF5C8", "#4FC3FF", "#9BD4FF", "#B78CFF", "#FF7AB6", "#FF6B5A", "#9BE15D", "#F5E663", "#7C8CFF", "#E6EEFF", "#16181D"];   // чёрный (владелец 22.11) — диск облика у него светлый (entities.js dark)
 const STYLE_NAMES = { nexus: "Нейросфера", aura: "Сфера", holobrain: "Голограмма мозга", lattice: "Кристалл", orbital: "Орбиты", tactical: "Радар", rings: "Кольца", strings: "Струны", particles: "Частицы" };
 
 function toast(t, ms) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("show"), ms || 1800); }

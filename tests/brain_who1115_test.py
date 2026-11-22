@@ -110,7 +110,7 @@ with sync_playwright() as p:
     pg.click("#br-go")
     pg.wait_for_timeout(300)
     ms = pg.evaluate("[...document.querySelectorAll('#br-body [data-m]')].map(b => b.dataset.m)")
-    ok(ms[0] == "gemini-flash-latest" and ms[-1] == "text-embedding-004", f"Gemini: советуемые первыми, поиск по смыслу — в конце: {ms}")
+    ok(ms[0] == "gemini-flash-latest" and "text-embedding-004" not in ms, f"Gemini: советуемые первыми, поиск по смыслу (не для разговора) — не показываем (владелец 22.11): {ms}")
     pg.click('#br-body [data-m="gemma-3-27b-it"]')
     pg.wait_for_timeout(400)
     ok("не ответила" in pg.inner_text("#br-st") and pg.evaluate("SS.llm.active") == "dewiar-cloud", "модель не ответила — не ставится, сказано выбрать другую")

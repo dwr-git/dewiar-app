@@ -104,6 +104,17 @@ def smile_real(who, name, big):
     crop = tuple(round(v * 2) for v in W["crop"])
     sb = np.asarray(sm.crop(crop).resize((360 * K, 360 * K), Image.LANCZOS)).astype(np.float32)
     bb = np.asarray(big.convert("RGB")).astype(np.float32)
+    # владелец 22.11: «накладываемая улыбка высоковато… рот светлее». Линия смыкания губ в кадре с улыбкой у генератора
+    # бывает на 1–2 px выше — опускаем низ лица кадра с улыбкой так, чтобы линии совпали (не больше 3 px: дальше — не та
+    # линия, а тень бороды), — при смене улыбки рот не «прыгает» и не двоится
+    ly, lcx = W["lip"][0], W["lip"][1]
+    def seam(a):
+        y0_, y1_ = int((ly - 18) * K), int((ly + 14) * K)
+        col = a[y0_:y1_, int((lcx - 6) * K):int((lcx + 6) * K)].mean(axis=(1, 2))
+        return (y0_ + float(np.argmin(col))) / K
+    dy = seam(bb) - seam(sb)
+    if 0.25 <= abs(dy) <= 3.0:
+        sb = np.roll(sb, int(round(dy * K)), axis=0)
     x, y, w, h = W["smile_box"]
     X0, Y0, X1, Y1 = int(x * K), int(y * K), int((x + w) * K), int((y + h) * K)
     yy, xx = np.mgrid[0:360 * K, 0:360 * K].astype(np.float32)
@@ -123,6 +134,21 @@ def smile_real(who, name, big):
     cs = (chroma(out) * mk[..., None]).sum((0, 1)) / (mk.sum() + 1e-3)
     cb = (chroma(bb) * mk[..., None]).sum((0, 1)) / (mk.sum() + 1e-3)
     out = np.clip(out - mk[..., None] * (cs - cb), 0, 255)
+    # яркость и контраст губ — как в основном кадре (владелец 22.11: «рот как будто светлее, и это видно»): среднее и разброс
+    # яркости в области губ подгоняем к основному кадру, мягко по той же маске
+    lum = lambda im: im.mean(2)   # noqa: E731
+    w_ = mk.sum() + 1e-3
+    ms_, mb_ = (lum(out) * mk).sum() / w_, (lum(bb) * mk).sum() / w_
+    ss_ = np.sqrt(((lum(out) - ms_) ** 2 * mk).sum() / w_) + 1e-3
+    sbb = np.sqrt(((lum(bb) - mb_) ** 2 * mk).sum() / w_)
+    k_ = float(np.clip(sbb / ss_, 0.8, 1.4))
+    tgt = (lum(out) - ms_) * k_ + mb_
+    out = np.clip(out + mk[..., None] * (tgt - lum(out))[..., None], 0, 255)
+    # и вокруг рта в целом (губы с кожей рядом, овал чуть шире губ) — средняя яркость как в основном кадре: улыбка не
+    # «светлое пятно» на лице (было до +24 из 255)
+    m2 = np.clip((1.3 - rl) / 0.5, 0, 1)
+    w2 = m2.sum() + 1e-3
+    out = np.clip(out - m2[..., None] * (((lum(out) - lum(bb)) * m2).sum() / w2), 0, 255)
     a = np.clip((1.0 - r) / 0.42, 0, 1) ** 1.6                    # мягкий овал: к краю рамки — основной кадр
     a = a * (np.asarray(big.getchannel("A")).astype(np.float32) / 255.0 if big.mode == "RGBA" else 1.0) ** 2
     # ↑ только по самому портрету: за контуром лица (фон окна виден насквозь) кадр с улыбкой не рисуем — у скул на светлом

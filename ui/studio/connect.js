@@ -276,7 +276,7 @@ const CLOUD = {
   deepseek: { hint: 'Ключ — на <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a>. Напрямую — дешевле, чем через посредников.',
               rec: ["deepseek-chat", "deepseek-reasoner"] },
   gemini: { hint: 'Ключ — в <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> («Get API key»). Есть бесплатный уровень.',
-            rec: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-pro-latest", "gemini-2.5-pro"] },
+            rec: ["gemini-flash-latest", "gemini-pro-latest", "gemini-flash-lite-latest"] },   // «-latest» — у Google всегда новейшая
   kimi: { hint: 'Ключ — на <a href="https://platform.moonshot.ai/console/api-keys" target="_blank">platform.moonshot.ai</a>. Модели Kimi K2 — сильные в инструментах.',
           rec: ["kimi-latest", "kimi-k2-turbo-preview", "kimi-k2-0905-preview", "moonshot-v1-32k"] },
   glm: { hint: 'Ключ — на <a href="https://z.ai/manage-apikey/apikey-list" target="_blank">z.ai</a> («API Keys»). Модели GLM от Zhipu.',
@@ -336,12 +336,23 @@ async function ckModels(prov, prof) {
   }
   if (!models.length && CLOUD[prov].rec.length) models = CLOUD[prov].rec.slice();   // список не отдал (бывает у GLM) — проверим первую из советуемых
   if (!models.length) throw new Error("сервис не вернул список моделей");
+  // владелец 22.11: «модели странные старые… убирать те, которые не языковые». Не для разговора (голос, картинки, видео,
+  // поиск по смыслу, «живой» звук, управление компьютером) — не показываем вовсе (если остались только такие — как есть);
+  // остальные — новые версии выше старых (у Google новые долго ходят «preview» — они тоже вверху), в одной версии стабильная — выше «preview» и датированных снимков
+  const side = (m) => /embed|rerank|tts|whisper|dall-e|image|imagen|veo|lyria|moderation|audio|transcribe|realtime|[-_]live\b|computer-use|robotics|aqa/i.test(m);
+  models = models.filter(m => !side(m)).length ? models.filter(m => !side(m)) : models;
   const rec = CLOUD[prov].rec.filter(m => models.includes(m));
-  const side = (m) => /embed|rerank|tts|whisper|dall-e|image|moderation|audio|transcribe|realtime/i.test(m) ? 1 : 0;   // не для разговора — в конец
-  const ordered = rec.concat(models.filter(m => !rec.includes(m)).sort((a, b) => side(a) - side(b) || ckFree(b) - ckFree(a) || a.localeCompare(b)));   // бесплатные — первыми
+  const ver = (m) => { const v = String(m).match(/(?:^|[-_/a-z])(\d+(?:\.\d+)?)(?=[-_.a-z]|$)/i); return v ? parseFloat(v[1]) : 0; };
+  const raw = (m) => /preview|exp(?:erimental)?\b|-\d{4,}|\d{2}-\d{2}\b/i.test(m) ? 1 : 0;
+  const ordered = rec.concat(models.filter(m => !rec.includes(m)).sort((a, b) => ckFree(b) - ckFree(a) || ver(b) - ver(a) || raw(a) - raw(b) || a.localeCompare(b)));   // бесплатные — первыми
   return { ordered, rec };
 }
 let ckId = null, ckSvc = "", ckPend = null;
+// владелец 22.11: «в выборе мозга три Гугла» — каждое «Подключить» добавляло профиль. Тот же сервис и та же модель —
+// тот же профиль (новый ключ и прокси — в него), а не ещё один
+const ckSame = (prof) => Object.keys(S.llm.profiles || {}).find(id => { const p = S.llm.profiles[id] || {};
+  return !p.cloud && String(p.base_url || "").replace(/\/+$/, "").toLowerCase() === String(prof.base_url || "").replace(/\/+$/, "").toLowerCase()
+    && String(p.model || "") === String(prof.model || ""); }) || null;
 const ckSel = (own) => { $("#ck-sel-f").hidden = !!own; $("#ck-own-f").hidden = !own; $("#ck-found").style.display = ""; };
 $("#ck-go").onclick = async (ev) => {
   const prov = $("#ck-prov").value, key = $("#ck-key").value.trim(), r = $("#ck-res"), btn = $("#ck-go");
@@ -360,7 +371,7 @@ $("#ck-go").onclick = async (ev) => {
     ckSel(false); $("#ck-key").value = "";
     if (rec.includes(ordered[0])) {             // советуемая модель есть — подключаем её и проверяем сразу
       prof.model = ordered[0]; prof.name = `${ckSvc} — ${prof.model}`;
-      ckId = uid(); S.llm.profiles[ckId] = prof;
+      ckId = ckSame(prof) || uid(); S.llm.profiles[ckId] = prof;
       await save({ llm: { profiles: S.llm.profiles, active: ckId } }); renderProfiles();
       r.textContent = ""; await wizardCheck(ckId);
     } else {
@@ -380,9 +391,13 @@ $("#ck-key").onkeydown = (e) => { if (e.key === "Enter") $("#ck-go").click(); };
 $("#ck-use").onclick = async () => {
   const m = !$("#ck-own-f").hidden ? $("#ck-model-own").value.trim() : $("#ck-model").value;
   if (!m) { $("#ck-res").className = "res bad"; $("#ck-res").textContent = "Впишите имя модели"; $("#ck-model-own").focus(); return; }
-  if (!ckId && ckPend) { ckId = uid(); S.llm.profiles[ckId] = ckPend; ckPend = null; }
+  if (!ckId && ckPend) { ckId = ckSame(Object.assign({}, ckPend, { model: m })) || uid(); S.llm.profiles[ckId] = ckPend; ckPend = null; }
   if (!ckId || !S.llm.profiles[ckId]) return;
   $("#ck-res").textContent = "";
+  const same = ckSame(Object.assign({}, S.llm.profiles[ckId], { model: m }));
+  if (same && same !== ckId) {                  // выбрали модель, которая уже подключена, — тот же профиль, без второго
+    S.llm.profiles[same] = Object.assign(S.llm.profiles[ckId], { model: m }); delete S.llm.profiles[ckId]; ckId = same;
+  }
   const p = S.llm.profiles[ckId]; p.model = m; p.name = `${ckSvc || ckPreset($("#ck-prov").value).name} — ${m}`;
   await save({ llm: { profiles: S.llm.profiles, active: ckId } }); renderProfiles(); await wizardCheck(ckId);
 };

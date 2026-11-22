@@ -366,6 +366,7 @@ class Settings:
                 if (raw.get("llm") or {}).get("history_reset_seconds") in (300, 1200):
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
                 self._cloud_kind()
+                self._dedupe_profiles()
             except FileNotFoundError:
                 self.data = copy.deepcopy(DEFAULTS)
                 if system_dark():                                         # №259 (25.10): тёмная система — с первого запуска
@@ -385,6 +386,35 @@ class Settings:
             if isinstance(p, dict) and p.get("cloud") and "/dwrapp/cloud.php" in str(p.get("base_url") or "") \
                     and p.get("kind") != "openai":
                 p["kind"] = "openai"
+
+    def _dedupe_profiles(self):
+        """Владелец 22.11: «в выборе мозга три Гугла и мозг Dewiar — непонятно, что выбирать». Каждое «Подключить» по ключу
+        добавляло новый профиль. Одинаковые (сервис, адрес, модель, ключ, прокси) — один: остаётся выбранный (или первый),
+        ссылки персонажей на лишние переходят к нему. -> сколько убрано."""
+        llm = self.data.get("llm") or {}
+        profs = llm.get("profiles") or {}
+        seen, drop = {}, {}
+        order = sorted(profs, key=lambda k: (k != llm.get("active"), list(profs).index(k)))
+        for pid in order:
+            p = profs.get(pid)
+            if not isinstance(p, dict) or p.get("cloud"):
+                continue
+            key = (p.get("kind") or "openai", str(p.get("base_url") or "").rstrip("/").lower(), str(p.get("model") or ""),
+                   str(p.get("api_key") or ""), str(p.get("proxy") or ""))
+            if not key[1]:
+                continue
+            if key in seen:
+                drop[pid] = seen[key]
+            else:
+                seen[key] = pid
+        for pid, keep in drop.items():
+            profs.pop(pid, None)
+            for who, ref in list((llm.get("persona") or {}).items()):
+                if ref == pid:
+                    llm["persona"][who] = keep
+        if drop:
+            log.info("Мозг: одинаковых подключений убрано — %d", len(drop))
+        return len(drop)
 
     def save(self):
         """Через .tmp с правами 600 (в файле ключи API): файл не останется недописанным и не будет виден другим."""

@@ -173,6 +173,7 @@ async function ask(text, opts = {}) {
     if (lean) { msgs[0].content = systemStable(true); plog("info", `🍃 чистый разговор: подсказка ${Math.round(msgs[0].content.length / 1000)} тыс. знаков, действия — по просьбе модели`); }
     putContext(msgs, ctxParts.filter(Boolean).join("\n\n"));
     putProfile(msgs, systemPersonal());               // личное — справкой в начале разговора, не в подсказке
+    let seenOut = "", outRead = false;               // безопасность 22.11: прочитанное в ходе и был ли текст извне (outsideCheck)
     const called = new Set(); let nudged = false;      // какие инструменты уже вызваны в этом ходе; напоминали ли «сделай по-настоящему»
     let netOk = true, netTurn = false;                 // «Сеть Лиры»: только первый круг хода; ответил ли узел (пометка в истории)
     if (guided) called.add("app_help");
@@ -244,7 +245,8 @@ async function ask(text, opts = {}) {
         continue;
       }
       // и после других инструментов: «узнала погоду» (weather) и «сделала презентацию» словами — без make_app
-      const claim = !r.calls.length && !nudged && String(r.text || "").length < 1500 ? claimedAction(r.text || "", called, text) : null;
+      const aboutMe = ABOUT_ME.test(text) && !called.size;   // рассказ о себе — описание возможностей, не обещания
+      const claim = !aboutMe && !r.calls.length && !nudged && String(r.text || "").length < 1500 ? claimedAction(r.text || "", called, text) : null;
       if (claim) {
         nudged = true;
         // «Звоню маме», «Включаю Маяк», «Фотографирую» — а инструмент не вызван (модель повторила прошлый ответ из истории):
@@ -261,9 +263,9 @@ async function ask(text, opts = {}) {
       }
       const fix = !r.calls.length && !numChecked ? numberMismatch(r.text || "", doneCalls) : "";
       if (fix) { numChecked = true; msgs.push(aMsg(r.text), { role: "user", content: fix }); sink.push(" "); continue; }   // «на 79 минут», а поставлено 59
-      const rfix = !r.calls.length && !remindAsked && round < maxRounds - 1 ? remindClaim(r.text || "", called) : "";
+      const rfix = !aboutMe && !r.calls.length && !remindAsked && round < maxRounds - 1 ? remindClaim(r.text || "", called) : "";
       if (rfix) { remindAsked = true; plog("info", "✋ пообещала напомнить без напоминания — прошу поставить"); msgs.push(aMsg(r.text), { role: "user", content: rfix }); sink.push(" "); continue; }
-      const sfix = !r.calls.length && !nudged && round < maxRounds - 1 ? (remindMissing(text, called) || (!called.size ? savedClaim(text, r.text || "") : "")) : "";
+      const sfix = !aboutMe && !r.calls.length && !nudged && round < maxRounds - 1 ? (remindMissing(text, called) || (!called.size ? savedClaim(text, r.text || "") : "")) : "";
       if (sfix) { nudged = true; msgs.push(aMsg(r.text), { role: "user", content: sfix }); sink.push(" "); continue; }   // «Готово», а ничего не сделано (№66)
       const dfix = !r.calls.length && !drew && round < maxRounds - 1 ? diagramMissing(text, sink.text() + (r.text || ""), called) : "";
       if (dfix) { drew = true; msgs.push(aMsg(r.text), { role: "user", content: dfix }); sink.push(" "); continue; }   // «нарисуй схему» — словами
@@ -279,7 +281,7 @@ async function ask(text, opts = {}) {
       // «в Dewiar такого нет» без руководства; «через сколько дней» — без числа; поручение — «Я проверю.» (один раз за ход)
       const xfix = !opts.hidden && !r.calls.length && !xAsked && round < maxRounds - 1 ? (sameMinutesFix(text, doneCalls) || inventedFacts(text, sink.text() + (r.text || ""), called) || lawUnsourced(text, sink.text() + (r.text || ""), called)
         || imagesMissing(text, r.text || "", called) || appHelpMissing(text, r.text || "", called) || daysMissing(text, sink.text() + (r.text || ""), called)
-        || (!nudged ? orderUndone(text, r.text || "", called) : "")) : "";
+        || (!nudged && !aboutMe ? orderUndone(text, r.text || "", called) : "")) : "";
       if (xfix) { xAsked = true; msgs.push(aMsg(r.text), { role: "user", content: xfix }); sink.push(" "); continue; }
       if (!r.calls.length) break;
       leanKeep = r.calls.every(c => TALK_LEAN_KEEP.has(c.name));   // только «запомнить» и «коллега» — беседа продолжается налегке
@@ -296,7 +298,9 @@ async function ask(text, opts = {}) {
         ranTools = true;
         if (!cueArmed && !opts.hidden) { cueArmed = true; actCueArm(c.name, ctl, sink); }
         if (c.name === "more_tools") res = "Действия подключены — следующим шагом вызови нужное и только потом говори о сделанном.";
-        else try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
+        else if (outsideCheck(c.name, safeJSON(c.args), text, seenOut, outRead)) {
+          res = outsideCheck(c.name, safeJSON(c.args), text, seenOut, outRead); plog("info", `🛡 ${c.name}: outside_guard`);
+        } else try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
         plog("info", `🔧 ${c.name} → ${clip(String((res && res.text) || res || "").split("\n")[0], 90)}`);   // что сделано — видно в отчёте (№56)
         if (c.name === "calendar_add" && /^Записано/.test(String(res))) called.add("calendar_write");   // правда записано, а не только спросили
         if (c.name === "call_persona" && res && res.switchTo) { switchTo = res.switchTo; res = res.text; }
@@ -306,8 +310,10 @@ async function ask(text, opts = {}) {
         if (r.finish === "length" && /^Ошибка/.test(String(res)))   // ответ оборвался по лимиту — вызов пришёл не целиком
           res = String(res) + " (Твой ответ оборвался по лимиту длины, и вызов пришёл не целиком. Сделай короче: меньше текста и "
             + "комментариев, компактный код — и вызови снова.)";
+        seenOut = (seenOut + "\n" + String(res)).slice(-60000);
+        if (OUT_READ.has(c.name) && !/^Ошибка/.test(String(res))) { outRead = true; res = OUT_NOTE + String(res); }
         msgs.push({ role: "tool", tool_call_id: c.id, name: c.name, content: String(res).slice(0, 8000) });
-        doneCalls.push({ name: c.name, args: safeJSON(c.args), result: String(res).slice(0, 300) });
+        doneCalls.push({ name: c.name, args: safeJSON(c.args), result: String(res).replace(OUT_NOTE, "").slice(0, 300) });
       }
       if (shots.length) {                            // снимок с камеры — модели картинкой (сама модель со зрением, если есть)
         msgs.push({ role: "user", content: [{ type: "text", text: "Снимок с камеры телефона:" }, ...shots.map(u => ({ type: "image_url", image_url: { url: u } }))] });

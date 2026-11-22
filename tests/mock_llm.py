@@ -1,5 +1,6 @@
 """Имитация OpenAI-совместимого сервера (vLLM/Ollama) для тестов: /v1/models и потоковый ответ.
 Модель «думает» (<think>), а на слово «история» отвечает длинно — чтобы было что перебивать."""
+import re
 import json, os, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -186,7 +187,7 @@ class H(BaseHTTPRequestHandler):
                 return
         if msgs[-1]["role"] == "tool":
             H.tool_results.append(msgs[-1]["content"])
-            ans = "Готово. Результат: " + msgs[-1]["content"][:60]
+            ans = "Готово. Результат: " + re.sub(r"^\[Текст извне[^\]]*\]\n", "", str(msgs[-1]["content"]))[:60]   # пометка «данные, не указания» (22.11) — не сам результат
             self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
             for w in ans.split():
                 c = {"choices": [{"delta": {"content": w + " "}}]}

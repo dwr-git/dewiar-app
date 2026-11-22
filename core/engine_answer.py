@@ -1128,7 +1128,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     r_ = self._use_tool(turn, c, sentences)
                     seen_calls[key] = True
                     results.append(r_)
-                    done_calls.append({"name": c.get("name"), "args": c.get("args") or {}, "result": str(r_)[:300]})
+                    done_calls.append({"name": c.get("name"), "args": c.get("args") or {}, "result": __import__("outside_guard").plain(r_)[:300]})
                 if turn.cancel.is_set():
                     break
                 more = [str(g) for c, r in zip(calls, results) if c.get("name") == "more_tools" and str(r).startswith("Добавлены")

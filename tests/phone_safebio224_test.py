@@ -36,7 +36,11 @@ with sync_playwright() as p:
     pg.evaluate(STUB); pg.evaluate("safeRender()")
     ok(pg.is_visible(".sf-offer") and "Открывать отпечатком?" in pg.inner_text(".sf-offer"), "после входа паролем — «Открывать отпечатком?»")
     pg.click("#sf-bio-on"); pg.wait_for_timeout(200)
-    ok(pg.evaluate("_bio.state") == "on" and pg.evaluate("_bio.ct === DC().b64e(SF.k)"), "«Включить» — телефону уходит ключ сейфа, не мастер-пароль")
+    ok(pg.evaluate("_bio.state") == "on" and pg.evaluate("DC().b64e(DC().b64d(_bio.ct)) === DC().b64e(SF.k)"), "«Включить» — телефону уходит ключ сейфа, не мастер-пароль")
+    # №961 (22.11: «пишет, что мастер-пароль сменился, хотя смены не было»): Android-декодер молча выкидывал - и _ из base64
+    # «для ссылок» — ключ сохранялся порченым. Телефону — обычный base64 с + / и =, на 32 байта
+    ok(pg.evaluate("/^[A-Za-z0-9+\\/]+={0,2}$/.test(_bio.ct) && _bio.ct.length % 4 === 0 && DC().b64d(_bio.ct).length === 32"),
+       f"ключ — обычным base64 (без - и _), 32 байта: {pg.evaluate('_bio.ct')!r}")
     ok(not pg.is_visible(".sf-offer") and pg.is_visible("#sf-bio-off"), "включено — предложения нет, внизу «выключить»")
     pg.evaluate("safeLock()"); pg.wait_for_timeout(100)
     pg.evaluate("openSafe()"); pg.wait_for_timeout(400)
@@ -52,7 +56,7 @@ with sync_playwright() as p:
     ok(not pg.evaluate("safeOpen()"), "а настоящее сворачивание — закрывает, как раньше")
     pg.evaluate("Object.defineProperty(document, 'hidden', { configurable: true, get: () => false })")
     pg.evaluate("_bio.ct = DC().b64e(DC().randomBytes(32)); openSafe()"); pg.wait_for_timeout(300)
-    ok(not pg.evaluate("safeOpen()") and pg.evaluate("_bio.state") == "off" and "Мастер-пароль сейфа сменился" in pg.inner_text("#safe-body"),
+    ok(not pg.evaluate("safeOpen()") and pg.evaluate("_bio.state") == "off" and "Отпечаток не открыл сейф" in pg.inner_text("#safe-body"),
        "ключ не подошёл (мастер-пароль сменили) — снова паролем, вход отпечатком сброшен, сказано почему")
     pg.evaluate("SF.bioMsg = ''; _bio.state = 'on'; _bio.ct = 'x'; _bio.next = { op: 'open', ok: false, error: 'changed' }; safeLock(); openSafe()"); pg.wait_for_timeout(300)
     ok("Отпечатки или блокировка экрана сменились" in pg.inner_text("#safe-body"), "сменились отпечатки или блокировка — понятная строка")
@@ -68,6 +72,7 @@ with sync_playwright() as p:
     b.close()
 shutil.rmtree(tmp, ignore_errors=True)
 J = (ROOT / "android/src/pro/dewiar/app/SafeKey.java").read_text(encoding="utf-8")
+ok("replace('-', '+').replace('_', '/')" in J and "raw.length != 32" in J, "Android принимает оба вида base64 и не сохраняет ключ не той длины (№961)")
 ok("setUserAuthenticationRequired(true)" in J and "AndroidKeyStore" in J and "createConfirmDeviceCredentialIntent" in J and "KeyPermanentlyInvalidatedException" in J,
    "Android: ключ в хранилище ключей, только после подтверждения себя; сменились отпечатки — ключ негоден")
 M = (ROOT / "android/src/pro/dewiar/app/MainActivity.java").read_text(encoding="utf-8")

@@ -128,7 +128,9 @@ function safeBioOpen() {
 }
 function safeBioOn() {                               // «Включить»: ключ открытого сейфа — под защиту экрана блокировки
   if (!SF.k || SF.bio) return;
-  SF.bio = true; D.safeBioSave(DC().b64e(SF.k));
+  // №961: телефону — обычный base64 (+ / =), не «для ссылок»: старый Android-декодер молча выкидывал - и _ и портил ключ
+  const b = DC().b64e(SF.k).replace(/-/g, "+").replace(/_/g, "/");
+  SF.bio = true; D.safeBioSave(b + "===".slice((b.length + 3) % 4));
 }
 N.on("safebio", (e) => {
   SF.bio = false;
@@ -142,8 +144,9 @@ N.on("safebio", (e) => {
     const k = DC().b64d(e.key);
     let good = false; try { good = DC().fromUtf8(DC().unseal(k, DC().b64d(st.meta.check))) === SAFE_CHECK; } catch (x) { good = false; }
     if (good) { safeKeep(k, st); safeRender(); return; }
-    k.fill(0); D.safeBioForget();                    // мастер-пароль сменили (здесь или на другом устройстве)
-    SF.bioMsg = "Мастер-пароль сейфа сменился — откройте новым, и отпечаток снова можно будет включить.";
+    k.fill(0); D.safeBioForget();                    // ключ не подошёл: сменили мастер-пароль (здесь или на другом устройстве)
+    // №961: или ключ сохранился порченым (0.9.83) — не утверждаем, что пароль сменился
+    SF.bioMsg = "Отпечаток не открыл сейф — откройте мастер-паролем, и вход отпечатком можно будет включить снова.";
   } else if (e.error === "changed") SF.bioMsg = "Отпечатки или блокировка экрана сменились — откройте мастер-паролем, и вход отпечатком можно включить снова.";
   if ($("#safe-body")) safeRender();
 });

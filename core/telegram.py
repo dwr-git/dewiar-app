@@ -745,6 +745,15 @@ class Telegram:
         if not self.paired():
             code = self.data.get("code", "")
             tok = text.split()[-1] if text else ""        # «/start КОД» из ссылки; цифры — код, набранный вручную
+            # проверка безопасности 22.11: код — 6 цифр; подбирать его перебором нельзя — после 8 неверных за час приём кодов
+            # замирает на час (ссылка из студии несёт код целиком, человек не ошибается)
+            if time.time() < getattr(self, "_pair_lock", 0):
+                return
+            if code and text and not (tok == code or re.sub(r"\D", "", text) == code):
+                self._pair_bad = [x for x in getattr(self, "_pair_bad", []) if x > time.time() - 3600] + [time.time()]
+                if len(self._pair_bad) >= 8:
+                    self._pair_lock, self._pair_bad = time.time() + 3600, []
+                    log.warning("%s: 8 неверных кодов привязки за час — приём кодов на час остановлен", self.TITLE)
             if code and (tok == code or re.sub(r"\D", "", text) == code):
                 name = " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x) or user.get("username", "")
                 with self._lock:

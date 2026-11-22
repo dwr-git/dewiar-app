@@ -937,7 +937,11 @@
     // образы (L.soft): улыбка из сдвига губ выходила гримасой (владелец 21.11: «если не так симпатично, как у оригинальной
     // Лиры, — лучше вообще без улыбки»); теперь — настоящая, из кадра с улыбкой (geo.smile — рамка низа лица); нет кадра — нет улыбки
     const smileGoal = (!L.soft || L.geo.smile) && !talking && A.smileTill && (e.state === "idle" || e.state === "listening") ? 1 : 0;
-    A.smile += (smileGoal - A.smile) * Math.min(1, dt * 3);
+    // владелец 22.11: «в момент смены на улыбку виден промежуточный вариант — и нижние губы, и верхние». У образов улыбка —
+    // другой кадр низа лица, и наплыв двух ртов виден; смена — за ~0,15 с, почти мгновенно. Базовая Лира — как была (там
+    // улыбка — сдвиг губ, наплыв не виден)
+    A.smile += (smileGoal - A.smile) * Math.min(1, dt * (L.geo && L.geo.smile ? 14 : 3));
+    if (L.geo && L.geo.smile && Math.abs(smileGoal - A.smile) < 0.04) A.smile = smileGoal;
 
     const neu = e.tone === "neu";
     ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.clip();
@@ -1349,6 +1353,9 @@
       if (live !== undefined) { this.live = live || ""; this._live = null; }   // живое лицо (слои из папки live)
       if (style) this.style = STYLES[style] ? style : "nexus";
       if (color) this.color = rgb(color);
+      // владелец 22.11: «нет чёрного цвета». Тёмный цвет персонажа на тёмном диске не виден (и «lighter» его не сложит) —
+      // у тёмного цвета диск светлый, а рисунок ложится обычным наложением, как тушь на бумаге
+      this.dark = !!this.color && (0.2126 * this.color[0] + 0.7152 * this.color[1] + 0.0722 * this.color[2]) < 60;
       if (image !== undefined) {
         this.img = null;
         if (image) { this.img = new Image(); this.img.src = image; }
@@ -1453,12 +1460,13 @@
       if (plate) {
         const pg = ctx.createRadialGradient(0, -PR * 0.25, PR * 0.1, 0, 0, PR);
         if (this.tone === "mono" || this.tone === "ink" || this.tone === "neu") { pg.addColorStop(0, "#1f2029"); pg.addColorStop(0.75, "#14141b"); pg.addColorStop(1, "#0c0c11"); }
+        else if (this.dark) { pg.addColorStop(0, "#FFFFFF"); pg.addColorStop(0.75, "#EEF1F7"); pg.addColorStop(1, "#DDE2EC"); }
         else { pg.addColorStop(0, "#26264A"); pg.addColorStop(0.75, "#17172E"); pg.addColorStop(1, "#0D0D1A"); }
         ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(0, 0, PR, 0, TAU); ctx.fill();
         ctx.save(); ctx.beginPath(); ctx.arc(0, 0, PR - 0.5, 0, TAU); ctx.clip();
       }
       const spin = this.vinyl && VINYL_STATES.has(this.state);
-      ctx.globalCompositeOperation = plate && LIGHTER.has(this.style) && !spin ? "lighter" : "source-over";
+      ctx.globalCompositeOperation = plate && LIGHTER.has(this.style) && !spin && !this.dark ? "lighter" : "source-over";
       // №766: облик, которого нет (персонаж записан в обход студии, style: «stratum»), — не пустой круг и ошибка каждый
       // кадр, а обычные «частицы»
       (spin ? vinyl : (STYLES[this.style] || STYLES.particles))(spin ? Object.assign({}, g, { c: this.color }) : this.style === "photo" ? gm : g, this);

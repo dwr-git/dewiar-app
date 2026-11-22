@@ -217,7 +217,7 @@ const CLOUD = {
   anthropic: { name: "Claude (Anthropic)", url: "https://api.anthropic.com/v1", model: "claude-sonnet-5-5", key: "https://platform.claude.com/settings/keys" },
   // признанные поставщики напрямую (20.10): официальные OpenAI-совместимые адреса; модель — первая из rec, что есть у сервиса
   gemini: { name: "Google Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-flash-latest", key: "https://aistudio.google.com/apikey",
-            rec: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-pro-latest"] },
+            rec: ["gemini-flash-latest", "gemini-pro-latest", "gemini-flash-lite-latest"] },   // «-latest» — у Google всегда новейшая
   kimi: { name: "Kimi (Moonshot)", url: "https://api.moonshot.ai/v1", model: "kimi-latest", key: "https://platform.moonshot.ai/console/api-keys",
           rec: ["kimi-latest", "kimi-k2-turbo-preview", "kimi-k2-0905-preview", "moonshot-v1-32k"] },
   glm: { name: "GLM (Z.ai)", url: "https://api.z.ai/api/paas/v4", model: "glm-4.6", key: "https://z.ai/manage-apikey/apikey-list", rec: ["glm-4.6", "glm-4.5-air", "glm-4.5"] },

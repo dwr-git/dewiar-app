@@ -443,7 +443,11 @@ function showBot(t, cls) {
   t = trL(t);
   if (tgTurn && t && cls !== "wait") tgLast = String(t);
   const b = $("#bot"), long = !cls && isLongAnswer(t);
-  b.className = cls || (long ? "framed" : ""); b.textContent = t || "";
+  b.className = cls || (long ? "framed" : "");
+  // 22.11 (владелец: «маркдаун сырой — видны звёздочки там, где должен быть заголовок»): длинный ответ с разметкой — уже
+  // пока идёт, через тот же mdAnswer (он экранирует), а не голым текстом до самого конца
+  if (long && /\*\*|^\s*#{1,4}\s|^\s*(?:[-*•]|\d+[.)])\s|^\s*\|/m.test(t || "")) b.innerHTML = `<div class="ans">${mdAnswer(t)}</div>`;
+  else b.textContent = t || "";
   $("#stage").classList.toggle("long", long);
   if (!long) $("#talk").scrollTop = 1e6;
   quietCheck();

@@ -229,6 +229,13 @@ def _humanize(e, base_url, model=""):
         # владелец 12.11: «Не получилось: 407 Proxy Authentication Required» — по-английски и непонятно, что делать
         return ("прокси не пустил: просит логин и пароль (407). Если это прокси Dewiar — я уже беру свежий, повторите через "
                 "минуту; если свой — проверьте логин в студии → «Dewiar.pro» → «Сеть»")
+    if isinstance(e, httpx.ProxyError) and re.search(r"malformed|protocol", str(e), re.I):
+        # владелец 22.11: Gemini через купленный прокси — «Не получилось: Malformed reply». Прокси ответил не на языке
+        # выбранного типа, а другой тип (net._px_other) тоже не прошёл
+        return ("прокси ответил не так, как отвечает выбранный тип (SOCKS5 или HTTP), и другим типом тоже не открылся. "
+                "Проверьте у продавца прокси адрес, порт и логин — часто у SOCKS5 и HTTP разные порты")
+    if isinstance(e, httpx.ProxyError) and "authentication" in str(e).lower():
+        return "прокси не принял логин или пароль — проверьте их у продавца прокси"
     if isinstance(e, httpx.ConnectError):
         host = (re.match(r"^\w+://([^/:?#]+)", str(base_url or "")) or [None, ""])[1]
         if host and not re.match(r"^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)|\.local$", host):
@@ -536,7 +543,7 @@ def list_models(p, timeout=6):
         ids = [m.get("id") for m in data if m.get("id")]
         ids = [x[7:] if x.startswith("models/") else x for x in ids]      # Gemini: «models/gemini-…» — в ответах без «models/»
         # не для разговора: голос, распознавание, картинки, видео, модерация — их выбирали «первой по алфавиту»
-        ids = [x for x in ids if not re.search(r"(^|[-_/])(tts|whisper|transcribe|dall-e|imagen|veo|moderation|aqa)([-_.]|$)|image-|-image\b|audio|"
+        ids = [x for x in ids if not re.search(r"(^|[-_/])(tts|whisper|transcribe|dall-e|imagen|veo|lyria|moderation|aqa|live|computer-use|robotics)([-_.]|$)|image-|-image\b|audio|"
                                                 r"(^|[-_/:])(flux\d*|sdxl|stable-diffusion)", x, re.I)] or ids
         # модели для поиска по смыслу (эмбеддинги, реранкеры) разговаривать не умеют — в конец списка, отдельно (№144:
         # LM Studio отдаёт и их; выбрали text-embedding-nomic… как модель разговора)

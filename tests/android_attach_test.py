@@ -108,7 +108,8 @@ try:
         ok(pg.evaluate("document.querySelectorAll('#atts .at').length") == 0, "после отправки вложения убраны")
 
         # длинный ответ — в рамке с кнопками
-        pg.evaluate("""() => { showBot('Собрала список:\\n\\n| Курс | Цена |\\n|---|---|\\n| Belhard | 950 BYN |\\n\\n- новичкам\\n- без кода'); frameAnswer(document.querySelector('#bot').textContent); }""")
+        # 22.11: длинный ответ с разметкой оформлен уже по ходу (showBot) — в frameAnswer, как в разговоре, сам текст ответа
+        pg.evaluate("""() => { const t = 'Собрала список:\\n\\n| Курс | Цена |\\n|---|---|\\n| Belhard | 950 BYN |\\n\\n- новичкам\\n- без кода'; showBot(t); frameAnswer(t); }""")
         fr = pg.evaluate("""() => ({ cls: document.querySelector('#bot').className, long: document.querySelector('#stage').classList.contains('long'),
             th: [...document.querySelectorAll('#bot th')].map(x => x.textContent), li: document.querySelectorAll('#bot li').length,
             acts: [...document.querySelectorAll('#bot .acts button')].map(x => x.textContent) })""")
