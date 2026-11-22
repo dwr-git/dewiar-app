@@ -209,11 +209,28 @@ def compare(a, b):
             "render_at": "" if ra == rb else _ctx(ra, cr)}
 
 
+def mode(body):
+    """«Чистый разговор» (core/talk_lean.py, 1.0.60): у беседы своя подсказка, у дела — полная. Сервер держит в кэше обе —
+    стабильной должна быть каждая сама по себе, а не одна на все вопросы."""
+    return "lean" if "Сейчас — просто разговор." in str(body["messages"][0]["content"]) else "full"
+
+
+def same_mode_pairs(reqs):
+    """[(прошлый запрос того же вида, запрос)] — сравнивать беседу с беседой, дело с делом."""
+    last, out = {}, []
+    for r in reqs:
+        m = mode(r["body"])
+        if m in last:
+            out.append((last[m], r))
+        last[m] = r
+    return out
+
+
 def audit(questions=QUESTIONS):
-    """-> {"one": [сравнения соседних вопросов одного человека], "two": сравнение двух людей, "reqs": …}."""
+    """-> {"one": [сравнения вопроса с прошлым того же вида у одного человека], "two": сравнение двух людей, "reqs": …}."""
     r1, log1 = _run_core("Михаил", "- Живёт в Минске.\n", questions)
     r2, _ = _run_core("Анна", "- Работает учителем.\n- Любит кошек.\n", questions[:1])
-    one = [dict(compare(r1[i - 1]["body"], r1[i]["body"]), q=r1[i]["q"]) for i in range(1, len(r1))]
+    one = [dict(compare(a["body"], b["body"]), q=b["q"], mode=mode(b["body"])) for a, b in same_mode_pairs(r1)]
     two = compare(r1[0]["body"], r2[0]["body"]) if r1 and r2 else None
     return {"one": one, "two": two, "reqs": r1, "reqs2": r2, "log": log1}
 

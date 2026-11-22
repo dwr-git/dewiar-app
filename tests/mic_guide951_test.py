@@ -21,6 +21,10 @@ for q in ("как выключить микрофон, чтобы ты не сл
     ok(r and r[0].get("id") == "widget" and any("Кнопка-микрофон" in h for h in r[0].get("how") or []),
        f"«{q}» — руководство отвечает про кнопку-микрофон в виджете")
 src = (ROOT / "ui/assets/entities.js").read_text(encoding="utf-8")
-ok("const smileGoal = !L.soft && !talking" in src, "у образов улыбки нет (у обычной Лиры и Патрика — как была)")
+ok("const smileGoal = (!L.soft || L.geo.smile) && !talking" in src, "у образа улыбка — только настоящая, из кадра с улыбкой (geo.smile); у обычной Лиры и Патрика — как была")
+import json as _j, re as _re  # noqa: E402
+conf = _re.findall(r'"(lira-\w+|patrik-\w+)": \{[^\n]*"smile": (\[[^\]]*\])', src)
+ok(len(conf) == 19 and all((ROOT / "ui/assets/live" / f"{k}-smile.webp").exists() for k, _ in conf),
+   f"владелец 21.11 прислал кадры с улыбкой — у всех 19 образов настоящая улыбка (рамка низа лица): {len(conf)}")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} не прошло")
 sys.exit(1 if fails else 0)

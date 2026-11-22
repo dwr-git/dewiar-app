@@ -60,13 +60,26 @@ def aggregate(runs):
                 if r.get("skipped"):
                     continue
                 e = sc.setdefault(r["id"], {"group": r["group"], "title": r["title"], "A": [], "B": [], "why": {"A": [], "B": []}})
-                e[side].append({"ok": bool(r["passed"]), "t": r.get("time_s"), "score": r.get("score")})
+                e[side].append({"ok": bool(r["passed"]), "t": r.get("time_s"), "score": r.get("score"),
+                                "fail": "" if r["passed"] else fail_line(r)})
                 e["why"][side].append(r.get("xray") or [])
                 g = gr.setdefault(r["group"], {"A": [0, 0, []], "B": [0, 0, []]})
                 g[side][0] += bool(r["passed"]); g[side][1] += 1
                 if r.get("time_s") is not None:
                     g[side][2].append(r["time_s"])
     return sc, gr
+
+
+def fail_line(r):
+    """Почему прогон не сдан — одной строкой (владелец 21.11: «все эти вещи ты должен видеть из отчётов»): какие проверки
+    не прошли, что сказал судья и чем кончился ответ — чтобы разбирать провалы по отчёту стенда, без повторного прогона."""
+    bad = [c["name"] for c in r.get("checks") or [] if not c.get("ok")]
+    j = (r.get("judge") or {}).get("why") or ""
+    last = next((s.get("answer") or "" for s in reversed(r.get("steps") or []) if s.get("answer")), "")
+    parts = ([r["error"][:120]] if r.get("error") else []) + (["проверки: " + ", ".join(bad[:3])] if bad else []) \
+        + ([f"судья {r.get('score') if r.get('score') is not None else '—'}/10: {j[:220]}"] if j else []) \
+        + ([f"ответ: «{' '.join(last.split())[:160]}»"] if last else [])
+    return " · ".join(parts)
 
 
 def why_line(xs):
@@ -120,6 +133,10 @@ def markdown(meta, sc, gr):
             wb = why_line(e["why"]["B"])
             if wb:
                 L.append(f"  - после: {wb}")
+        for side, name in (("A", "до"), ("B", "после")) if ab else (("A", "прогон"),):
+            fails = list(dict.fromkeys(x["fail"] for x in e[side] if x.get("fail")))[:2]   # не больше двух разных причин
+            for f in fails:
+                L.append(f"  - ✗ {name}: {f}")
     return "\n".join(L) + "\n"
 
 

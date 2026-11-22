@@ -428,7 +428,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 # правил действий и почти без самих действий; понадобилось дело — модель попросит (more_tools, core/talk_lean.py)
                 import modules as _mods
                 import talk_lean
-                if talk_lean.talk_turn(ask_core(text), self.history, _mods.wanted(ask_core(text))):
+                # просьба к плагину (№507: «Когда ближайшее полнолуние?» — плагин «Луна») — дело, не беседа
+                if talk_lean.talk_turn(ask_core(text), self.history, _mods.wanted(ask_core(text))) and not self._plugin_hint(text):
                     specs, turn.lean = talk_lean.lean_specs(specs), True
                     log.info("🍃 Просто разговор — подсказка без правил действий (%d действия)", len(specs))
             mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(prof))
@@ -445,7 +446,9 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             if turn.lean:
                 import talk_lean
                 system += talk_lean.LEAN_RULE
-            personal = self._personal(full_).strip() if pmsg else ""
+            # «Чистый разговор»: справка о человеке — как при деле (с папкой и прочим): снимок на начало разговора, а разговор
+            # часто начинается с «привет» — иначе и дела потом шли бы без папки (полный прогон 22.11, prefix_cache1104)
+            personal = self._personal(full_ or turn.lean).strip() if pmsg else ""
             pdelta = ""
             if personal:                               # 0.87: справка в начале разговора — снимок, изменения — к вопросу
                 personal, pdelta = self._profile_snap(personal, msgs)
@@ -691,6 +694,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             for step in range(6):                       # модель → действия → результаты → модель…
                 calls, step_text = [], ""
                 t_step, t_ev = time.monotonic(), None     # «⏱ модель: …» — от запроса до первого события этого шага
+                if step and getattr(turn, "lean", False) and msgs and msgs[-1].get("role") == "user":
+                    # «Чистый разговор», а проверка ответа попросила переделать (вызвать плагин, действие, поиск…) — переделывать
+                    # уже с полной подсказкой и всеми действиями: налегке их нет (полный прогон 22.11: «полнолуние» — плагин «Луна»)
+                    turn.lean = False
+                    specs = self.toolbox.specs(slim_text, keep=set(getattr(turn, "packs", None) or ()))
+                    system = self._system(True, personal=not pmsg)
+                    log.info("🧰 Проверка просит переделать — дальше с полной подсказкой и действиями")
                 if step == 5 and specs:                  # последний шаг — только слова: ответить тем, что уже узнал
                     can_task = any(x.get("name") == "start_task" for x in specs) and "start_task" not in called
                     specs = []

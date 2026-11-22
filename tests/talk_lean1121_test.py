@@ -55,7 +55,7 @@ class H(BaseHTTPRequestHandler):
             tc = {"index": 0, "id": "c1", "type": "function", "function": {"name": n, "arguments": json.dumps(a)}}
             self.wfile.write(("data: " + json.dumps({"choices": [{"delta": {"tool_calls": [tc]}}]}) + "\n\n").encode())
         u = str(last.get("content") or "")
-        if last.get("role") == "user" and "бодрым" in u and names == ["more_tools", "remember", "write_diary"]:
+        if last.get("role") == "user" and "бодрым" in u and names == ["more_tools", "remember", "widget", "write_diary"]:
             call("more_tools", {"packs": ["music"]})
         elif last.get("role") == "tool" and "Добавлены" in u:
             call("play_radio", {"query": "бодрое"}) if "play_radio" in names else say("Не нашла радио.")
@@ -140,13 +140,13 @@ async def session():
 try:
     asyncio.run(session())
     a, rq = R["talk"]
-    ok(rq and rq[0]["names"] == ["more_tools", "remember", "write_diary"] and "СЛОВА НЕ ДЕЙСТВУЮТ" not in rq[0]["sys"]
-       and "Сейчас — просто разговор" in rq[0]["sys"], f"«как дела?» — без правил действий, 3 действия: {rq[0]['names'] if rq else None}")
+    ok(rq and rq[0]["names"] == ["more_tools", "remember", "widget", "write_diary"] and "СЛОВА НЕ ДЕЙСТВУЮТ" not in rq[0]["sys"]
+       and "Сейчас — просто разговор" in rq[0]["sys"], f"«как дела?» — без правил действий, 4 действия (с «спрячься»): {rq[0]['names'] if rq else None}")
     a2, rq2 = R["deed"]
     ok(rq2 and "web_search" in rq2[0]["names"] and "СЛОВА НЕ ДЕЙСТВУЮТ" in rq2[0]["sys"], "просьба-дело — полная подсказка и все действия")
     ok(rq and rq2 and len(rq[0]["sys"]) < len(rq2[0]["sys"]) * 0.75, f"беседа — подсказка заметно легче: {len(rq[0]['sys']) if rq else 0} против {len(rq2[0]['sys']) if rq2 else 0}")
     a3, rq3 = R["esc"]
-    ok(len(rq3) >= 2 and rq3[0]["names"] == ["more_tools", "remember", "write_diary"] and "play_radio" in rq3[1]["names"]
+    ok(len(rq3) >= 2 and rq3[0]["names"] == ["more_tools", "remember", "widget", "write_diary"] and "play_radio" in rq3[1]["names"]
        and "СЛОВА НЕ ДЕЙСТВУЮТ" in rq3[1]["sys"], f"беседа, а понадобилось дело — модель попросила действия, следующий шаг с полной подсказкой: {[r['names'][:4] for r in rq3]}")
     ok("бодрое" in (a3 or "").lower() or "радио" in (a3 or "").lower(), f"и дело сделано: {a3!r}")
 finally:

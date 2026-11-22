@@ -24,9 +24,9 @@ K = LF.K
 # (линия смыкания, середина, полуширина) и рамка слоя рта — всё в пикселях живого портрета 360
 WHO = {
     "lira": {"crop": (26, 54, 484, 512), "eyes": [(147.5, 162.6), (212.6, 163.2)], "iris": 16.0,
-             "lip": (227.0, 180.0, 23.5), "mouth": (147.0, 206.0, 66.0, 44.0), "smile": 5.5, "open": (0.0, 3.2, 5.6, 8.0), "light_hair": True},   # улыбка 5,5 (владелец 21.11: «у образов почти не видна»)
+             "lip": (227.0, 180.0, 23.5), "mouth": (147.0, 206.0, 66.0, 44.0), "smile_box": (116.0, 188.0, 128.0, 82.0), "smile": 5.5, "open": (0.0, 3.2, 5.6, 8.0), "light_hair": True},   # улыбка 5,5 (владелец 21.11: «у образов почти не видна»)
     "patrik": {"crop": (0, 0, 512, 512), "eyes": [(146.8, 148.9), (212.5, 149.3)], "iris": 15.0,
-               "lip": (221.4, 180.0, 28.5), "mouth": (143.0, 201.0, 74.0, 44.0), "smile": 4.8, "open": (0.0, 2.8, 4.8, 7.0), "light_hair": False},
+               "lip": (221.4, 180.0, 28.5), "mouth": (143.0, 201.0, 74.0, 44.0), "smile_box": (110.0, 182.0, 140.0, 82.0), "smile": 4.8, "open": (0.0, 2.8, 4.8, 7.0), "light_hair": False},
 }
 CROP = WHO["lira"]["crop"]
 
@@ -88,6 +88,49 @@ def matte_alpha(rgba, crop):
     return Image.fromarray(np.dstack([arr[..., :3], a]).clip(0, 255).astype(np.uint8), "RGBA")
 
 
+def smile_real(who, name, big):
+    """Настоящая улыбка образа (владелец 21.11: сдвиг губ выходил гримасой — «если не так симпатично, как у оригинальной Лиры,
+    лучше без улыбки»; владелец прислал тот же кадр с лёгкой улыбкой: design/looks/<who>-<name>-smile.png). Слой — низ лица
+    (губы, щёки, складки) из кадра с улыбкой в рамке smile_box с мягким овальным краем; общий тон кадра с улыбкой подгоняется
+    под основной (генератор чуть менял цвет кожи) — по коже вокруг рта, без самого рта. -> (RGBA слоя в 3×, рамка) или (None, None)."""
+    f = SRC / f"{who}-{name}-smile.png"
+    if not f.exists():
+        return None, None
+    from scipy.ndimage import gaussian_filter
+    W = WHO[who]
+    sm = Image.open(f).convert("RGB")
+    if sm.size != (1024, 1024):
+        sm = sm.resize((1024, 1024), Image.LANCZOS)
+    crop = tuple(round(v * 2) for v in W["crop"])
+    sb = np.asarray(sm.crop(crop).resize((360 * K, 360 * K), Image.LANCZOS)).astype(np.float32)
+    bb = np.asarray(big.convert("RGB")).astype(np.float32)
+    x, y, w, h = W["smile_box"]
+    X0, Y0, X1, Y1 = int(x * K), int(y * K), int((x + w) * K), int((y + h) * K)
+    yy, xx = np.mgrid[0:360 * K, 0:360 * K].astype(np.float32)
+    cx, cy, rx, ry = (X0 + X1) / 2, (Y0 + Y1) / 2, (X1 - X0) / 2, (Y1 - Y0) / 2
+    r = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
+    mx, my, mw, mh = W["mouth"]
+    rc = np.sqrt(((xx - (mx + mw / 2) * K) / (mw * K * 0.62)) ** 2 + ((yy - (my + mh / 2) * K) / (mh * K * 0.62)) ** 2)
+    ring = ((r < 1.35) & (rc > 1.0)).astype(np.float32)          # кожа вокруг рта — по ней подгоняем тон
+    s_ = 9.0 * K
+    corr = np.dstack([gaussian_filter((bb[..., c] - sb[..., c]) * ring, s_) for c in range(3)]) / (gaussian_filter(ring, s_)[..., None] + 1e-3)
+    out = np.clip(sb + corr, 0, 255)
+    # цвет губ — как в основном кадре (владелец 21.11: «губы были бледными, стали розовыми»): средний оттенок области рта
+    # кадра с улыбкой сдвигаем к оттенку основного, яркость и форма улыбки остаются
+    rl = np.sqrt(((xx - (mx + mw / 2) * K) / (mw * K * 0.58)) ** 2 + ((yy - (my + mh / 2) * K) / (mh * K * 0.5)) ** 2)
+    mk = np.clip((1.0 - rl) / 0.45, 0, 1)
+    chroma = lambda im: im - im.mean(2, keepdims=True)   # noqa: E731
+    cs = (chroma(out) * mk[..., None]).sum((0, 1)) / (mk.sum() + 1e-3)
+    cb = (chroma(bb) * mk[..., None]).sum((0, 1)) / (mk.sum() + 1e-3)
+    out = np.clip(out - mk[..., None] * (cs - cb), 0, 255)
+    a = np.clip((1.0 - r) / 0.42, 0, 1) ** 1.6                    # мягкий овал: к краю рамки — основной кадр
+    a = a * (np.asarray(big.getchannel("A")).astype(np.float32) / 255.0 if big.mode == "RGBA" else 1.0) ** 2
+    # ↑ только по самому портрету: за контуром лица (фон окна виден насквозь) кадр с улыбкой не рисуем — у скул на светлом
+    # фоне выходило тёмное пятно (фон кадра с улыбкой — чёрный)
+    lay = np.dstack([out, a * 255])[Y0:Y1, X0:X1]
+    return Image.fromarray(lay.astype(np.uint8), "RGBA"), [x, y, w, h]
+
+
 def find_iris(big, cx, cy):
     """Центр радужки рядом с (cx, cy): самые тёмные точки в круге 9 px (кадр 360) — их середина."""
     a = np.asarray(big).astype(np.float32)[..., :3].mean(2)
@@ -141,9 +184,14 @@ def build(name, who="lira"):
     # мельче, и 5,2 пикселя на портрете — едва щель)
     for i, op in enumerate(W["open"]):
         LF.mouth_layer(big, open_px=op).save(LIVE / f"{pre}-mouth-{i}.webp", quality=92, method=6)
-    LF.mouth_layer(big, smile_px=W["smile"]).save(LIVE / f"{pre}-smile.webp", quality=92, method=6)
     geo = {"eyes": [[round(x - D / 2, 1), round(y - D / 2, 1)] for x, y in W["eyes"]], "iris": D,
            "mouth": list(W["mouth"]), "moveX": 2.2, "moveY": 0.9}
+    lay, box = smile_real(who, name, big)
+    if lay is not None:                          # настоящая улыбка из кадра с улыбкой — своя рамка (низ лица)
+        lay.save(LIVE / f"{pre}-smile.webp", quality=92, method=6)
+        geo["smile"] = box
+    else:                                        # кадра с улыбкой нет — образ без улыбки (слой — закрытый рот)
+        LF.mouth_layer(big, smile_px=0.0).save(LIVE / f"{pre}-smile.webp", quality=92, method=6)
     return {"own": True, "soft": True, "iris": [f"{pre}-iris-l.png", f"{pre}-iris-r.png"], "geo": geo}
 
 
