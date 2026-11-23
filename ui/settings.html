@@ -2516,7 +2516,10 @@
         <label class="f m-stdio">Команда<input type="text" id="m-cmd" placeholder="npx -y @modelcontextprotocol/server-filesystem ~"></label>
         <label class="f m-stdio">Переменные окружения<input type="text" id="m-env" placeholder="KEY=значение; KEY2=значение"></label>
         <label class="f m-http" style="display:none">Адрес<input type="url" id="m-url" placeholder="https://example.ru/mcp"></label>
-        <label class="f m-http" style="display:none">Токен, если нужен<input type="password" id="m-tok"></label>
+        <label class="f m-http" style="display:none">Авторизация<select id="m-auth"><option value="token">Без входа / Bearer-токен</option><option value="oauth">OAuth — вход в браузере (PKCE)</option></select></label>
+        <label class="f m-http m-token" style="display:none">Токен, если нужен<input type="password" id="m-tok" autocomplete="off"></label>
+        <label class="f m-http m-oauth" style="display:none">Client ID (если выдан провайдером)<input type="text" id="m-cid" placeholder="Пусто — автоматическая регистрация"></label>
+        <p class="hint m-http m-oauth" style="display:none">После добавления нажмите «Войти». Открывайте браузер на компьютере, где работает Dewiar: возврат идёт на 127.0.0.1. Токены хранятся отдельно от настроек; «Выйти» удаляет их локально.</p>
       </div>
       <div class="actions" style="margin:0 0 12px"><button class="btn primary" id="m-save">Добавить</button><span class="res" id="m-res"></span></div>
     </details>

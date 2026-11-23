@@ -297,6 +297,8 @@ class TasksCommands:
             return self.skills.catalog()
         if cmd.startswith("plugin"):                # «Плагины» в студии (core/plugins.py)
             return self._plugin_cmd(cmd, a)
+        if cmd in ("mcp_oauth", "mcp_oauth_forget"):
+            return self.mcp.oauth(a.get("name", ""), forget=cmd == "mcp_oauth_forget")
         if cmd == "mcp_status":
             return self.mcp.status()
         if cmd == "status":

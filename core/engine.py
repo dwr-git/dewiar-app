@@ -162,7 +162,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.plugins = Plugins(settings)                   # плагины: навыки + MCP + настройки + дела (core/plugins.py)
         self.skills.plugins = self.plugins
         self.skills.reload()
-        self.mcp = MCPManager(settings, on_change=lambda: self.emit("mcp", status=self.mcp.status()))
+        self.mcp = MCPManager(settings, on_change=lambda: self.emit("mcp", status=self.mcp.status()),
+                              on_oauth=lambda **event: self.emit("mcp_oauth", **event))
         self.plugins.tool_texts = self.mcp.plugin_tool_texts       # №507: слова плагина без words — и из его действий
         self.toolbox = Toolbox(settings, self.reminders, self.skills, self.mcp)
         # предохранитель модулей (1.0): сработал — счётчик «чем пользуются»; имена серверов плагинов — людей, их не считаем

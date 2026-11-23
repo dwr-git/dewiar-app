@@ -4,13 +4,15 @@
   stdio — локальная программа (npx …, uvx …, python …), JSON-RPC построчно через stdin/stdout;
   http  — Streamable HTTP: POST JSON-RPC, ответ JSON или SSE, сессия в заголовке Mcp-Session-Id.
 
-Настройки: settings.mcp.servers = {имя: {type, command, args, env, url, headers, enabled, trust}}; MCPManager
-подключает их в фоне и переподключает при изменении настроек (reconcile).
+Настройки: settings.mcp.servers = {имя: {type, command, args, env, url, headers, enabled, trust, auth}}; MCPManager
+подключает их в фоне и переподключает при изменении настроек (reconcile). auth: "oauth" — вход по OAuth 2.1 (PKCE,
+браузер): токены живут отдельным файлом 0600 (core/mcp_oauth.py), а не в настройках — в экспорт настроек не попадают.
 Инструменты сервера видны модели как mcp_<сервер>_<инструмент> (не длиннее 64 знаков).
 Подтверждение: спрашиваем, если инструмент не помечен readOnlyHint, пока серверу не выставлено trust. readOnlyHint
 сообщает сам сервер — защита рассчитана на серверы, которые человек подключил сознательно.
 """
 
+import atexit
 import itertools
 import json
 import logging
@@ -27,6 +29,20 @@ import httpx
 log = logging.getLogger("dewiar.mcp")
 PROTOCOL = "2025-06-18"               # предлагаем при initialize; сервер отвечает своей версией — её и шлём дальше (HTTP)
 CLIENT = {"name": "dewiar", "version": "0.9"}
+
+_HTTP = None
+_HTTP_LOCK = threading.Lock()
+
+
+def _http():
+    """Один httpx.Client на все HTTP-серверы: пул соединений общий, соединения переиспользуются — раньше у каждого
+    сервера был свой клиент, и каждое подключение держало отдельный пул (на ходу модели это десятки запросов)."""
+    global _HTTP
+    with _HTTP_LOCK:
+        if _HTTP is None:
+            _HTTP = httpx.Client(timeout=httpx.Timeout(15, read=120), follow_redirects=True)
+            atexit.register(_HTTP.close)
+        return _HTTP
 
 
 def plugin_expand(cfg):
@@ -171,24 +187,63 @@ class StdioTransport:
             self.p.kill()
 
 
+class _Unauthorized(Exception):
+    pass
+
+
 class HttpTransport:
     """Streamable HTTP: каждый запрос — POST; ответ — JSON или поток SSE. headers из настроек (например,
     Authorization) добавляются к каждому запросу."""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, name=""):
         self.url = cfg["url"]
+        self.oauth_name = name if cfg.get("auth") == "oauth" else ""
         self.headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
                         **{k: str(v) for k, v in (cfg.get("headers") or {}).items()}}
-        self.client = httpx.Client(timeout=httpx.Timeout(15, read=120), follow_redirects=True)
+        self.client = _http()
 
     def _post(self, msg, timeout):
+        try:
+            return self._authorized_post(msg, timeout)
+        except ValueError as e:
+            if self.oauth_name:
+                raise MCPError(str(e)) from e
+            raise
+
+    def _authorized_post(self, msg, timeout):
+        headers = dict(self.headers)
+        if self.oauth_name:
+            import mcp_oauth
+            headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
+            token = mcp_oauth.access_token(self.oauth_name, self.url, self.client)
+            headers["Authorization"] = "Bearer " + token
+        try:
+            return self._post_once(msg, timeout, headers)
+        except _Unauthorized:
+            if not self.oauth_name:
+                raise MCPError("сервер MCP требует авторизацию") from None
+            token = mcp_oauth.access_token(self.oauth_name, self.url, self.client, rejected=token)
+            headers["Authorization"] = "Bearer " + token
+            try:
+                return self._post_once(msg, timeout, headers)
+            except _Unauthorized:
+                raise MCPError("OAuth: доступ отклонён — войдите заново") from None
+
+    def _post_once(self, msg, timeout, headers):
         """-> ответ на msg или None. 202 — сервер принял уведомление без ответа. Mcp-Session-Id из ответа
         запоминаем и шлём дальше. В SSE событие — строки data: до пустой строки; до нашего ответа сервер может
         прислать другие сообщения (уведомления о ходе работы) — их пропускаем."""
-        with self.client.stream("POST", self.url, json=msg, headers=self.headers, timeout=timeout) as r:
+        with self.client.stream("POST", self.url, json=msg, headers=headers, timeout=timeout,
+                                follow_redirects=not bool(self.oauth_name)) as r:
+            if r.status_code == 401:
+                raise _Unauthorized()
+            if self.oauth_name and 300 <= r.status_code < 400:
+                raise MCPError("OAuth: укажите конечный адрес MCP без перенаправления")
             if r.status_code == 202:
                 return None
             if r.status_code >= 400:
+                if self.oauth_name:
+                    raise MCPError(f"сервер MCP ответил HTTP {r.status_code}")  # тело может содержать токен
                 r.read()
                 raise MCPError(f"сервер MCP ответил {r.status_code}: {r.text[:160]}")
             sid = r.headers.get("mcp-session-id")
@@ -230,7 +285,7 @@ class HttpTransport:
             pass
 
     def close(self):
-        self.client.close()
+        pass  # общий пул живёт до завершения программы; закрытие сервера не ломает соседние
 
 
 class Server:
@@ -241,6 +296,7 @@ class Server:
         self.name, self.cfg = name, cfg
         self.status, self.error, self.tools, self.t = "connecting", "", [], None
         self.ids = itertools.count(1)
+        self._closed = threading.Event()
 
     def rpc(self, method, params=None, timeout=30):
         msg = {"jsonrpc": "2.0", "id": next(self.ids), "method": method}
@@ -254,8 +310,10 @@ class Server:
     def connect(self):
         """Подключиться и получить инструменты (постранично, не больше 20 страниц). Исключений не бросает:
         ошибка остаётся в status/error, транспорт закрывается."""
+        if self._closed.is_set():
+            return
         try:
-            self.t = HttpTransport(self.cfg) if self.cfg.get("type") == "http" else StdioTransport(self.cfg)
+            self.t = HttpTransport(self.cfg, self.name) if self.cfg.get("type") == "http" else StdioTransport(self.cfg)
             init = self.rpc("initialize", {"protocolVersion": PROTOCOL, "capabilities": {}, "clientInfo": CLIENT}, 60)
             if isinstance(self.t, HttpTransport):
                 self.t.headers["MCP-Protocol-Version"] = init.get("protocolVersion", PROTOCOL)
@@ -274,6 +332,9 @@ class Server:
             self.status, self.error = "error", str(e)
             log.warning("MCP «%s»: %s", self.name, e)
             self.close()
+        finally:
+            if self._closed.is_set():
+                self.close()
 
     def call(self, tool, args):
         """Вызвать инструмент -> текст для модели (не больше 8000 знаков). Текст и текстовые ресурсы — как есть,
@@ -299,6 +360,7 @@ class Server:
         return r if isinstance(r, dict) else {}
 
     def close(self):
+        self._closed.set()
         if self.t:
             try:
                 self.t.close()
@@ -322,8 +384,9 @@ class MCPManager:
     """Все серверы из настроек. on_change() вызывается после каждого подключения — чтобы обновить список
     инструментов модели и студию."""
 
-    def __init__(self, settings, on_change=None):
-        self.s, self.on_change = settings, on_change
+    def __init__(self, settings, on_change=None, on_oauth=None):
+        self.s, self.on_change, self.on_oauth = settings, on_change, on_oauth
+        self._index_sig, self._index_cache = None, {}
         self.servers = {}
         self.lock = threading.Lock()
 
@@ -348,15 +411,21 @@ class MCPManager:
                 c = want[n] = dict(c, _cloud=cloud)
             if c.get("plugin"):
                 want[n] = dict(c, _values=dict((on.get(c["plugin"]) or {}).get("values") or {}), **({"_ws": ws} if ws else {}))
+        dead = []
         with self.lock:
             for n in list(self.servers):
                 if n not in want or self.servers[n].cfg != want[n]:
-                    self.servers.pop(n).close()
+                    dead.append(self.servers.pop(n))
             for n, c in want.items():
                 if n not in self.servers:
                     srv = Server(n, dict(c))
                     self.servers[n] = srv
                     threading.Thread(target=self._connect, args=(srv,), daemon=True).start()
+
+        for srv in dead:
+            import mcp_oauth
+            mcp_oauth.cancel(srv.name)
+            srv.close()
 
     def _connect(self, srv):
         srv.connect()
@@ -364,14 +433,20 @@ class MCPManager:
             self.on_change()
 
     def status(self):
+        import mcp_oauth
         with self.lock:
-            return {n: {"status": s.status, "error": s.error, "tools": [t.get("name") for t in s.tools]}
-                    for n, s in self.servers.items()}
+            snapshot = list(self.servers.items())
+        return {n: {"status": s.status, "error": s.error, "tools": [t.get("name") for t in s.tools],
+                    "authed": mcp_oauth.connected(n, s.cfg.get("url", "")) if s.cfg.get("auth") == "oauth" else False}
+                for n, s in snapshot}
 
     def _index(self):
         """Имя для модели -> (сервер, инструмент); только подключённые серверы."""
-        out = {}
         with self.lock:
+            sig = tuple((n, id(s), s.status, id(s.tools), len(s.tools)) for n, s in self.servers.items())
+            if sig == self._index_sig:
+                return self._index_cache
+            out = {}
             for n, s in self.servers.items():
                 if s.status != "ok":
                     continue
@@ -384,7 +459,8 @@ class MCPManager:
                         suf = f"_{i}"
                         key, i = base[:64 - len(suf)] + suf, i + 1
                     out[key] = (s, t)
-        return out
+            self._index_sig, self._index_cache = sig, out
+            return out
 
     def specs(self):
         """Описания инструментов для модели; в описании — имя сервера, чтобы модель понимала, откуда инструмент."""
@@ -495,12 +571,42 @@ class MCPManager:
                 servers[n] = dict(servers[n], enabled=True)
             self.s.update({"mcp": {"servers": servers}})
         with self.lock:
-            for n in [n for n, s in self.servers.items() if s.cfg.get("plugin") == pid]:
-                self.servers.pop(n).close()
+            dead = [self.servers.pop(n) for n in list(self.servers) if self.servers[n].cfg.get("plugin") == pid]
+        for s in dead:
+            s.close()
         self.reconcile()
 
-    def close(self):
+    def oauth(self, name, forget=False):
+        """Явный вход из студии; браузер открывает интерфейс, не фоновый MCP-запрос."""
+        import mcp_oauth
+        cfg = (self.s.get("mcp", "servers") or {}).get(name)
+        if not cfg or cfg.get("type") != "http" or cfg.get("auth") != "oauth":
+            raise ValueError("Выберите HTTP MCP-сервер с OAuth")
+        if forget:
+            mcp_oauth.forget(name)
+            self._oauth_done(name, cfg, "")
+            return {"ok": True}
+        return mcp_oauth.begin(name, dict(cfg), _http(), lambda error: self._oauth_done(name, cfg, error))
+
+    def _oauth_done(self, name, cfg, error):
+        # Пока человек входил, сервер могли удалить или поменять: чужое подключение не трогаем.
+        if (self.s.get("mcp", "servers") or {}).get(name) != cfg:
+            return
         with self.lock:
-            for s in self.servers.values():
-                s.close()
-            self.servers = {}
+            srv = self.servers.pop(name, None)
+        if srv:
+            srv.close()
+        self.reconcile()
+        if self.on_oauth:
+            self.on_oauth(name=name, error=error)
+        if self.on_change:
+            self.on_change()
+
+    def close(self):
+        import mcp_oauth
+        with self.lock:
+            dead, self.servers = list(self.servers.values()), {}
+            self._index_sig, self._index_cache = None, {}
+        for s in dead:
+            mcp_oauth.cancel(s.name)
+            s.close()
