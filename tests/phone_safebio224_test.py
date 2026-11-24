@@ -64,6 +64,15 @@ with sync_playwright() as p:
     pg.fill("#sf-pw", "Длинный-мастер-15!"); pg.click("#sf-open"); pg.wait_for_selector("#sf-q", timeout=20000)
     pg.click("#sf-bio-no"); pg.wait_for_timeout(100)
     ok(not pg.is_visible(".sf-offer") and pg.evaluate("prefGet('safe_bio_no')") == "1", "«Не сейчас» — предложение больше не показывается")
+    # 24.11 (человек: «на телефоне отпечаток не предлагает»): после крестика включить всё равно можно — строкой внизу
+    ok(pg.is_visible("#sf-bio-on2") and "включить" in pg.inner_text(".sf-bioline"), "после «Не сейчас» внизу — «Открывать отпечатком · включить»")
+    pg.click("#sf-bio-on2"); pg.wait_for_timeout(200)
+    ok(pg.evaluate("_bio.state") == "on", "«включить» внизу — включает вход отпечатком")
+    pg.click("#sf-bio-off"); pg.wait_for_timeout(100)
+    st = pg.evaluate("_bio.state"); pg.evaluate("_bio.state = 'none'; safeRender()"); pg.wait_for_timeout(100)
+    ok("включите на телефоне блокировку экрана" in pg.inner_text("#safe-body") and not pg.is_visible("#sf-bio-on2"),
+       "нет блокировки экрана — сказано, что включить, кнопки нет")
+    pg.evaluate(f"_bio.state = '{st}'; safeRender()")
     if os.environ.get("SAFE_SHOTS"):
         pg.evaluate("prefSet('safe_bio_no', ''); safeRender()"); pg.screenshot(path=os.environ["SAFE_SHOTS"] + "/safebio-offer.png")
         pg.evaluate("_bio.state = 'on'; safeLock(); _bio.next = { op: 'open', ok: false, error: 'cancel' }; openSafe()"); pg.wait_for_timeout(300)

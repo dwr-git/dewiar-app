@@ -244,13 +244,18 @@ function sfList(box) {
     ${sfBio() === "off" && prefGet("safe_bio_no") !== "1" ? `<div class="sf-offer">${sfSvg("finger")}<span><b>Открывать отпечатком?</b><small>Или лицом, или PIN телефона — без мастер-пароля.</small></span>
       <button class="btn p" id="sf-bio-on">Включить</button><button class="sf-ib" id="sf-bio-no" aria-label="Не сейчас">✕</button></div>` : ""}
     <div class="sf-list" id="sf-list"></div>
-    <p class="hint sf-fine">Сейф закроется сам — при сворачивании и через 5 минут без дела.</p>${sfBio() === "on" ? `<p class="hint sf-fine sf-bioline">Открывается отпечатком · <a href="#" id="sf-bio-off">выключить</a></p>` : ""}`;
+    <p class="hint sf-fine">Сейф закроется сам — при сворачивании и через 5 минут без дела.</p>${sfBio() === "on" ? `<p class="hint sf-fine sf-bioline">Открывается отпечатком · <a href="#" id="sf-bio-off">выключить</a></p>`
+      : sfBio() === "off" && prefGet("safe_bio_no") === "1" ? `<p class="hint sf-fine sf-bioline">Открывать отпечатком или PIN телефона · <a href="#" id="sf-bio-on2">включить</a></p>`
+      : sfBio() === "none" ? `<p class="hint sf-fine sf-bioline">Чтобы открывать отпечатком, включите на телефоне блокировку экрана (отпечаток, лицо или PIN)</p>` : ""}`;
+  /* 24.11 (человек: «на телефоне всё по-старому, через пароль, отпечаток не предлагает»): карточку «Открывать отпечатком?»
+     закрыли крестиком — она больше не показывалась, и включить было негде; без блокировки экрана — молчали почему */
   sfRows();
   const q = $("#sf-q");
   q.oninput = () => { SF.q = q.value; sfRows(); safeIdle(); };
   if (keep) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   $("#sf-add").onclick = () => { SF.edit = { kind: "" }; SF.view = "form"; safeRender(); };
   if ($("#sf-bio-on")) $("#sf-bio-on").onclick = () => safeBioOn();
+  if ($("#sf-bio-on2")) $("#sf-bio-on2").onclick = (e) => { e.preventDefault(); safeBioOn(); };
   if ($("#sf-bio-no")) $("#sf-bio-no").onclick = () => { prefSet("safe_bio_no", "1"); safeRender(); };
   if ($("#sf-bio-off")) $("#sf-bio-off").onclick = (e) => { e.preventDefault(); D.safeBioForget(); prefSet("safe_bio_no", "1"); toast("Вход отпечатком выключен — сейф открывается мастер-паролем"); safeRender(); };
 }

@@ -110,7 +110,7 @@ def keep_above_guard():
         for gw in Gtk.Window.list_toplevels():
             if gw.get_title() not in ABOVE_TITLES or not gw.get_visible():
                 continue
-            if not ON_TOP[0] and gw.get_title() != PAD_TITLE:   # виджет «не поверх» — не поднимаем
+            if not ON_TOP[0]:                              # виджет «не поверх» — не поднимаем ни его, ни блокнот (владелец 24.11)
                 continue
             if STUDIO_FRONT[0]:                                # студия в фокусе — впереди она (владелец 24.11)
                 continue
@@ -1814,7 +1814,10 @@ class Api:
         if on == ON_TOP[0]:
             return on
         ON_TOP[0] = on
-        for w in list(getattr(self, "wins", {}).values()):
+        # владелец 24.11: выключил «поверх всех» — виджет ушёл назад, а блокнот рядом с ним остался висеть поверх всего.
+        # Блокнот — часть виджета: «поверх» у него такое же
+        pad = getattr(self, "_pad", None)
+        for w in list(getattr(self, "wins", {}).values()) + ([pad] if pad is not None else []):
             try:
                 if not (WIN and _topmost_ui(w, on)):
                     w.on_top = on
@@ -2561,13 +2564,21 @@ class Api:
                 STUDIO_FRONT[0] = False
                 return
             front = g.is_active()
+            if front == STUDIO_FRONT[0] and getattr(g, "_dw_front_set", False):
+                return
             STUDIO_FRONT[0] = front
+            g._dw_front_set = True
             try:
                 g.set_keep_above(front)
+                gdw = g.get_window()
+                if front and gdw is not None:
+                    gdw.raise_()                           # в слое «поверх» — выше виджета и блокнота (порядок слоя)
+                _ui_log(f"студия {'в фокусе — впереди' if front else 'не в фокусе — обычное окно'}")
             except Exception as e:  # noqa: BLE001
                 _ui_log(f"студия впереди: {e}")
         gw.connect("notify::is-active", on_active)
         gw.connect("destroy", lambda *_: STUDIO_FRONT.__setitem__(0, False))
+        _ui_log(f"студия: слежу за фокусом (Лира поверх всех: {bool(ON_TOP[0])})")
         on_active(gw)
 
     def _studio_gw(self):
@@ -3560,8 +3571,8 @@ class Api:
             + ("&mode=" + mode if mode in ("play", "pult") else "") + ("&game=" + getattr(self, "_pad_game", "") if mode == "play" and getattr(self, "_pad_game", "") else "")
         self._pad_game = ""
         url, bridge = self._bridged(self._url("pad.html", q))
-        win = webview.create_window(PAD_TITLE, url, width=W, height=g["h"], x=g["x"], y=g["y"],
-                                    resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
+        win = webview.create_window(PAD_TITLE, url, width=W, height=g["h"], x=g["x"], y=g["y"],      # «поверх» — как виджет
+                                    resizable=False, frameless=True, easy_drag=False, on_top=ON_TOP[0], hidden=True,
                                     background_color="#dbe5f1" if light else "#12131b", js_api=bridge, **_no_shadow())
         self._pad, self._pad_born = win, time.monotonic()
         win.events.closed += lambda *a: (setattr(self, "_pad", None), setattr(self, "_pad_on", False)) if getattr(self, "_pad", None) is win else None
