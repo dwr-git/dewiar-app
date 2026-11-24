@@ -306,7 +306,7 @@ function syncApply(it) {
     if (!d.repeat && +d.at < Date.now() - 300000 && !exists) return false;
     if (d.paused) { if (exists) D.alarmCancel(it.id); return true; }
     const was = exists ? JSON.parse(D.alarms() || "[]").find(x => x.id === it.id) : null, note = "note" in d ? d.note : was && was.note;
-    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) },
+    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) }, was && was.who ? { who: was.who } : {},   // №980: кто ставил — не теряем при правке с компьютера
       note ? { note } : {})));
     if (d.kind === "timer") setTimeout(tmrShow, 0);
   } else if (it.kind === "note") {

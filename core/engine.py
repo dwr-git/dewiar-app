@@ -1014,9 +1014,18 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             radio.duck(1.0 if quiet else 0.0 if st in ("listening", "thinking") else 0.25 if st == "speaking" else 1.0)
         self.emit("state", state=st, persona=self.s.get("persona"))
 
-    def note(self, text):
-        self.status["note"] = self._g(text)
+    def note(self, text, ttl=0):
+        """Строка-подсказка под обликом. ttl — через сколько секунд убрать сама (если её не сменили) — №981 (23.11):
+        «целый день висит, что Лира не распознала длинную фразу… ни закрыть, ни стереть»."""
+        self.status["note"] = val = self._g(text)
         self.emit("status", status=self.status)
+        if ttl and val:
+            def clear():
+                if self.status.get("note") == val:
+                    self.note("")
+            t = threading.Timer(ttl, clear)
+            t.daemon = True
+            t.start()
 
     def _level(self, v, src):
         if self._intro_ear is not None or self._intro_probe is not None:

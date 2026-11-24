@@ -15,7 +15,7 @@ def ok(c, m):
 
 
 src = (ROOT / "ui/assets/entities.js").read_text(encoding="utf-8")
-ok("dt * (L.geo && L.geo.smile ? 14 : 3)" in src, "смена улыбки: у образов — быстро (14), у базовой Лиры — как было (3)")
+ok("(up ? 14 : 2.5) : 3)" in src, "улыбка образов появляется быстро (14), гаснет плавно (2,5, владелец 22.11 вечер: «резко исчезает»), у базовой Лиры — как было (3)")
 d = ROOT / "ui/assets/live"
 bad, lips = [], []
 for name, conf in re.findall(r'"((?:lira|patrik)-[a-z]+)": (\{"own".*?\}\}),?\n', src):

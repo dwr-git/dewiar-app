@@ -176,7 +176,9 @@ N.on("stt_error", e => {
     setTimeout(() => { if (state === "listening") listen(); }, 450 * sttRetry); return;
   }
   sttRetry = 0;
-  if (sttVia === "system" && e.code === 13) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
+  // №974: 13 у Android — «язык распознавания недоступен» (Speech.java уже попробовал без выбора языка), а не веб-версия:
+  // ниже — как любой отказ распознавателя телефона (сервер Dewiar, если есть), с понятной причиной
+  if (sttVia === "system" && e.code === 13 && D.web) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
     plog("warn", "распознавание браузера недоступно: " + (e.msg || ""));
     const c = Date.now() < sttSysUntil ? null : cloudEars();
     if (c) { S.stt = { engine: "server", url: c.url, key: c.key, model: "gigaam", from_account: loggedIn(), auto: true }; saveS();

@@ -701,6 +701,21 @@ def _stream_retry(method, url, tries=2, **kw):
         return
 
 
+_SURR = re.compile("[\ud800-\udfff]")
+
+
+def _well_formed(o):
+    """№989 (24.11): «модель ответила 400: Invalid Unicode (unpaired surrogate)». Половинка эмодзи (обрезка текста по
+    длине в окне или на телефоне) в запросе — сервер его не принимает. Половинки -> «�»; остальное как есть."""
+    if isinstance(o, str):
+        return _SURR.sub("\ufffd", o) if _SURR.search(o) else o
+    if isinstance(o, list):
+        return [_well_formed(x) for x in o]
+    if isinstance(o, dict):
+        return {k: _well_formed(v) for k, v in o.items()}
+    return o
+
+
 def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     """Поток событий: ("text", кусок) и в конце, если модель решила действовать,
     ("tools", [{"id", "name", "args"}]). cancel — threading.Event для мгновенной остановки. Ошибки — LLMError.
@@ -718,6 +733,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         tools = None
     native = p.get("kind") == "ollama" or base in _native
     max_tokens = int(p.get("max_tokens") or DEFAULT_MAX_TOKENS)
+    _said = []                                   # что уже ушло человеку (продолжение оборванного ответа, №990)
+    system, messages = _well_formed(system), _well_formed(messages)   # №989: без «половинок» эмодзи (сервер — 400)
     # Размышления выключены по умолчанию: качество ответов помощника почти не растёт, а ответ заметно медленнее.
     # Включить — только явно, "think": "on" в профиле; при повторе после пустого ответа — выключены всегда.
     no_think = p.get("think") != "on" or _retry > 0
@@ -908,7 +925,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                     got_text = True
                     if st is not None:
                         st["text"] = True
-                    yield "text", piece
+                    _said.append(piece); yield "text", piece
             if col.pending:
                 try:
                     piece = bare.feed(col.feed_obj(json.loads(col.pending)))
@@ -917,7 +934,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                         net_buf.append(piece)
                     elif piece:
                         got_text = True
-                        yield "text", piece
+                        _said.append(piece); yield "text", piece
                 except ValueError:
                     pass
             if not (cancel is not None and cancel.is_set()):
@@ -926,7 +943,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                     net_buf.append(piece)
                 elif piece:
                     got_text = True
-                    yield "text", piece
+                    _said.append(piece); yield "text", piece
         if col.usage:
             _usage.v = col.usage
         _usage.out = col.out
@@ -949,15 +966,27 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             _net.v = True
             if ntext:
                 got_text = True
-                yield "text", ntext
+                _said.append(ntext); yield "text", ntext
         if not calls and bare_calls:
             log.info("Вызов без тегов, голым JSON: %s", ", ".join(c["name"] for c in bare_calls))
             calls = [{"id": f"call_b{i}", "name": c["name"], "args": c["args"]} for i, c in enumerate(bare_calls)]
         elif held:
             got_text = True
-            yield "text", held
+            _said.append(held); yield "text", held
         if calls and not (cancel is not None and cancel.is_set()):
             yield "tools", calls
+            return
+        # №990 (24.11): «в текстовом режиме длинные ответы обрываются» — ответ на 1922 знака оборвался на «Ссылайся на ст.»:
+        # модель упёрлась в лимит длины (размышления съели часть). Обрыв по лимиту — просим продолжить ровно с того места
+        # (один раз, с бо́льшим лимитом); человек видит один цельный ответ
+        if (got_text and _retry == 0 and col.finish in ("length", "max_tokens") and not p.get("_bg")
+                and not (cancel is not None and cancel.is_set())):
+            told = "".join(_said)
+            log.info("✂ Ответ оборвался на лимите длины (%d знаков) — прошу продолжить", len(told))
+            more = list(messages) + [{"role": "assistant", "content": told},
+                                     {"role": "user", "content": "(Ответ оборвался на полуслове из-за лимита длины. Продолжи ровно с "
+                                      "того места, где оборвалось, — без повторов, без вступления и без вызова действий.)"}]
+            yield from stream_events(dict(p, max_tokens=max(2 * max_tokens, 4096)), system, more, cancel, None, _retry + 1)
             return
         if not got_text and not (cancel is not None and cancel.is_set()):
             log.warning("Пустой ответ: модель %s, формат %s, причина %s, размышлений %d симв., начало ответа: %r",

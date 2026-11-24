@@ -1391,7 +1391,10 @@ if (screen.orientation && screen.orientation.addEventListener) screen.orientatio
 function faceFor(p) {
   if (!D.setFace) return;
   const c = document.createElement("canvas"); c.width = c.height = 192;
-  const x = c.getContext("2d"), done = () => { try { D.setFace(p.id, p.name, p.color || "#8A9BFF", c.toDataURL("image/png").split(",")[1]); } catch (e) {} };
+  // №980 (23.11): «Лира — основной персонаж, а напоминания приходят от Патрика». Faces.save делает отданный облик текущим
+  // (по нему подписаны напоминания без «кто ставил» — с компьютера, из синхронизации), а фото грузится не сразу: облик
+  // Патрика, дорисованный после возврата к Лире, становился «текущим». Отдаём облик, только если персонаж всё ещё тот же
+  const x = c.getContext("2d"), done = () => { if (personaBase().id !== p.id) return; try { D.setFace(p.id, p.name, p.color || "#8A9BFF", c.toDataURL("image/png").split(",")[1]); } catch (e) {} };
   x.save(); x.beginPath(); x.arc(96, 96, 96, 0, 7); x.clip();
   const g = x.createRadialGradient(80, 70, 10, 96, 96, 96);
   g.addColorStop(0, p.color || "#8A9BFF"); g.addColorStop(.6, "#1d1d38"); g.addColorStop(1, "#0d0d1a");
@@ -1815,7 +1818,9 @@ N.on("stt_error", e => {
     setTimeout(() => { if (state === "listening") listen(); }, 450 * sttRetry); return;
   }
   sttRetry = 0;
-  if (sttVia === "system" && e.code === 13) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
+  // №974: 13 у Android — «язык распознавания недоступен» (Speech.java уже попробовал без выбора языка), а не веб-версия:
+  // ниже — как любой отказ распознавателя телефона (сервер Dewiar, если есть), с понятной причиной
+  if (sttVia === "system" && e.code === 13 && D.web) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
     plog("warn", "распознавание браузера недоступно: " + (e.msg || ""));
     const c = Date.now() < sttSysUntil ? null : cloudEars();
     if (c) { S.stt = { engine: "server", url: c.url, key: c.key, model: "gigaam", from_account: loggedIn(), auto: true }; saveS();
@@ -2553,6 +2558,16 @@ function econSuggest(models) {                       // как economy.suggest: 
 /* Ответ модели потоком (OpenAI-совместимый /chat/completions или Ollama /api/chat). onText(кусок) — текст по мере прихода,
    уже без размышлений и вызовов функций текстом; -> {text, calls:[{id,name,args}]} */
 var turnServers = new Set();                        // серверы облака, отвечавшие в этом ходе (экзамен: строка «сервер»)
+/* №989 (24.11): «модель ответила 400: Invalid Unicode (unpaired surrogate)» на каждый вопрос. Тексты в истории и памяти
+   обрезаются по длине (slice), а эмодзи — две половинки: обрезка по середине оставляет одну, и сервер не принимает запрос.
+   Перед отправкой — каждую оборванную половинку заменяем знаком «�» (без «взгляда назад» — старый Safari). */
+const wfStr = (s) => s.replace(/[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff]/g, (m) => m.length === 2 ? m : "\ufffd");
+function wellFormed(o) {
+  if (typeof o === "string") return wfStr(o);
+  if (Array.isArray(o)) return o.map(wellFormed);
+  if (o && typeof o === "object") { const r = {}; for (const k of Object.keys(o)) r[k] = wellFormed(o[k]); return r; }
+  return o;
+}
 async function llmStream(messages, tools, onText, signal, opt = {}) {
   const model = await resolveModel();
   const think = opt.think != null ? !!opt.think : thinkMode() === "on";
@@ -2576,6 +2591,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     // «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — только там, где поле точно понимают
     if (S.llm.no_usage !== llmBase() && (["dewiar", "local", "server"].includes(brainKind()) || /openai\.com|openrouter|deepseek\.com/.test(url))) body.stream_options = { include_usage: true };
   }
+  body = wellFormed(body);                          // №989: без «половинок» эмодзи — иначе сервер отвечает 400
   const tAsk = Date.now(); let tFirst = 0, usage = null;
   let hold = null, held = "", text = "", buf = "", inThink = false, gate = true, gbuf = "", tcBuf = "", inTool = false, finish = "", sawReason = false;
   let afterCall = false, dropped = "";      // текст после вызова — сочинённый до результата: не озвучиваем
@@ -9047,7 +9063,7 @@ function syncApply(it) {
     if (!d.repeat && +d.at < Date.now() - 300000 && !exists) return false;
     if (d.paused) { if (exists) D.alarmCancel(it.id); return true; }
     const was = exists ? JSON.parse(D.alarms() || "[]").find(x => x.id === it.id) : null, note = "note" in d ? d.note : was && was.note;
-    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) },
+    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) }, was && was.who ? { who: was.who } : {},   // №980: кто ставил — не теряем при правке с компьютера
       note ? { note } : {})));
     if (d.kind === "timer") setTimeout(tmrShow, 0);
   } else if (it.kind === "note") {

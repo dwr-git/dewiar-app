@@ -210,7 +210,7 @@ class AudioMixin(ModelsMixin, MicMixin, ListenMixin, NameMixin, EchoMixin):
                 if not getattr(self, "_long_hint", False):     # человек думает, что ассистент «уснул» (отчёт 18.10)
                     self._long_hint = True
                     self.note("Длинную фразу без имени я приняла за разговор рядом и не ответила. Если это было мне — "
-                              "начните с имени или попросите: «расскажи…», «найди…».")
+                              "начните с имени или попросите: «расскажи…», «найди…».", ttl=45)   # №981: не висит весь день
                 return
             if long_:
                 log.info("Продолжение разговора: длинная фраза — %s", "имя внутри фразы" if named else

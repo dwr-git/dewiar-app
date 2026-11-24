@@ -35,6 +35,9 @@ HELP = ("Я — ваш ассистент Dewiar. Пишите или присы
         "с вопросом.\n\n/stop — остановить ответ\n/status — что я сейчас делаю\n/help — эта подсказка")
 
 
+# сеть не пустила (провайдер, таймаут) — не ошибка привязки или запрета: можно повторить позже
+NET_FAIL_RX = re.compile(r"не отвечает|недоступен|timed? ?out|timeout|10060|connect|сеть|network", re.I)
+
 class TelegramError(Exception):
     pass
 
@@ -851,7 +854,27 @@ class Telegram:
             self.problem = str(e)
             if self.shared() and "не привязан" in str(e):
                 self._lost_link()
+            elif NET_FAIL_RX.search(str(e)):
+                self._resend_later(own["chat"], text, buttons)
             return False
+
+    def _resend_later(self, chat, text, buttons=None, waits=(20, 60, 180)):
+        """№984 (23.11, «ответила в виджет, но не в бот… пока не нажал „Проверить“»): Telegram с этого компьютера то
+        доступен, то нет (провайдер), и ответ на сообщение из Telegram пропадал. Сеть не пустила — пробуем ещё раз через
+        20 с, минуту и три минуты (в фоне); дошло — в журнал."""
+        def run():
+            for w in waits:
+                time.sleep(w)
+                try:
+                    self._reply(chat, text, buttons)
+                    self.problem = ""
+                    log.info("%s: отправилось со второй попытки (через %d с)", self.TITLE, w)
+                    return
+                except TelegramError as e:
+                    if not NET_FAIL_RX.search(str(e)):
+                        return
+            log.warning("%s: так и не отправилось — Telegram недоступен с этого компьютера", self.TITLE)
+        threading.Thread(target=run, daemon=True).start()
 
     def _lost_link(self):
         """№874 (18.11: «пишет „подключён… владелец“ и тут же „Telegram ещё не привязан“; из телеги — компьютеры не на

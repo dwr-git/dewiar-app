@@ -4,6 +4,16 @@
 /* Ответ модели потоком (OpenAI-совместимый /chat/completions или Ollama /api/chat). onText(кусок) — текст по мере прихода,
    уже без размышлений и вызовов функций текстом; -> {text, calls:[{id,name,args}]} */
 var turnServers = new Set();                        // серверы облака, отвечавшие в этом ходе (экзамен: строка «сервер»)
+/* №989 (24.11): «модель ответила 400: Invalid Unicode (unpaired surrogate)» на каждый вопрос. Тексты в истории и памяти
+   обрезаются по длине (slice), а эмодзи — две половинки: обрезка по середине оставляет одну, и сервер не принимает запрос.
+   Перед отправкой — каждую оборванную половинку заменяем знаком «�» (без «взгляда назад» — старый Safari). */
+const wfStr = (s) => s.replace(/[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff]/g, (m) => m.length === 2 ? m : "\ufffd");
+function wellFormed(o) {
+  if (typeof o === "string") return wfStr(o);
+  if (Array.isArray(o)) return o.map(wellFormed);
+  if (o && typeof o === "object") { const r = {}; for (const k of Object.keys(o)) r[k] = wellFormed(o[k]); return r; }
+  return o;
+}
 async function llmStream(messages, tools, onText, signal, opt = {}) {
   const model = await resolveModel();
   const think = opt.think != null ? !!opt.think : thinkMode() === "on";
@@ -27,6 +37,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     // «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — только там, где поле точно понимают
     if (S.llm.no_usage !== llmBase() && (["dewiar", "local", "server"].includes(brainKind()) || /openai\.com|openrouter|deepseek\.com/.test(url))) body.stream_options = { include_usage: true };
   }
+  body = wellFormed(body);                          // №989: без «половинок» эмодзи — иначе сервер отвечает 400
   const tAsk = Date.now(); let tFirst = 0, usage = null;
   let hold = null, held = "", text = "", buf = "", inThink = false, gate = true, gbuf = "", tcBuf = "", inTool = false, finish = "", sawReason = false;
   let afterCall = false, dropped = "";      // текст после вызова — сочинённый до результата: не озвучиваем

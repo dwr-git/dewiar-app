@@ -940,8 +940,11 @@
     // владелец 22.11: «в момент смены на улыбку виден промежуточный вариант — и нижние губы, и верхние». У образов улыбка —
     // другой кадр низа лица, и наплыв двух ртов виден; смена — за ~0,15 с, почти мгновенно. Базовая Лира — как была (там
     // улыбка — сдвиг губ, наплыв не виден)
-    A.smile += (smileGoal - A.smile) * Math.min(1, dt * (L.geo && L.geo.smile ? 14 : 3));
-    if (L.geo && L.geo.smile && Math.abs(smileGoal - A.smile) < 0.04) A.smile = smileGoal;
+    // владелец 22.11, вечер: «начинает улыбаться плавно и красиво… а потом резко улыбка исчезает — плохо». Появляется
+    // быстро (без двух ртов разом), гаснет плавно, как у базовой Лиры
+    const up = smileGoal > A.smile;
+    A.smile += (smileGoal - A.smile) * Math.min(1, dt * (L.geo && L.geo.smile ? (up ? 14 : 2.5) : 3));
+    if (L.geo && L.geo.smile && up && smileGoal - A.smile < 0.04) A.smile = smileGoal;
 
     const neu = e.tone === "neu";
     ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.clip();

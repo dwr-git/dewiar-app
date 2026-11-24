@@ -236,20 +236,35 @@ def _rgb(css):
 def match_page_bg(win):
     """№921 (1.0.48, Mac, снимок: над студией тёмно-серая полоса со светофором, «как в Unsloth — без этой линии»): строка
     заголовка уже прозрачная и страница под ней, но WKWebView держит сверху отступ безопасной зоны (safeArea 28 в журнале),
-    а под страницей — цвет окна по умолчанию (серый системный): он и виден полосой. Красим подложку страницы и окно в
-    цвет самой студии — полосы не видно, светофор лежит на её фоне. Тема сменилась — вызвать ещё раз."""
+    а под страницей — цвет окна: его и видно полосой. Красим подложку страницы и окна в цвет самой студии.
+    №965 (22.11, 1.0.62, «восьмая попытка»): в журнале «подложка в цвет страницы rgb(38, 42, 49)» — это цвет тёмной темы
+    («Графитовой»), а студия на снимке светлая: красили один раз при загрузке, по теме, с которой окно открылось, и по
+    фону body (у светлых тем он прозрачный). Теперь цвет — основной цвет темы (--sk-base из theme.js), и подложка
+    следит за ним всё время, пока окно открыто: тема сменилась (вручную или по времени суток) — перекрашиваем."""
     time.sleep(0.4)                                            # страница дорисовала тему
-    try:
-        css = win.evaluate_js("(() => { const b = getComputedStyle(document.body).backgroundColor; "
-                              "return b && !/rgba\\(0, 0, 0, 0\\)|transparent/.test(b) ? b : getComputedStyle(document.documentElement).backgroundColor; })()")
-    except Exception as e:  # noqa: BLE001
-        log(f"цвет студии для строки заголовка: {e}")
-        return
-    rgb = _rgb(str(css or ""))
-    if rgb is None:
-        log(f"цвет студии для строки заголовка не разобрал: {css!r}")
-        return
+    js = ("(() => { const r = getComputedStyle(document.documentElement), k = r.getPropertyValue('--sk-base').trim(); if (k) return k; "
+          "const b = getComputedStyle(document.body).backgroundColor; "
+          "return b && !/rgba\\(0, 0, 0, 0\\)|transparent/.test(b) ? b : r.backgroundColor; })()")
+    last = None
+    while True:
+        try:
+            css = win.evaluate_js(js)
+        except Exception as e:  # noqa: BLE001 — окно закрыто
+            if last is None:
+                log(f"цвет студии для строки заголовка: {e}")
+            return
+        rgb = _rgb(str(css or ""))
+        if rgb is None:
+            if last is None:
+                log(f"цвет студии для строки заголовка не разобрал: {css!r}")
+        elif rgb != last:
+            last = rgb
+            _paint_under(win, rgb, css)
+        time.sleep(3)
 
+
+def _paint_under(win, rgb, css):
+    """Подложка окна и WebView — цвет rgb (0–1)."""
     def run():
         try:
             import AppKit

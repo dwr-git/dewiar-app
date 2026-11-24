@@ -339,7 +339,10 @@ if (screen.orientation && screen.orientation.addEventListener) screen.orientatio
 function faceFor(p) {
   if (!D.setFace) return;
   const c = document.createElement("canvas"); c.width = c.height = 192;
-  const x = c.getContext("2d"), done = () => { try { D.setFace(p.id, p.name, p.color || "#8A9BFF", c.toDataURL("image/png").split(",")[1]); } catch (e) {} };
+  // №980 (23.11): «Лира — основной персонаж, а напоминания приходят от Патрика». Faces.save делает отданный облик текущим
+  // (по нему подписаны напоминания без «кто ставил» — с компьютера, из синхронизации), а фото грузится не сразу: облик
+  // Патрика, дорисованный после возврата к Лире, становился «текущим». Отдаём облик, только если персонаж всё ещё тот же
+  const x = c.getContext("2d"), done = () => { if (personaBase().id !== p.id) return; try { D.setFace(p.id, p.name, p.color || "#8A9BFF", c.toDataURL("image/png").split(",")[1]); } catch (e) {} };
   x.save(); x.beginPath(); x.arc(96, 96, 96, 0, 7); x.clip();
   const g = x.createRadialGradient(80, 70, 10, 96, 96, 96);
   g.addColorStop(0, p.color || "#8A9BFF"); g.addColorStop(.6, "#1d1d38"); g.addColorStop(1, "#0d0d1a");

@@ -124,6 +124,8 @@ public final class Speech {
         return ok;
     }
 
+    private static boolean noLangSwitch = false;     // №974: распознаватель не умеет выбирать язык — только основной
+
     public void listenSystem(final int g) {
         gen = g;
         final Runnable go = new Runnable() {
@@ -140,6 +142,7 @@ public final class Speech {
                     else if (active) { try { rec.cancel(); } catch (Throwable ignored) { } }   // прежний сеанс ещё идёт — прервать
                     final long t0 = android.os.SystemClock.elapsedRealtime();
                     final boolean[] ready = {false};
+                    final boolean sw = lang2 != null && !lang2.isEmpty() && !noLangSwitch;   // просим распознаватель выбирать язык
                     active = true;
                     rec.setRecognitionListener(new RecognitionListener() {
                         @Override public void onReadyForSpeech(Bundle b) { ready[0] = true; ev(g, "stt_start", o()); }
@@ -154,6 +157,14 @@ public final class Speech {
                             // «прервано» от прерванного прежнего сеанса прилетает уже сюда, до готовности нового — не наше
                             if (code == SpeechRecognizer.ERROR_CLIENT && !ready[0] && android.os.SystemClock.elapsedRealtime() - t0 < 600) return;
                             active = false;
+                            // №974 (realme, Android 16): 12/13 — «язык не поддерживается / недоступен». Распознаватель не
+                            // умеет выбирать между двумя языками (второй язык в настройках) — слушаем только на основном,
+                            // до конца работы, сразу же ещё раз (человек ничего не заметит)
+                            if ((code == 12 || code == 13) && !ready[0] && sw) {
+                                noLangSwitch = true;
+                                main.post(new Runnable() { @Override public void run() { listenSystem(g); } });
+                                return;
+                            }
                             if ((code == SpeechRecognizer.ERROR_CLIENT || code == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || code == 11) && rec != null) {
                                 // сломался — отпустить сразу, а не перед следующей фразой: к ней служба успеет отключиться
                                 final SpeechRecognizer old = rec;
@@ -184,7 +195,7 @@ public final class Speech {
                     // и «только на языке приложения» — для распознавателей, что берут язык системы (отчёт №253: телефон без русской
                     // прошивки слышал английский и китайский)
                     i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, main);
-                    if (lang2 != null && !lang2.isEmpty()) {
+                    if (sw) {
                         // второй язык (28.10): русский или английский — распознаватель решает сам (Android 14+, у Google — да;
                         // старые распознаватели эти пожелания пропускают и слушают по-русски, как раньше)
                         ArrayList<String> langs = new ArrayList<>(java.util.Arrays.asList(main, other));
@@ -252,6 +263,7 @@ public final class Speech {
             case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: return "распознавание занято";
             case SpeechRecognizer.ERROR_CLIENT: return "распознавание прервано";
             case 11: return "служба распознавания переподключается";
+            case 12: case 13: return "распознаватель телефона не знает этого языка — нужен русский в настройках голосового ввода";
             default: return "ошибка распознавания " + c;
         }
     }
