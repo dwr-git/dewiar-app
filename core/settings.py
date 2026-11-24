@@ -128,7 +128,9 @@ DEFAULTS = {
         "xray": True,               # «Рентген» ответа: путь хода, подсказка, действия, проверки (core/xray.py)
         "talk_lean": True,          # «Чистый разговор» (core/talk_lean.py): включён для всех с 1.0.60 — стенд 22.11: «Разговор»
                                     # 88–98 % → 95 %, «Как твои дела?» 2/6 → 3/3, «Понимание ситуации» 73 % → 79 %; False — как раньше
-        "ledger": False,            # «Каркас хода»: ответ сверяется с журналом сделанного (core/ledger.py) — проба, стенд
+        "ledger": "auto",           # «Каркас хода»: ответ сверяется с журналом сделанного (core/ledger.py). "auto" (1.0.69) — у
+                                    # облака Dewiar да (стенд 24.11: «Честность» 31→33 из 33, «Действия» и «Разговор» без потерь;
+                                    # проверка — ещё один короткий запрос, своей медленной модели не добавляем); True/False — всегда/никогда
         "key_fallback": True,       # сервис по ключу (Gemini, Kimi…) не ответил — мозг Dewiar (15.11, «Кто чем думает»)
         "own_fallback": False,      # своя модель не отвечает — мозг Dewiar (по согласию; engine_answer._own_fallback)
         "scene": False,             # «Ум Лиры», шаг 1: проба сцены разговора (экзамен --scene) — True включает всегда
@@ -363,6 +365,9 @@ class Settings:
                 if au.get("follow_up_seconds", 8) == 8 and not au.get("follow_v2"):
                     self.data["audio"]["follow_up_seconds"] = 15             # №514: 8 с — прежнее значение по умолчанию, не выбор
                 self.data["audio"]["follow_v2"] = True                        # перевод один раз: выбранные потом 8 с не трогаем
+                if (raw.get("llm") or {}).get("ledger") is False and not (raw.get("llm") or {}).get("ledger_v2"):
+                    self.data["llm"]["ledger"] = "auto"                  # False — прежнее значение по умолчанию (проба), не выбор
+                self.data["llm"]["ledger_v2"] = True                      # перевод один раз: выключенный потом не трогаем
                 if (raw.get("llm") or {}).get("history_reset_seconds") in (300, 1200):
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
                 self._cloud_kind()

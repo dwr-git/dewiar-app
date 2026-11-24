@@ -413,8 +413,14 @@ class Radar:
             c = self.conf()
             gap = (c["tick_night"] if self.night() else c["tick_day"]) * 60
             mode = c.get("mode") or "always"
-            run = c.get("on", True) and self.st.sources() and mode != "pause" and (mode == "always" or self.night())
-            if run and time.time() - float(self.st.load("log", {}).get("last_tick") or 0) >= gap:
+            since = time.time() - float(self.st.load("log", {}).get("last_tick") or 0)
+            # №1010 (24.11: «радар не делает обходы, последний раз 8 дней назад, в очереди 102»): режим «только ночью», а
+            # компьютер ночью выключен — обхода не было вовсе. Ночного обхода не было больше суток — один обход днём
+            late = mode == "night" and not self.night() and since >= 24 * 3600
+            run = c.get("on", True) and self.st.sources() and mode != "pause" and (mode == "always" or self.night() or late)
+            if run and since >= gap:
+                if late:
+                    log.info("📡 Радар: ночью обхода не было больше суток (компьютер был выключен) — обхожу сейчас")
                 self.tick()
             if stopping.wait(60):
                 return

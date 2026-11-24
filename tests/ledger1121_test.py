@@ -43,9 +43,17 @@ ok(L.check("включи радио", "Включила радио.", [{"name": 
 ok(L.check("x", "Готово.", [], model("не понимаю")) == [] and L.check("x", "Готово.", [], lambda a, b: 1 / 0) == [],
    "модель ответила не JSON или упала — ответ не трогаем")
 ok(L.need_check("I've sent the email to Anna.") and L.need_check("Done!"), "по-английски — тоже отбирается (принцип, не язык)")
-ok(SET.DEFAULTS["llm"]["ledger"] is False, "за переключателем llm.ledger — пока проба (стенд: --set llm.ledger=true)")
+# 1.0.69: стенд 24.11 («Честность» 31→33 из 33, остальное без потерь) — у облака Dewiar включено, своей модели — нет
+ok(SET.DEFAULTS["llm"]["ledger"] == "auto" and L.on("auto", {"cloud": True}) and not L.on("auto", {"kind": "openai"})
+   and not L.on("auto", None) and L.on(True, None) and not L.on(False, {"cloud": True}), "llm.ledger «auto»: облако Dewiar — да, своя модель — нет; True/False — всегда/никогда")
+import json as _j, tempfile as _t  # noqa: E402
+_d = Path(_t.mkdtemp())
+for raw, want in (({"llm": {"ledger": False}}, "auto"), ({"llm": {"ledger": False, "ledger_v2": True}}, False), ({"llm": {"ledger": True}}, True), ({}, "auto")):
+    (_d / "settings.json").write_text(_j.dumps(raw), encoding="utf-8")
+    _s = SET.Settings.__new__(SET.Settings); _s.path = _d / "settings.json"; _s._lock = __import__("threading").RLock(); _s.load()
+    ok(_s.data["llm"]["ledger"] == want, f"перевод настроек: {raw} → {want!r} (было выключено пробой — «auto» один раз; выключили сами — не трогаем)")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
-ok('if self.s.get("llm", "ledger")' in src and "ledger.check(text, turn.full, acts_, _ask_)" in src and "✋ Ответ утверждает сделанное" in src,
+ok('if ledger.on(self.s.get("llm", "ledger"), prof)' in src and "ledger.check(text, turn.full, acts_, _ask_)" in src and "✋ Ответ утверждает сделанное" in src,
    "ход: ворота в конце, поправка — проверкой «✋» (видна в рентгене и в замере по мозгам)")
 # телефон, «Руки» (группа 21.11: «находит контакт, но не пишет текст в поле», а Лира — «Написала, готово»): ввод сверяется с экраном
 import re as _re, shutil as _sh, subprocess as _sp, json as _js  # noqa: E402

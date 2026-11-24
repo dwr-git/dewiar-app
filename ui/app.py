@@ -2585,6 +2585,23 @@ class Api:
         from gi.repository import Gtk
         return next((g for g in Gtk.Window.list_toplevels() if g.get_title() == STUDIO_TITLE), None)
 
+    def _pad_attach(self, gw):
+        """Linux, главный поток GTK. Владелец 24.11 (Ubuntu, «поверх всех» выключено): «фокус на виджете — он поднялся над
+        браузером, а блокнот, который с ним работает, под браузером; нажал на блокнот — он поднялся, а виджет спрятан».
+        Блокнот и виджет — два отдельных окна, каждое поднималось само по себе. Блокнот — подчинённое окно виджета
+        (transient_for): оконный менеджер держит его над виджетом и поднимает их вместе — нажали на любое из двух, оба
+        впереди. Проверено в настоящем Mutter: без этого — «виджет, браузер, блокнот», с ним — «браузер, виджет, блокнот»."""
+        try:
+            from gi.repository import Gtk
+            title = TITLES.get(getattr(self, "mode", "card"), TITLES["card"])
+            parent = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == title), None)
+            if parent is None or gw is None or gw.get_transient_for() is parent:
+                return
+            gw.set_transient_for(parent)
+            _ui_log("блокнот: подчинённое окно виджета — поднимаются вместе")
+        except Exception as e:  # noqa: BLE001
+            _ui_log(f"блокнот рядом с виджетом: {e}")
+
     def _raise_studio(self):
         """Linux: поднять студию наверх и дать ей фокус. GNOME не пускает вперёд окна фоновой программы (защита от
         кражи фокуса): со второго раза студия открывалась ЗА другими окнами — казалось, что кнопки «Настройки»,
@@ -3550,6 +3567,7 @@ class Api:
                         gw = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == PAD_TITLE), None)
                         if gw is None:
                             return False
+                        self._pad_attach(gw)
                         gw.show_all()
                         gw.present()
                         if gw.get_window() is not None:
@@ -3605,6 +3623,7 @@ class Api:
                         r = int(round(PAD_RADIUS * (ZOOM[0] or 1.0)))
                         shape_window(gw, "pad", rects=pad_rects(g["side"], g["w"] * k, g["h"] * k, g["gap"] * k,
                                                                 [(y * k, c * k) for y, c in g["clips"]], r * k))
+                        self._pad_attach(gw)
                         gw.show_all()
                         gw.get_window().move(g["x"], g["y"])
                         return True

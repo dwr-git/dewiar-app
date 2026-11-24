@@ -140,5 +140,8 @@ log = ["14:44:16 INFO    dewiar.stt: GigaAM готов за 29.6 с"]
 ok("работает" in doctor.works_in_core("onnx_asr", log) and doctor.works_in_core("onnx_asr", []) == "", "в журнале ядра «GigaAM готов» — не ошибка")
 cl = ["13:31:21 INFO    dewiar.llm: Сервер модели: соединение не установилось (ConnectTimeout)"] * 4
 ok("нет связи" in doctor.net_note(cl) and doctor.net_note(log) == "", "модель не отвечает — в ИТОГ")
+# №1047 (24.11): своя модель отвечала, а «нет связи» шло от команды студии (каталог курсов) — это не модель
+_br = ["21:31:35 WARNING dewiar.bridge: Команда academy_list: нет связи с облаком Dewiar — проверьте интернет."] * 6
+ok(doctor.net_note(_br) == "", "«нет связи» у команд студии (dewiar.bridge) — не «модель не отвечает»")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

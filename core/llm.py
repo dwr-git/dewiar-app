@@ -712,6 +712,40 @@ def _stream_retry(method, url, tries=2, **kw):
         return
 
 
+def _skip_echo(events, told):
+    """Поток после обрыва: модель иногда начинает ответ заново — уже показанное (told) второй раз не отдаём. Копим текст,
+    пока его не станет больше показанного; начало совпало (пробелы не в счёт) — отдаём только продолжение (№1044)."""
+    words = told.split()
+    rx = re.compile(r"\s*" + r"\s+".join(map(re.escape, words))) if words else None
+    want = len(" ".join(words))
+
+    def cut(buf):                                  # -> текст для показа
+        m = rx.match(buf) if rx else None
+        if m is None:
+            return buf
+        log.info("✂ Модель начала ответ заново — повтор показанного убрал")
+        return buf[m.end():]
+
+    buf, open_ = "", rx is not None
+    for kind, val in events:
+        if open_ and kind == "text":
+            buf += val
+            if len(buf.strip()) <= want + 20:
+                continue
+        if open_:
+            open_ = False
+            out = cut(buf)
+            if out:
+                yield "text", out
+            if kind == "text":
+                continue
+        yield kind, val
+    if open_ and buf:
+        out = cut(buf)
+        if out.strip():
+            yield "text", out
+
+
 _NO_GZ = set()                       # хосты облака Dewiar, которые сжатый запрос не приняли (сайт старше 1.0.67)
 
 
@@ -1023,11 +1057,22 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         if (got_text and _retry == 0 and col.finish in ("length", "max_tokens") and not p.get("_bg")
                 and not (cancel is not None and cancel.is_set())):
             told = "".join(_said)
+            if col.calls or len(told.strip()) < 120:
+                # №1044 (владелец 24.11, итог дня: «по два раза рассказывает одно и то же»): оборвалось на 27-м знаке —
+                # лимит съел вызов действия (или размышления), а не длинный ответ. «Продолжи» без действий начинало ответ
+                # заново, потом звучал ответ после действия — два раза. Тут — тот же запрос целиком, с действиями и бо́льшим
+                # лимитом; уже показанное начало, если модель его повторит, второй раз не показываем
+                log.info("✂ Лимит длины на %d знаках%s — спрашиваю целиком с бо́льшим лимитом", len(told),
+                         " (обрезан вызов действия)" if col.calls else "")
+                yield from _skip_echo(stream_events(dict(p, max_tokens=max(4 * max_tokens, 4096)), system, messages,
+                                                    cancel, tools, _retry + 1), told)
+                return
             log.info("✂ Ответ оборвался на лимите длины (%d знаков) — прошу продолжить", len(told))
             more = list(messages) + [{"role": "assistant", "content": told},
                                      {"role": "user", "content": "(Ответ оборвался на полуслове из-за лимита длины. Продолжи ровно с "
                                       "того места, где оборвалось, — без повторов, без вступления и без вызова действий.)"}]
-            yield from stream_events(dict(p, max_tokens=max(2 * max_tokens, 4096)), system, more, cancel, None, _retry + 1)
+            yield from _skip_echo(stream_events(dict(p, max_tokens=max(2 * max_tokens, 4096)), system, more, cancel, None,
+                                                _retry + 1), told)
             return
         if not got_text and not (cancel is not None and cancel.is_set()):
             log.warning("Пустой ответ: модель %s, формат %s, причина %s, размышлений %d симв., начало ответа: %r",

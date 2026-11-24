@@ -1245,11 +1245,11 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     log.warning("Действие с ошибкой так и выдано за сделанное — говорю правду")
                     turn.full = (turn.full.rstrip() + " " + note).strip()
                     sentences.put(note)
-            if self.s.get("llm", "ledger") and not turn.cancel.is_set() and turn.full.strip():
+            import ledger
+            if ledger.on(self.s.get("llm", "ledger"), prof) and not turn.cancel.is_set() and turn.full.strip():
                 # «Каркас хода» (план «Качество», шаг 3; отзыв Alex 21.11: «сказала, что сделала, а на самом деле нет»): ответ
                 # сверяется с журналом хода — что программа сделала на самом деле (рентген: действия и итог); утверждает
                 # сделанное без основания — правдой из журнала. Решает модель коротким вопросом, не словарь фраз (core/ledger.py)
-                import ledger
                 xr_ = xray_current()
                 acts_ = list((xr_ or {}).get("acts") or [])
 

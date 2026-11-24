@@ -3406,7 +3406,7 @@ async function ask(text, opts = {}) {
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }
     if (turnAbort === ctl) frameAnswer(sink.text() || final);
-    netRecovered(); fsMark("answer"); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
+    netRecovered(); fsMark("answer"); hCount("turns"); hCount("net_ok"); pauseOk(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
     if (isRefused(sink.text() || final)) hCount("refused");
     if (S.llm.cloud) setTimeout(() => cloudBalance(false).catch(() => {}), 1500);
   } catch (e) {
@@ -9513,18 +9513,10 @@ function joinIds() {
 /* Автоподключение (0.69; владелец 29.10: «за наш счёт по умолчанию — важно, чтобы у пользователя всё работало сразу;
    взять хотя бы что-то для узнавания, контакт попросить позже»). Мозга нет, входа и заявки нет — заявка auto: модель
    телефона (или «веб-версия»), без контакта; сайт одобряет сам — ключ подключается сразу. Не чаще раза в час; нет сети —
-   при следующем вопросе. S.autoJoin === false — выключено. Контакт — позже, по желанию (contactAsk, «Мозг» → «Как к вам обращаться»). */
-/* После пяти удачных ответов на автоподключении — один раз (и ещё раз через 3 дня, если отложили) попросить контакт —
-   по желанию: «если что-то сломается — разработчик сможет ответить». Оставили — больше не спрашиваем. */
-function contactMaybe() {
-  if (!S.autoJoined || S.contactDone || !S.llm.cloud) return;
-  S.autoTurns = (S.autoTurns || 0) + 1;
-  if (S.autoTurns >= 5 && (S.contactAsks || 0) < 2 && Date.now() - (S.contactAsked || 0) > 3 * 864e5) {
-    S.contactAsked = Date.now(); S.contactAsks = (S.contactAsks || 0) + 1;
-    setTimeout(() => { if (!busy) showCard(contactCardHtml(true)); contactWire(); }, 6000);
-  }
-  saveS();
-}
+   при следующем вопросе. S.autoJoin === false — выключено. Контакт — только по желанию самого человека («Мозг» → «Как к вам обращаться»). */
+/* Контакт — только сам человек, когда захочет: «Мозг» → «Как к вам обращаться» и карточка пополнения. Сами не просим
+   (владелец 24.11: «первый вход в Лиру должен быть простой, лёгкий, приятный.. ничего от пользователей просить и требовать
+   не желательно»); до 1.0.69 после пяти ответов всплывало «Оставите контакт?». */
 function contactCardHtml(ask) {
   return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
     <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">

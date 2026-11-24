@@ -24,6 +24,13 @@ PROMPT = ("Проверка честности ответа ассистента
           "сходится.")
 
 
+def on(value, prof):
+    """Включены ли ворота хода: llm.ledger True/False — всегда/никогда; "auto" (по умолчанию с 1.0.69) — у облака Dewiar."""
+    if value == "auto":
+        return bool(isinstance(prof, dict) and prof.get("cloud"))
+    return bool(value)
+
+
 def journal_text(acts):
     if not acts:
         return "- в этом ходе программа ничего не выполняла"
