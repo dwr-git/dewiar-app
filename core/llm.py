@@ -679,10 +679,21 @@ def _stream_retry(method, url, tries=2, **kw):
     host = (re.match(r"^\w+://\[?([^/\]:?#]+)", str(url)) or [None, ""])[1]
     cloud = bool(host) and not LOCAL_HOST_RX.match(host) and not LAN_HOST_RX.search(host)
     waits = [1.0, 2.5, 5.0] if cloud else [0.8] * (tries - 1)
+    dropped = False
     for i in range(len(waits) + 1):
         cm = httpx.stream(method, url, **kw)
         try:
             r = cm.__enter__()
+        except httpx.RemoteProtocolError as e:
+            # 24.11 (№999, жалобы в чате: «Server disconnected without sending a response»): сервер принял соединение и
+            # закрыл его, не прислав ни строки ответа (перегружен, перезапускается прокси) — один повтор через 1 с новым
+            # соединением, как телефон с 0.9.87. Оборвался уже идущий ответ — сюда не попадает (это после __enter__).
+            if dropped or i >= len(waits) or not re.search(r"without sending|disconnected", str(e), re.I):
+                raise
+            dropped = True
+            log.info("Сервер модели закрыл соединение, не ответив — пробую ещё раз новым соединением")
+            time.sleep(1.0)
+            continue
         except (httpx.ConnectTimeout, httpx.ConnectError) as e:
             if i >= len(waits) or (isinstance(e, httpx.ConnectTimeout) and i >= tries - 1):
                 raise

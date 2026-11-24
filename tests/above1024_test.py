@@ -39,7 +39,7 @@ rep.Gtk = types.SimpleNamespace(Window=types.SimpleNamespace(list_toplevels=lamb
 rep.GdkX11 = types.SimpleNamespace(X11Window=X11Window)
 gi.repository = rep; sys.modules["gi"] = gi; sys.modules["gi.repository"] = rep
 ns = {"TITLES": {"card": "Dewiar", "mini": "Dewiar — значок"}, "PAD_TITLE": "Dewiar — блокнот", "ABOVE_TITLES": None, "sys": sys,
-      "ON_TOP": [True]}                                          # 0.68: «Виджет поверх всех окон» можно выключить (№48)
+      "ON_TOP": [True], "STUDIO_FRONT": [False]}                  # 0.68: «Виджет поверх всех окон» можно выключить (№48)
 exec(ast.get_source_segment(src, fn), ns)
 r = ns["keep_above_guard"]()
 ok(r is True and wins[0].calls == [False, True], f"виджет потерял «поверх» — поставлен снова: {wins[0].calls}")
