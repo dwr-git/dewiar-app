@@ -30,7 +30,7 @@ window.padShown = (side) => { if (side) padSide(side); document.body.classList.r
   setTimeout(() => { if (window.padSnipTake) padSnipTake(); }, 300); };   // вернулись из «Вырезать с экрана» — вставить вырезанное
 window.padClose = async () => { gameStop(); await saveNow(); document.body.classList.remove("snap"); setTimeout(() => $("#wrap").classList.add("away"), 90);
   setTimeout(() => { const a = api(); if (a && a.pad_hide) a.pad_hide(); }, 320); };
-$("#b-close").onclick = () => padClose();
+$("#b-close").onclick = () => { core.call("settings_save", { patch: { ui: { pad_open: false } } }).catch(() => { }); padClose(); };   // закрыли сами — в следующий раз не открывать
 /* ⇄ — лист на другую сторону от виджета; выбор запоминается (ui.pad_side). Владелец 24.10: «раньше был слева — можно
    переключать на одну или другую сторону?» Не помещается с той стороны (виджет у края экрана) — остаётся, где был. */
 $("#b-side").onclick = async () => { const a = api(); if (!a || !a.pad_flip) return;

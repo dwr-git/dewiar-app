@@ -104,7 +104,7 @@ ok(not [x for x in I.urgent(items, tr, {items[0]["id"]}, now) if x.get("id") == 
 b = I.parse_brief(json.dumps({"headline": "PHP — неделя уязвимостей", "points": ["4 материала за сутки"], "main": [{"id": "p00", "why": "обновиться"}, {"id": "нет", "why": "x"}]}), items)
 ok(b and b["headline"].startswith("PHP") and [m["id"] for m in b["main"]] == ["p00"], "бриф: заголовок, пункты; выдуманный id — мимо")
 mind = I.apply_evolve({}, json.dumps({"theses": [{"text": "PHP под атакой", "refs": ["p00"]}, {"text": "без ссылок", "refs": []}],
-                                      "new_hyps": [{"text": "Выйдет PHP 8.4.15 за неделю", "due": "2026-11-20"}]}), items)
+                                      "new_hyps": [{"text": "Выйдет PHP 8.4.15 за неделю", "due": time.strftime("%Y-%m-%d", time.localtime(time.time() + 7 * 86400))}]}), items)   # срок — через неделю от сегодня (с 20.11 «2026-11-20» стало прошлым)
 ok(mind["v"] == 1 and [t["text"] for t in mind["theses"]] == ["PHP под атакой"] and mind["hyps"][0]["state"] == "open", f"эволюция: {mind}")
 hid = mind["hyps"][0]["id"]
 mind = I.apply_evolve(mind, json.dumps({"theses": [], "checks": [{"id": hid, "state": "confirmed", "refs": ["p10"]}]}), items)

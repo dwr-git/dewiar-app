@@ -80,7 +80,8 @@ function dictMore(t, cut) {
 }
 /* Сказанное голосом — с тем, что прикреплено в поле ввода (фото, файл): прикрепили скриншот и сказали «сохрани в
    заметки …» — он уходит вместе с фразой и попадает в заметку (отзыв 11.10: фото так и висело над полем). */
-function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : {}); }
+// voice — сказано голосом (1.0.53, владелец 20.11 «скорость голоса»): облако отдаёт простой вопрос лёгкому мозгу (X-Dewiar-Voice)
+function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : { voice: true }); }
 const dictTake = (t) => { const all = ((dict ? dict + " " : "") + (t || "")).trim(); dict = ""; return all; };
 function sttStall(why) {
   if (!sttActive) return;
@@ -114,7 +115,10 @@ N.on("stt_end", e => {
   sttGuard(sttVia === "server" ? 60000 : 8000, "end");          // запись уходит на сервер — при слабом интернете это не мгновенно
   if (sttVia === "server" && !String($("#you").textContent || "").trim()) showYou(trL("распознаю…"));
 });
-N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); });
+/* №366 (20.11): запись для сервера (своя, Speech.listenServer) шлёт уровень каждые 50 мс, а частичного текста у неё нет —
+   сторож «нет событий 15 с» срабатывал посреди удержания кнопки: запись отменялась, голосовое пропадало целиком. Уровень от
+   своей записи — знак, что она жива: сторож заводится заново (у распознавания телефона — только частичный текст, как было). */
+N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); else if (sttVia === "server" && sttActive) sttGuard(15000, "silent"); });
 N.on("stt_partial", e => { if (!sttMine(e)) return; heardPartial = e.text; showYou((dict ? dict + " " : "") + e.text); sttAlive(); });
 N.on("stt_result", e => {
   if (!sttMine(e)) return;
@@ -172,7 +176,9 @@ N.on("stt_error", e => {
     setTimeout(() => { if (state === "listening") listen(); }, 450 * sttRetry); return;
   }
   sttRetry = 0;
-  if (sttVia === "system" && e.code === 13) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
+  // №974: 13 у Android — «язык распознавания недоступен» (Speech.java уже попробовал без выбора языка), а не веб-версия:
+  // ниже — как любой отказ распознавателя телефона (сервер Dewiar, если есть), с понятной причиной
+  if (sttVia === "system" && e.code === 13 && D.web) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
     plog("warn", "распознавание браузера недоступно: " + (e.msg || ""));
     const c = Date.now() < sttSysUntil ? null : cloudEars();
     if (c) { S.stt = { engine: "server", url: c.url, key: c.key, model: "gigaam", from_account: loggedIn(), auto: true }; saveS();
@@ -260,6 +266,9 @@ function voiceOpts(voices, cur) {
 function cloudVoice() {
   if (loggedIn() && S.accCloud && S.accCloud.tts) return { url: S.accCloud.base.split("?")[0] + "?p=", key: S.account.token };
   if (S.llm.cloud && S.llm.tts) return { url: cloudBase() + "?p=", key: S.llm.api_key };
+  // №928/№363 (20.11): мозг — своя модель по API, а слух — облако Dewiar своим ключом: голос пропадал совсем, если в телефоне
+  // нет своего синтеза речи (помогала только установка «Синтеза речи Google»). Тот же ключ облака озвучит ответы
+  if (S.stt.engine === "server" && S.stt.key && /cloud\.php/.test(S.stt.url || "")) return { url: String(S.stt.url).split("?")[0] + "?p=", key: S.stt.key };
   return null;
 }
 /* Голос устройства для героя или героини. Выбран в настройках — он. Иначе подбираем сами: признак пола у голоса (у части

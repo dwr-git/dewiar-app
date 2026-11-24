@@ -122,7 +122,7 @@
   <button data-p="look" data-i18n="nav.look">Оформление</button>
   <button data-p="sound" data-i18n="nav.sound">Звук и поведение</button>
   <button data-p="hands" data-i18n="nav.hands">Руки</button>
-  <button data-p="skills" data-i18n="nav.skills">Плагины</button>
+  <button data-p="skills" class="sub" data-i18n="nav.skills">Плагины</button>
   <button data-p="features" title="Что показывать: игры, встречи, радар, суфлёр — включайте только нужное" data-i18n="nav.features" data-i18n-title="nav.features.tip">Возможности</button>
   <div class="ng" data-fold-k="Связи и данные" data-i18n="nav.g.links">Связи и данные</div>
   <button data-p="devices" title="Все ваши компьютеры и телефоны — одна Лира: подключить, состояние, синхронизация" data-i18n="nav.devices" data-i18n-title="nav.devices.tip">Устройства</button>
@@ -1711,7 +1711,7 @@
       <p class="hint">Бесплатный мозг Dewiar подключился сам, без анкеты. Оставьте имя и контакт — почту, Telegram или телефон, —
         если что-то сломается, разработчик сможет вам ответить. По желанию; поменять можно в любой момент.
         Контакт видит только команда Dewiar; удалить — «О программе» → «Сообщить о проблеме» со словами «Мои данные».
-        <a href="https://dewiar.pro/dwrapp/privacy.php" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
+        <a href="https://dewiar.pro/dwrapp/privacy" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
       <div class="actions" style="margin:0;flex-wrap:wrap">
         <input type="text" id="dw-me-name" maxlength="80" placeholder="Имя" style="flex:1;min-width:140px">
         <input type="text" id="dw-me-contact" maxlength="120" placeholder="Почта, Telegram или телефон" style="flex:2;min-width:200px">
@@ -2299,6 +2299,11 @@
         <button class="btn primary" id="ck-go">Подключить</button>
       </div>
       <p class="hint" style="margin-top:8px" id="ck-hint"></p>
+      <!-- владелец 21.11: «часто нужно, чтобы работало через прокси… назначать его за конкретным вендором» — прокси только
+           этого сервиса; позже — в профиле («Настроить» → «Прокси») -->
+      <details class="ck-px" id="ck-px"><summary>Через прокси — если сервис не открывается из вашей страны</summary>
+        <div id="ck-pxbox" style="margin-top:8px"></div><p class="hint">Данные прокси дал ваш продавец прокси или VPN. Через него пойдут только запросы к этому сервису; всё остальное — как обычно.</p>
+      </details>
       <div id="ck-found" style="display:none;margin-top:10px;align-items:flex-end" class="actions">
         <label class="f" style="min-width:280px" id="ck-sel-f">Модель<select id="ck-model"></select></label>
         <label class="f" style="min-width:280px" id="ck-own-f" hidden>Имя модели — из консоли сервиса<input id="ck-model-own" placeholder="например, gpt-5-mini" autocomplete="off"></label>
@@ -2789,9 +2794,10 @@
     <div class="an-row"><a class="btn pri" id="an-go" target="_blank" rel="noopener" hidden></a><button class="btn" id="an-ok">Понятно</button></div>
   </dialog>
   <dialog class="nwdlg" id="news-dlg" aria-labelledby="nw-title">
+    <button class="nw-x" id="nw-x" type="button" title="Закрыть" aria-label="Закрыть"><svg viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8"/></svg></button>
     <h2 id="nw-title" tabindex="-1" autofocus>Что нового</h2><p class="nwsub" id="nw-sub"></p><div id="nw-list"></div>
     <div class="nw-ideas" id="nw-ideas"><span aria-hidden="true">💡</span><p>Что Лире уметь дальше? Поддержите голосом нужное или предложите своё.</p><button class="btn" id="nw-ideas-go" type="button">Идеи Лиры</button></div>
-    <div class="actions" style="margin:16px 0 0;justify-content:flex-end"><button class="btn primary" id="nw-ok">Понятно</button></div>
+    <div class="actions nw-foot"><button class="btn primary" id="nw-ok">Понятно</button></div>
   </dialog>
   <section id="p-ideas" class="wide">
     <div class="id-hero">
@@ -2892,7 +2898,7 @@
   <div class="wbrain" id="wlc-brain" hidden><div><b>Сначала — мозг: кто будет думать</b><span id="wlc-brain-t">Бесплатно: облако Dewiar по входу или своя модель на компьютере (Ollama, LM Studio).</span></div><button class="btn primary" data-go="brain">Подключить</button></div>
   <div class="wans" id="wlc-ans" hidden aria-live="polite"><i class="wans-ava" aria-hidden="true"></i><p></p></div>
   <div class="actions"><button class="btn link" id="wlc-intro" title="Персонаж сам расскажет о себе голосом и проверит микрофон">👋 Познакомиться голосом</button><span class="grow"></span><button class="btn" id="wlc-later">Позже</button><button class="btn primary" id="wlc-done" hidden>Готово</button></div>
-  <p class="wlegal" id="wlc-legal">Пользуясь Dewiar, вы принимаете <a href="https://dewiar.pro/dwrapp/terms.php" target="_blank" rel="noopener">Условия использования</a> и <a href="https://dewiar.pro/dwrapp/privacy.php" target="_blank" rel="noopener">Политику конфиденциальности</a>. Анонимный пульс выключается в «О программе».</p>
+  <p class="wlegal" id="wlc-legal">Пользуясь Dewiar, вы принимаете <a href="https://dewiar.pro/dwrapp/terms" target="_blank" rel="noopener">Условия использования</a> и <a href="https://dewiar.pro/dwrapp/privacy" target="_blank" rel="noopener">Политику конфиденциальности</a>. Анонимный пульс выключается в «О программе».</p>
 </div></div>
 <div class="drawer" id="help"><button class="btn icon hx" id="help-x" title="Закрыть">✕</button><div id="help-body"></div></div>
 <div class="drawer" id="drawer">
@@ -2926,7 +2932,7 @@
   <div class="row">
     <label class="f">Голос Piper<select id="e-piper"></select></label>
     <label class="f">Темп<input type="range" min="0.75" max="1.3" step="0.05" id="e-len"></label>
-    <label class="f">Голос на сервере (Qwen3-TTS)<input type="text" id="e-remote" placeholder="vivian, ryan… или имя клона"></label>
+    <label class="f">Свой голос на сервере (необязательно)<input type="text" id="e-remote" placeholder="пусто — мужской или женский, как голос выше"></label>
     <label class="f">Обработка голоса<select id="e-fx"></select></label>
     <label class="f">Голос Vosk TTS<select id="e-vosk"></select></label>
   </div>
@@ -3048,6 +3054,8 @@
 <script src="studio/capture.js"></script>
 <script src="assets/rich.js"></script>
 <script src="studio/chat.js"></script>
+<script src="studio/reader.js"></script>
+<script src="studio/xray.js"></script>
 <script src="studio/tricks.js"></script>
 <script src="studio/news.js"></script>
 <script src="studio/modes.js"></script>

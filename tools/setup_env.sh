@@ -12,7 +12,7 @@ say "Пакеты системы: сборка Android, PHP, ffmpeg"
 $SUDO apt-get update -qq || true
 DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq \
   android-sdk android-sdk-platform-23 android-framework-res dalvik-exchange \
-  php-cli php-sqlite3 php-curl php-mbstring php-gd ffmpeg zip unzip espeak-ng >/dev/null || echo "часть пакетов не встала — смотрите выше"
+  php-cli php-sqlite3 php-curl php-mbstring php-gd ffmpeg zip unzip espeak-ng nodejs >/dev/null || echo "часть пакетов не встала — смотрите выше"
 
 say "Python: библиотеки программы"
 pip install -q --break-system-packages -r requirements.txt || echo "requirements.txt — не всё встало"
@@ -32,8 +32,9 @@ else
 fi
 
 say "Проверка"
-for c in php ffmpeg keytool /usr/lib/android-sdk/build-tools/debian/apksigner dalvik-exchange; do
+for c in php ffmpeg node espeak-ng keytool /usr/lib/android-sdk/build-tools/debian/apksigner dalvik-exchange; do
   command -v "$c" >/dev/null 2>&1 || [ -x "$c" ] && echo "есть: $c" || echo "НЕТ: $c"
 done
 python3 -c "import httpx, numpy, vosk; print('Python-библиотеки: есть')" 2>/dev/null || echo "Python-библиотеки: НЕТ"
-echo; echo "Дальше: bash tests/run_quick.sh — всё ли цело."
+[ -f data/vosk-model-small-ru-0.22.zip ] && echo "модель Vosk для проверок слуха: есть" || echo "модель Vosk: ядро скачает само; если сайт закрыт — положите vosk-model-small-ru-0.22.zip в data/ (иначе проверки слуха будут «пропущены»)"
+echo; echo "Дальше: bash tests/run_quick.sh — всё ли цело (как устроены проверки — docs/TESTS.md)."

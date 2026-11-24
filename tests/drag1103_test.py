@@ -38,6 +38,7 @@ with sync_playwright() as p:
     ok(not r["orb"] and not r["card"], "облик и пустое место карточки — по-прежнему тащат виджет")
     # настоящее нажатие и движение мыши в поле: окно не двигается, текст выделяется
     pg.evaluate("() => { __calls.length = 0; const t = document.getElementById('askin'); t.value = 'выделить этот текст'; t.focus(); }")
+    pg.wait_for_timeout(800)                         # поле ещё едет (плашки и подсказки виджета появляются с задержкой) — мерить, когда встало
     box = pg.locator("#askin").bounding_box()
     if box:
         pg.mouse.move(box["x"] + 4, box["y"] + box["height"] / 2); pg.mouse.down()

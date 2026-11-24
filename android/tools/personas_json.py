@@ -26,7 +26,10 @@ for pid, p in P.BUILTIN.items():
                 "color": p.get("color", "#8A9BFF"), "role": p.get("role", ""), "tagline": p.get("tagline", ""),
                 "main": bool(p.get("main")), "skills": p.get("skills", []), "character": p.get("character", ""),
                 "focus": p.get("focus", ""), "aliases": p.get("aliases") or p.get("wake") or [p["name"].lower()],
-                "voice_remote": (p.get("voice") or {}).get("remote", ""), "avatar": av, "live": p.get("live", "")})
+                "voice_remote": (p.get("voice") or {}).get("remote", ""), "avatar": av, "live": p.get("live", ""),
+                # образы (1.0.55): живые слои и портрет — файлы live/<live>-<id>.webp в самом приложении (не data:-адреса)
+                "looks": [{"id": x["id"], "name": x["name"], "when": x.get("when") or []} for x in P.LOOKS.get(p.get("live") or "", [])
+                          if (root / "ui" / "assets" / "live" / f"{p.get('live')}-{x['id']}.webp").exists()]})
 print("window.DEWIAR_PERSONAS = " + json.dumps(out, ensure_ascii=False) + ";")
 
 # «Готовые персонажи» (идея №56, 03.11): шаблоны (Агент, Джарвис, Эва, Кодер) и специалисты галереи (Фемида, Доктор,
@@ -69,7 +72,8 @@ for kind, src in (("template", P.TEMPLATES), ("gallery", P.GALLERY)):
                     "color": p.get("color", "#8A9BFF"), "role": PHONE_ROLE.get(pid, p.get("role", "")), "tagline": p.get("tagline", ""),
                     "skills": p.get("skills", []), "character": p.get("character", ""), "focus": phone_focus(p.get("focus", ""), pid),
                     "aliases": p.get("aliases") or p.get("wake") or [p["name"].lower()], "kind": kind,
-                    "voice_remote": (p.get("voice") or {}).get("remote", ""), "avatar": avatar_of(pid), "live": p.get("live", "")})
+                    "voice_remote": (p.get("voice") or {}).get("remote", ""), "avatar": avatar_of(pid), "live": p.get("live", ""),
+                    "noface": pid in P.NO_FACE})          # 1.0.55: новым — абстракция (app.js galNoFace), прежним — лицо
 print("window.DEWIAR_GALLERY = " + json.dumps(gal, ensure_ascii=False) + ";")
 # детский режим (телефон, 28.10): Совёнок Уго из галереи — друг ребёнка
 k = P.GALLERY["ugo"]

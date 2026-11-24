@@ -17,6 +17,7 @@ from acts_base import (
     DRAFT_KINDS, DRAFT_RX, GEN_IMG_RX, NOTE_ASK_RX, NOTE_TOOLS, _PIC, QUERY_TOOLS, REMIND_ASK_RX, ROUTE_MAX, ROUTINE_HEAD,
     UPDATE_ASK_RX)  # noqa: F401 — прежние имена на месте
 from acts_confirm import ConfirmMixin
+import outside_guard as OG
 from acts_quick import QuickMixin
 from acts_alarm import AlarmMixin
 from acts_devices import DevicesMixin
@@ -98,6 +99,12 @@ class ToolsMixin(ConfirmMixin, QuickMixin, AlarmMixin, DevicesMixin, DayMixin):
         if br_strict:
             log.info("🛠 %s записан текстом — спрашиваю «Выполнить?»", name)
             need_confirm = True
+        # проверка безопасности 22.11 (outside_guard): после чтения текста извне — незнакомый адрес и сообщение человеку
+        # только с «да»; адрес домашней сети — только названный человеком
+        why = OG.check(name, args, asked or "", getattr(turn, "seen_out", ()), getattr(turn, "outside", False))
+        if why and not need_confirm:
+            log.info("🛡 %s — спрашиваю «Выполнить?»: %s", name, why)
+            need_confirm = True
         if need_confirm or force:
             question = warn_q or self.toolbox.describe(name, args)
             # №353 (пакет 27.10 12:22): разбор сервера — двадцать команд подряд, и каждая — «На сервере … выполнить?
@@ -168,6 +175,11 @@ class ToolsMixin(ConfirmMixin, QuickMixin, AlarmMixin, DevicesMixin, DayMixin):
             if name in NOTE_TOOLS:                          # №633: удалила или поправила заметку — открытый список «Заметок» освежается
                 self.emit("notes_changed")
             log.info("   ↳ %s", (res["text"] if isinstance(res, dict) else res)[:160].replace("\n", " "))
+            turn.seen_out = (getattr(turn, "seen_out", []) + [out[:30000]])[-20:]
+            mcp_ = getattr(self.toolbox, "mcp", None)
+            if name in OG.OUTSIDE or (mcp_ is not None and mcp_.has(name)):
+                turn.outside = True                         # чужой текст в ходе: дальше — outside_guard.check
+                res = OG.mark(res)
             return res
         except (ToolError, SkillError, MCPError) as e:
             log.info("   ↳ Ошибка: %s", redact(str(e))[:200].replace("\n", " "))    # №316 (пакет 27.10): в журнале не было видно, чем кончилось

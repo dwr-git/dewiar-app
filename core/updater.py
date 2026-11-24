@@ -56,6 +56,9 @@ from urllib.parse import urljoin, urlparse
 WIN = os.name == "nt"
 MAC = sys.platform == "darwin"
 MAC_JSON = "https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-mac.json"
+# 1.0.67 (№1005: «Версия не обновляется» — dewiar.pro из сети человека не открывается, а значит, и о новой версии программа
+# не узнавала): сведения о последнем выпуске открытой копии — их кладёт её release.yml; адреса файлов в нём полные
+GH_JSON = "https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-latest.json"
 MAC_DL = "https://github.com/dwr-git/dewiar-app/releases/download/"
 
 log = logging.getLogger("dewiar.update")
@@ -147,6 +150,12 @@ def _sha(path):
 CHECK_EVERY = 6 * 3600
 SPREAD = 6 * 3600            # фоновое скачивание новой версии — через случайные 0…6 ч: компьютеры не качают с сайта разом
 DEFER = 3600                 # сайт занят (503) или медленный, а запасного пути нет — следующая попытка через час
+# Ритм обновлений (владелец 20.11: «обновлений несколько раз в день — некоторых пользователей это уже не радует; напоминать
+# раз в 2–3 дня; нажал вручную — сразу»): фоновая проверка предлагает новую версию не раньше чем через 2 дня после того, как
+# встала нынешняя, плюс своя для каждого компьютера случайная добавка до суток (2–3 дня; заодно не все качают разом).
+# «Важное исправление» (urgent в latest.json, галочка в кабинете) и «Проверить сейчас» — сразу.
+UPDATE_EVERY = 2 * 86400
+UPDATE_JITTER = 86400
 SLOW_SPEED = 100 * 1024      # медленнее этого (байт/с) …
 SLOW_FOR = 60                # … дольше стольких секунд — сайт «медленный»: берём с GitHub (если можно) или откладываем
 WAIT = 30                    # сайт молчит дольше (при слежке за скоростью) — «не ответил»
@@ -235,6 +244,10 @@ class Updater:
         self._dl_thread = None
         self._emit_at = 0.0
         self._check_pending()
+        try:
+            self.cadence_due()          # помнить, когда встала эта версия (ритм обновлений)
+        except Exception:  # noqa: BLE001
+            pass
         try:                            # последний известный список моделей — на случай, если сайт сейчас недоступен
             m = json.loads((self.dir / "manifest.json").read_text(encoding="utf-8"))
             self._parse(m, m.get("_base", ""))
@@ -294,6 +307,30 @@ class Updater:
             pass
         return m, base
 
+    def _fetch_github(self, err):
+        """Сайт не ответил (нет связи, тайм-аут, 5xx) -> сведения о выпуске с GitHub (GH_JSON) или (None, None). Не на Mac
+        (у него своё), не при своём адресе обновлений, не при выключенном updates.mirror_github и не когда сайт ответил,
+        но «нет такого» (4xx). sha256 файла сверяется как всегда."""
+        import httpx
+        if MAC or self.url != DEFAULT_URL or (self.s and self.s.get("updates", "mirror_github") is False):
+            return None, None                  # свой адрес обновлений (своя сборка, компания) — GitHub не подставляем
+        if isinstance(err, httpx.HTTPStatusError) and err.response.status_code < 500:
+            return None, None
+        if not isinstance(err, (httpx.HTTPError, OSError, ValueError)):
+            return None, None
+        try:
+            r = httpx.get(GH_JSON, timeout=15, follow_redirects=True, headers={"Cache-Control": "no-cache"})
+            r.raise_for_status()
+            m = r.json()
+            if not isinstance(m, dict) or not m.get("version"):
+                raise ValueError("нет версии")
+        except Exception as e:  # noqa: BLE001
+            log.info("Обновления с GitHub: %s", e)
+            return None, None
+        log.info("Сайт обновлений не ответил — сведения о выпуске с GitHub (%s)", m.get("version"))
+        self.last["error"] = ""
+        return m, str(r.url)
+
     def model(self, key):
         """Где взять модель на своём сайте: {"url", "sha256", …} или None. Сайт спрашиваем один раз за запуск
         (быстро, до скачивания моделей); недоступен — последний сохранённый список."""
@@ -337,7 +374,9 @@ class Updater:
             except Exception as e:  # noqa: BLE001
                 self.last["error"] = f"{self.url}: {e}"
                 log.info("Обновления: %s", self.last["error"])
-                return None
+                m, base = self._fetch_github(e)
+                if m is None:
+                    return None
             self.last["error"] = ""
             if MAC:
                 return self._check_mac(m, base, download, manual, wait)
@@ -354,7 +393,7 @@ class Updater:
             mirror = self._mirror(m, base, url)
             info = {"version": ver, "notes": m.get("notes", ""), "date": m.get("date", ""),
                     "url": url, "sha256": (m.get("sha256") or "").lower(), "size": m.get("size"),
-                    "sources": [url] + mirror, "mirror": mirror[0] if mirror else ""}
+                    "sources": [url] + mirror, "mirror": mirror[0] if mirror else "", "urgent": bool(m.get("urgent"))}
             return self._deliver(info, download, manual, wait)
 
     def _mirror(self, sec, base, url):
@@ -377,6 +416,14 @@ class Updater:
             self.emit("update", update=self.public())
             return info
         ready = self._ready(info)
+        if ready is None and not manual and not info.get("urgent"):
+            due = self.cadence_due()
+            if time.time() < due:
+                self.last["next"] = due
+                self.available = None
+                log.info("Новая версия %s — предложу через %d ч (обновления раз в 2–3 дня; «Проверить сейчас» — сразу)",
+                         ver, max(1, int((due - time.time()) / 3600)))
+                return None
         if ready is None and not manual:
             at = self._spread_at(ver)
             nxt = max(at, float(self.last.get("defer") or 0))
@@ -425,6 +472,30 @@ class Updater:
         else:
             self.last["error"] = f"не скачалось: {e}"
         log.warning("Обновление %s не скачалось: %s", ver, e)
+
+    def cadence_due(self, now=None):
+        """Когда фоновой проверке можно предлагать новую версию: нынешняя встала (первый запуск этой версии — помнится в
+        updates/installed.json) + UPDATE_EVERY + своя добавка компьютера (0…UPDATE_JITTER, жребий один раз навсегда)."""
+        now = time.time() if now is None else now
+        f = self.dir / "installed.json"
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            d = {}
+        changed = False
+        if d.get("version") != self.version:
+            d.update(version=self.version, at=now)
+            changed = True
+        if not isinstance(d.get("jit"), (int, float)):
+            d["jit"] = random.uniform(0, UPDATE_JITTER)
+            changed = True
+        if changed:
+            try:
+                self.dir.mkdir(parents=True, exist_ok=True)
+                f.write_text(json.dumps(d), encoding="utf-8")
+            except OSError:
+                pass
+        return float(d.get("at") or now) + UPDATE_EVERY + float(d["jit"])
 
     def _spread_at(self, ver):
         """Когда фоновой проверке можно качать версию ver: случайно в ближайшие SPREAD секунд, своё время у каждого

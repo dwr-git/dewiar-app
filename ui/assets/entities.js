@@ -840,6 +840,26 @@
   // Свой набор слоёв и геометрия (Патрик — tools/live_face.py): рот и улыбка <имя>-mouth-0..3 / <имя>-smile, маска
   // разреза глаз <имя>-eyes.png (зрачок рисуется только внутри неё — веки его прикрывают), цвет радужки, координаты.
   const LIVE_CONF = {
+    // образы Лиры и Патрика (tools/live_looks.py): глаза и губы — свои, с картинки образа
+    "lira-braid": {"own": true, "soft": true, "iris": ["lira-braid-iris-l.png", "lira-braid-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-hair": {"own": true, "soft": true, "iris": ["lira-hair-iris-l.png", "lira-hair-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-kolos": {"own": true, "soft": true, "iris": ["lira-kolos-iris-l.png", "lira-kolos-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-home": {"own": true, "soft": true, "iris": ["lira-home-iris-l.png", "lira-home-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-silk": {"own": true, "soft": true, "iris": ["lira-silk-iris-l.png", "lira-silk-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-bob": {"own": true, "soft": true, "iris": ["lira-bob-iris-l.png", "lira-bob-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-bangs": {"own": true, "soft": true, "iris": ["lira-bangs-iris-l.png", "lira-bangs-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-curls": {"own": true, "soft": true, "iris": ["lira-curls-iris-l.png", "lira-curls-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-buns": {"own": true, "soft": true, "iris": ["lira-buns-iris-l.png", "lira-buns-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-street": {"own": true, "soft": true, "iris": ["lira-street-iris-l.png", "lira-street-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-tails": {"own": true, "soft": true, "iris": ["lira-tails-iris-l.png", "lira-tails-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-ties": {"own": true, "soft": true, "iris": ["lira-ties-iris-l.png", "lira-ties-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "lira-cyber": {"own": true, "soft": true, "iris": ["lira-cyber-iris-l.png", "lira-cyber-iris-r.png"], "geo": {"eyes": [[139.5, 154.6], [204.6, 155.2]], "iris": 16.0, "mouth": [147.0, 206.0, 66.0, 44.0], "smile": [116.0, 188.0, 128.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-suit": {"own": true, "soft": true, "iris": ["patrik-suit-iris-l.png", "patrik-suit-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "smile": [110.0, 182.0, 140.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-home": {"own": true, "soft": true, "iris": ["patrik-home-iris-l.png", "patrik-home-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "smile": [110.0, 182.0, 140.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-silver": {"own": true, "soft": true, "iris": ["patrik-silver-iris-l.png", "patrik-silver-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "smile": [110.0, 182.0, 140.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-coat": {"own": true, "soft": true, "iris": ["patrik-coat-iris-l.png", "patrik-coat-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "smile": [110.0, 182.0, 140.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-beard": {"own": true, "soft": true, "iris": ["patrik-beard-iris-l.png", "patrik-beard-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "smile": [110.0, 182.0, 140.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
+    "patrik-shirt": {"own": true, "soft": true, "iris": ["patrik-shirt-iris-l.png", "patrik-shirt-iris-r.png"], "geo": {"eyes": [[139.3, 141.4], [205.0, 141.8]], "iris": 15.0, "mouth": [143.0, 201.0, 74.0, 44.0], "smile": [110.0, 182.0, 140.0, 82.0], "moveX": 2.2, "moveY": 0.9}},
     // радужка — настоящая, вырезанная с портрета (iris: файлы), в покое лицо в точности как на фото; ходит чуть-чуть
     patrik: { own: true, mask: true, iris: ["patrik-iris-l.png", "patrik-iris-r.png"],
               geo: { eyes: [[140.8, 142.9], [206.5, 143.3]], iris: 12.0, mouth: [143.0, 201.0, 74.0, 44.0], moveX: 1.8, moveY: 0.5 } },
@@ -857,7 +877,7 @@
   function liveSet(name) {                        // слои загружаются один раз на всё окно
     if (LIVE_SETS[name]) return LIVE_SETS[name];
     const C = LIVE_CONF[name] || {}, pre = C.own ? name + "-" : "";
-    const L = LIVE_SETS[name] = { ready: false, failed: false, geo: Object.assign({}, LIVE_GEO, C.geo || {}) };
+    const L = LIVE_SETS[name] = { ready: false, failed: false, soft: !!C.soft, geo: Object.assign({}, LIVE_GEO, C.geo || {}) };
     const load = (f) => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = LIVE_DIR + f; });
     const cols = C.eyes || LIVE_EYES[name];
     Promise.all([load(name + ".webp"), load("iris.png"), load(pre + "smile.webp"), C.mask ? load(name + "-eyes.png") : Promise.resolve(null),
@@ -879,13 +899,16 @@
     // тон ответа (19.11, эмоции): радость, шутка, удивление — улыбка после фразы; сочувствие и серьёзное — без случайных улыбок
     const TN = (typeof window !== "undefined" && window.DEWIAR_TONE) || null, tnFresh = !!TN && Date.now() - TN.at < 30000;
     const tnWarm = tnFresh && /^(joy|playful|surprise)$/.test(TN.tone), tnSoft = tnFresh && /^(sympathy|calm)$/.test(TN.tone);
+    // образы с настоящей улыбкой (geo.smile — кадр с улыбкой) улыбаются втрое реже базовой Лиры: улыбка у них сильнее и
+    // заметнее (владелец 22.11: «улыбается слишком часто… раза в 3 реже»); базовая — как была
+    const rare = L.geo && L.geo.smile ? 1 / 3 : 1;
     if (speaking || e.state === "listening") { A.tx = vx; A.ty = vy; }
     else if (thinking) { A.tx = 0.9; A.ty = -0.9; }
     else if (e._looking && now <= A.nextEye) { A.tx = vx + (A.rx || 0) * 0.4; A.ty = vy + (A.ry || 0) * 0.4; }
     else if (now > A.nextEye) {
       A.rx = (Math.random() * 2 - 0.5) * L.geo.moveX / 2; A.ry = (Math.random() * 2 - 0.5) * L.geo.moveY / 2;
       A.tx = vx + A.rx * (e._looking ? 0.4 : 1); A.ty = vy + A.ry * (e._looking ? 0.4 : 1);
-      if (!A.smileTill && !tnSoft && Math.random() < 0.3) A.smileTill = now + 2000 + Math.random() * 2000;   // в тишине иногда улыбается
+      if (!A.smileTill && !tnSoft && Math.random() < 0.3 * rare) A.smileTill = now + 2000 + Math.random() * 2000;   // в тишине иногда улыбается
       A.nextEye = now + (Math.random() > 0.8 ? 500 : 3000 + Math.random() * 2000);
     }
     const ease = Math.min(1, dt * 10);
@@ -907,12 +930,21 @@
     else want = 0;
     if (want !== A.mTarget) { A.mPrev = A.mTarget; A.mTarget = want; A.mBlend = 0; }
     A.mBlend = Math.min(1, A.mBlend + dt * (e.lipsync ? 18 : 9));
-    if (A.wasSpeaking && !speaking && (tnWarm || (!tnSoft && Math.random() < 0.5))) A.smileTill = now + (tnWarm ? 3000 : 1500);   // договорила — улыбка
+    if (A.wasSpeaking && !speaking && (tnWarm ? Math.random() < rare : !tnSoft && Math.random() < 0.5 * rare)) A.smileTill = now + (tnWarm ? 3000 : 1500);   // договорила — улыбка
     A.wasSpeaking = speaking;
     if (A.smileTill && now > A.smileTill) A.smileTill = 0;
     const talking = A.mTarget !== 0 || (A.mPrev !== 0 && A.mBlend < 1);
-    const smileGoal = !talking && A.smileTill && (e.state === "idle" || e.state === "listening") ? 1 : 0;
-    A.smile += (smileGoal - A.smile) * Math.min(1, dt * 3);
+    // образы (L.soft): улыбка из сдвига губ выходила гримасой (владелец 21.11: «если не так симпатично, как у оригинальной
+    // Лиры, — лучше вообще без улыбки»); теперь — настоящая, из кадра с улыбкой (geo.smile — рамка низа лица); нет кадра — нет улыбки
+    const smileGoal = (!L.soft || L.geo.smile) && !talking && A.smileTill && (e.state === "idle" || e.state === "listening") ? 1 : 0;
+    // владелец 22.11: «в момент смены на улыбку виден промежуточный вариант — и нижние губы, и верхние». У образов улыбка —
+    // другой кадр низа лица, и наплыв двух ртов виден; смена — за ~0,15 с, почти мгновенно. Базовая Лира — как была (там
+    // улыбка — сдвиг губ, наплыв не виден)
+    // владелец 22.11, вечер: «начинает улыбаться плавно и красиво… а потом резко улыбка исчезает — плохо». Появляется
+    // быстро (без двух ртов разом), гаснет плавно, как у базовой Лиры
+    const up = smileGoal > A.smile;
+    A.smile += (smileGoal - A.smile) * Math.min(1, dt * (L.geo && L.geo.smile ? (up ? 14 : 2.5) : 3));
+    if (L.geo && L.geo.smile && up && smileGoal - A.smile < 0.04) A.smile = smileGoal;
 
     const neu = e.tone === "neu";
     ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.clip();
@@ -953,6 +985,10 @@
     }
     const [mx, my, mw, mh] = G.mouth, put = (im, a) => { if (a > 0.01) { ctx.globalAlpha = a; ctx.drawImage(im, X(mx), Y(my), mw * sc, mh * sc); } };
     if (talking) { put(L.mouths[A.mPrev], 1 - A.mBlend); put(L.mouths[A.mTarget], A.mBlend); }
+    else if (G.smile) {                           // настоящая улыбка образа — низ лица целиком поверх закрытого рта
+      put(L.mouths[0], 1);
+      if (A.smile > 0.01) { const [sx, sy, sw, sh] = G.smile; ctx.globalAlpha = A.smile; ctx.drawImage(L.smile, X(sx), Y(sy), sw * sc, sh * sc); }
+    }
     else { put(L.mouths[0], 1 - A.smile); put(L.smile, A.smile); }
     ctx.globalAlpha = 1;
     // нет связи — притушить ВЕСЬ портрет ровно одним слоем (раньше тускнело лицо, а губы и глаза, нарисованные поверх,
@@ -963,7 +999,10 @@
     const fade = ctx.createLinearGradient(0, R * 0.55, 0, R);   // низ портрета (обрез туловища) растворяется в фоне
     if (neu) {                                    // край без среза: плечи и низ мягко уходят в материал диска
       ctx.globalCompositeOperation = "destination-in";
-      const m = ctx.createRadialGradient(0, -R * 0.12, R * 0.7, 0, -R * 0.12, R * 1.08);
+      // образы (soft): плечи и наряд доходят до края круга — растворяем раньше, иначе край круга виден тонкой линией
+      // (владелец 21.11: «у других — еле заметная круглая полоска внутри», «Хвостики»)
+      const m = L.soft ? ctx.createRadialGradient(0, -R * 0.12, R * 0.62, 0, -R * 0.06, R * 0.97)
+        : ctx.createRadialGradient(0, -R * 0.12, R * 0.7, 0, -R * 0.12, R * 1.08);
       m.addColorStop(0, "rgba(0,0,0,1)"); m.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = m; ctx.fillRect(-R, -R, 2 * R, 2 * R);
       ctx.globalCompositeOperation = "source-over";
@@ -987,6 +1026,13 @@
       ctx.fillStyle = bg; ctx.fillRect(-R, band - 24, 2 * R, 48);
     }
     ctx.restore();
+    if (neu) {                                    // 21.11 (владелец: «у образов — еле заметная круглая полоска внутри»): край
+      // обрезки сглажен, и «растворение» (destination-in) не достаёт полупрозрачных пикселей самого края — там оставалась
+      // тонкая дуга портрета (у образов с плечами до края — видно). Стираем узкое кольцо по краю, уже без обрезки
+      const lw = Math.max(2, R * 0.03);
+      ctx.save(); ctx.globalCompositeOperation = "destination-out"; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.arc(0, 0, R + lw / 2 - 1, 0, TAU); ctx.stroke(); ctx.restore();
+    }
     portraitRim(g, e, R);
   }
 
@@ -1310,6 +1356,9 @@
       if (live !== undefined) { this.live = live || ""; this._live = null; }   // живое лицо (слои из папки live)
       if (style) this.style = STYLES[style] ? style : "nexus";
       if (color) this.color = rgb(color);
+      // владелец 22.11: «нет чёрного цвета». Тёмный цвет персонажа на тёмном диске не виден (и «lighter» его не сложит) —
+      // у тёмного цвета диск светлый, а рисунок ложится обычным наложением, как тушь на бумаге
+      this.dark = !!this.color && (0.2126 * this.color[0] + 0.7152 * this.color[1] + 0.0722 * this.color[2]) < 60;
       if (image !== undefined) {
         this.img = null;
         if (image) { this.img = new Image(); this.img.src = image; }
@@ -1414,12 +1463,13 @@
       if (plate) {
         const pg = ctx.createRadialGradient(0, -PR * 0.25, PR * 0.1, 0, 0, PR);
         if (this.tone === "mono" || this.tone === "ink" || this.tone === "neu") { pg.addColorStop(0, "#1f2029"); pg.addColorStop(0.75, "#14141b"); pg.addColorStop(1, "#0c0c11"); }
+        else if (this.dark) { pg.addColorStop(0, "#FFFFFF"); pg.addColorStop(0.75, "#EEF1F7"); pg.addColorStop(1, "#DDE2EC"); }
         else { pg.addColorStop(0, "#26264A"); pg.addColorStop(0.75, "#17172E"); pg.addColorStop(1, "#0D0D1A"); }
         ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(0, 0, PR, 0, TAU); ctx.fill();
         ctx.save(); ctx.beginPath(); ctx.arc(0, 0, PR - 0.5, 0, TAU); ctx.clip();
       }
       const spin = this.vinyl && VINYL_STATES.has(this.state);
-      ctx.globalCompositeOperation = plate && LIGHTER.has(this.style) && !spin ? "lighter" : "source-over";
+      ctx.globalCompositeOperation = plate && LIGHTER.has(this.style) && !spin && !this.dark ? "lighter" : "source-over";
       // №766: облик, которого нет (персонаж записан в обход студии, style: «stratum»), — не пустой круг и ошибка каждый
       // кадр, а обычные «частицы»
       (spin ? vinyl : (STYLES[this.style] || STYLES.particles))(spin ? Object.assign({}, g, { c: this.color }) : this.style === "photo" ? gm : g, this);

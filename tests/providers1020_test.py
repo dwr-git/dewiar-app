@@ -36,12 +36,17 @@ class R:
     status_code = 200
     def raise_for_status(self): pass
     def json(self): return {"data": [{"id": "models/gemini-2.5-flash-preview-tts"}, {"id": "models/gemini-flash-latest"}, {"id": "models/embedding-001"},
-                                     {"id": "models/imagen-4.0-generate-001"}, {"id": "models/gemini-2.5-pro"}, {"id": "models/aqa"}]}
+                                     {"id": "models/imagen-4.0-generate-001"}, {"id": "models/gemini-2.5-pro"}, {"id": "models/aqa"},
+                                     {"id": "models/gemini-live-2.5-flash-preview"}, {"id": "models/gemini-2.5-computer-use-preview-10-2025"},
+                                     {"id": "models/gemini-robotics-er-1.5-preview"}, {"id": "models/lyria-realtime-exp"}]}
 
 
 L.httpx.get = lambda *a, **k: R()
 ms = L.list_models({"base_url": V["gemini"], "kind": "openai", "api_key": "k"})
-ok(ms == ["gemini-flash-latest", "gemini-2.5-pro", "embedding-001"], f"Gemini: без «models/», голос и картинки — не модели разговора: {ms}")
+ok(ms == ["gemini-flash-latest", "gemini-2.5-pro", "embedding-001"], f"Gemini: без «models/», голос, картинки, «живой» звук, управление компьютером — не модели разговора: {ms}")
+cj_ = (ROOT / "ui/studio/connect.js").read_text(encoding="utf-8")
+ok("models = models.filter(m => !side(m))" in cj_ and "ver(b) - ver(a)" in cj_ and '"gemini-flash-latest", "gemini-pro-latest"' in cj_,
+   "владелец 22.11: не для разговора — не показываем, новые версии выше старых, советуем «-latest» Google (всегда новейшие)")
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 FAKE = "window.pywebview = { api: new Proxy({}, { get: () => () => Promise.resolve(true) }) };"
@@ -72,7 +77,7 @@ with sync_playwright() as p:
           throw new Error('нет сети'); };
         const ms = await svcModels(CLOUD.gemini.url, 'k'); http = h0;
         return [ms, CLOUD.gemini.rec.find(m => ms.includes(m))]; }""")
-    ok(r == [["gemini-2.5-flash", "gemini-pro-latest"], "gemini-2.5-flash"], f"телефон: модели сервиса без «models/» и голоса, выбрана советуемая: {r}")
+    ok(r == [["gemini-2.5-flash", "gemini-pro-latest"], "gemini-pro-latest"], f"телефон: модели сервиса без «models/» и голоса, выбрана советуемая («-latest» — у Google всегда новейшая): {r}")
     ok(not errs, f"телефон без ошибок JavaScript: {errs[:2]}")
     b.close()
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

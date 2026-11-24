@@ -171,16 +171,21 @@ function myPersonasApply() {
    (у каждого устройства свой набор). Пакетов знаний компьютера здесь нет — специализация словами в подсказке (focus). */
 const PGALLERY = window.DEWIAR_GALLERY || [];
 function galIds() { try { const l = JSON.parse(prefGet("gal_personas") || "[]"); return Array.isArray(l) ? l.filter(id => PGALLERY.some(g => g.id === id)) : []; } catch (e) { return []; } }
+function galNoFace() { try { const l = JSON.parse(prefGet("gal_noface") || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
 function galApply() {
   for (let i = PERSONAS.length - 1; i >= 0; i--) if (PERSONAS[i].gallery) PERSONAS.splice(i, 1);
   const at = PERSONAS.findIndex(p => p.custom);
-  const add = galIds().map(id => Object.assign({ main: false, skills: [], focus: "" }, PGALLERY.find(g => g.id === id), { gallery: true }));
+  // лица — только у Лиры и Патрика (1.0.55): Эва, Ника, Оскар, выбранные с этой версии, — абстракция (gal_noface);
+  // выбранные раньше остаются с лицом — привычный помощник не меняет облик без спроса
+  const nf = galNoFace();
+  const add = galIds().map(id => Object.assign({ main: false, skills: [], focus: "" }, PGALLERY.find(g => g.id === id), { gallery: true },
+    nf.includes(id) ? { avatar: "", live: "" } : {}));
   PERSONAS.splice(at < 0 ? PERSONAS.length : at, 0, ...add);       // после встроенных, перед своими
 }
 // -> персонаж, который теперь отвечает (или null — нет такого)
 function galAdd(id) {
   const g = PGALLERY.find(x => x.id === id); if (!g) return null;
-  const l = galIds(); if (!l.includes(id)) l.push(id);
+  const l = galIds(); if (!l.includes(id)) { l.push(id); if (g.noface) prefSet("gal_noface", JSON.stringify(galNoFace().filter(x => x !== id).concat([id]))); }
   prefSet("gal_personas", JSON.stringify(l)); galApply();
   S.persona = id; saveS(); applyPersona();
   return PERSONAS.find(p => p.id === id) || null;
@@ -193,7 +198,47 @@ galApply();
 myPersonasApply();
 // с 0.4.27 встроенных двое — Лира и Патрик; выбранный прежде Агент, Джарвис, Эва или Кодер — теперь Лира
 if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try { prefSet("settings", JSON.stringify(S)); } catch (e) { } }
-const persona = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
+const personaBase = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
+/* Образы (1.0.55, как на компьютере): тот же персонаж — другие причёска и наряд. Выбор — S.looks {id: {look, auto}};
+   живое лицо и портрет — live/<live>-<образ>.webp; «Сама — по времени» — lookAuto (то же правило, что core/personas.py). */
+function lookShuffle(n, seed) {      // как core/personas._shuffle — один порядок на компьютере и телефоне
+  let x = ((seed * 2654435761 + 12345) % 2147483648 + 2147483648) % 2147483648; const out = [...Array(n).keys()];
+  for (let j = n - 1; j > 0; j--) { x = Number((BigInt(x) * 1103515245n + 12345n) % 2147483648n); const k = x % (j + 1); [out[j], out[k]] = [out[k], out[j]]; }
+  return out;
+}
+function lookAuto(looks, now = new Date()) {
+  const h = now.getHours();
+  if (h >= 22 || h < 7) { const home = looks.find(x => (x.when || []).includes("evening")); if (home) return home.id; }
+  const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + 719163;   // как date.toordinal() в Python
+  const pool = [""].concat(looks.filter(x => !(x.when || []).length).map(x => x.id)), n = pool.length;
+  const hn = day * 24 + h, cycle = Math.floor(hn / n), i = hn % n;     // 21.11: каждый час — следующий из перемешанного круга
+  const order = lookShuffle(n, cycle), prev = lookShuffle(n, cycle - 1);
+  if (n > 1 && order[0] === prev[n - 1]) [order[0], order[1]] = [order[1], order[0]];
+  return pool[order[i]];
+}
+let lookHour = -1;          // «Сама — по времени дня»: сменился час — новое лицо без перезапуска (владелец 21.11)
+setInterval(() => { const h = new Date().getHours(); if (lookHour !== -1 && h !== lookHour && typeof applyPersona === "function") { try { applyPersona(); } catch (e) { } } lookHour = h; }, 60000);
+function lookIsAuto(p) { const pr = (S.looks || {})[p.id] || {}; return pr.auto !== undefined ? !!pr.auto : !("look" in pr); }
+function lookOf(p) {
+  if (!p || !(p.looks || []).length || p.kids) return "";
+  const pr = (S.looks || {})[p.id] || {};
+  if (lookIsAuto(p)) return lookAuto(p.looks);       // 21.11: «Сама» — по умолчанию у всех, пока человек не выбрал сам
+  return p.looks.some(x => x.id === pr.look) ? pr.look : "";
+}
+function persona() {
+  const p = personaBase(), l = lookOf(p);
+  return l ? Object.assign({}, p, { live: `${p.live}-${l}`, avatar: `live/${p.live}-${l}.webp`, look: l }) : p;
+}
+function setLook(look, auto) {
+  const p = personaBase(); if (!(p.looks || []).length) return false;
+  const pr = Object.assign({}, (S.looks || {})[p.id] || {});
+  if (look === "next") { const ids = [""].concat(p.looks.map(x => x.id)); look = ids[(ids.indexOf(lookOf(p)) + 1) % ids.length]; auto = false; }
+  if (look !== undefined && look !== null) { pr.look = look; if (auto === undefined) pr.auto = false; }
+  if (auto !== undefined) pr.auto = !!auto;
+  S.looks = Object.assign({}, S.looks || {}, { [p.id]: pr }); saveS(); applyPersona();
+  return true;
+}
+const lookName = (p, id) => id ? ((p.looks || []).find(x => x.id === id) || {}).name || "" : "Обычная";
 const hex2rgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 let orb = null;
 function applyPersona() {
@@ -294,7 +339,10 @@ if (screen.orientation && screen.orientation.addEventListener) screen.orientatio
 function faceFor(p) {
   if (!D.setFace) return;
   const c = document.createElement("canvas"); c.width = c.height = 192;
-  const x = c.getContext("2d"), done = () => { try { D.setFace(p.id, p.name, p.color || "#8A9BFF", c.toDataURL("image/png").split(",")[1]); } catch (e) {} };
+  // №980 (23.11): «Лира — основной персонаж, а напоминания приходят от Патрика». Faces.save делает отданный облик текущим
+  // (по нему подписаны напоминания без «кто ставил» — с компьютера, из синхронизации), а фото грузится не сразу: облик
+  // Патрика, дорисованный после возврата к Лире, становился «текущим». Отдаём облик, только если персонаж всё ещё тот же
+  const x = c.getContext("2d"), done = () => { if (personaBase().id !== p.id) return; try { D.setFace(p.id, p.name, p.color || "#8A9BFF", c.toDataURL("image/png").split(",")[1]); } catch (e) {} };
   x.save(); x.beginPath(); x.arc(96, 96, 96, 0, 7); x.clip();
   const g = x.createRadialGradient(80, 70, 10, 96, 96, 96);
   g.addColorStop(0, p.color || "#8A9BFF"); g.addColorStop(.6, "#1d1d38"); g.addColorStop(1, "#0d0d1a");
@@ -398,7 +446,11 @@ function showBot(t, cls) {
   t = trL(t);
   if (tgTurn && t && cls !== "wait") tgLast = String(t);
   const b = $("#bot"), long = !cls && isLongAnswer(t);
-  b.className = cls || (long ? "framed" : ""); b.textContent = t || "";
+  b.className = cls || (long ? "framed" : "");
+  // 22.11 (владелец: «маркдаун сырой — видны звёздочки там, где должен быть заголовок»): длинный ответ с разметкой — уже
+  // пока идёт, через тот же mdAnswer (он экранирует), а не голым текстом до самого конца
+  if (long && /\*\*|^\s*#{1,4}\s|^\s*(?:[-*•]|\d+[.)])\s|^\s*\|/m.test(t || "")) b.innerHTML = `<div class="ans">${mdAnswer(t)}</div>`;
+  else b.textContent = t || "";
   $("#stage").classList.toggle("long", long);
   if (!long) $("#talk").scrollTop = 1e6;
   quietCheck();

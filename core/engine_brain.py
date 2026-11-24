@@ -43,6 +43,24 @@ class BrainMixin:
         rv = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "reserve") is not False and not stale else ""
         return own or dw, extra, rv, bool(dw and not own)       # 4-е — прокси выдан Dewiar: в подсказках его адрес не показываем
 
+    def _host_px_conf(self):
+        """Для net.bind_hosts: {сервер модели: прокси} из профилей моделей (поле «Прокси» в студии → «Мозг»). Облако Dewiar —
+        мимо (у него свой путь: «Сеть»), свой компьютер и домашняя сеть — тоже."""
+        import net
+        out = {}
+        for p in (self.s.get("llm", "profiles") or {}).values():
+            px = str((p or {}).get("proxy") or "").strip()
+            if not px or p.get("cloud"):
+                continue
+            h = net.host_of(p.get("base_url") or "")
+            if not h or h in ("localhost", "127.0.0.1", "::1") or net._private_host(h) or h.endswith("dewiar.pro"):
+                continue
+            try:
+                out[h] = net.normalize_proxy(px)
+            except net.NetError:
+                log.debug("прокси профиля «%s» не разобран", p.get("name"))
+        return out
+
     def _lan_fetch(self):
         """Дома — напрямую: спросить у сайта его адрес в домашней сети (cloud.php ?p=/lan, со входом или ключом) и
         передать net.set_lan; сохраняется в net.lan — после перезапуска действует сразу. Раз в 10 минут (_brain_watch)."""
@@ -481,6 +499,17 @@ class BrainMixin:
                 if (self.s.get("llm", "active") or "") != active or \
                         (active and time.monotonic() - getattr(self, "_brain_manual", -1e9) < 3600):
                     return                                     # пока проверяли, модель выбрали сами — не спорим
+                # №940 (21.11: «когда падает мой сервер, приложение перекидывает на облако Dewiar… все галочки страховки
+                # сняла, но оно всё равно переключается»): своя модель или свой сервер не отвечает — в облако только с
+                # согласия («Если своя модель не отвечает — через Dewiar»); Dewiar Server дома и сервис по ключу — по «Подстраховке»
+                if active:
+                    from health import brain_kind
+                    kind = brain_kind(profiles.get(active) or {})
+                    home = active == "dewiar-home" or str((profiles.get(active) or {}).get("name") or "").startswith("Dewiar Server")
+                    if self.s.get("llm", "key_fallback") is False or \
+                            (kind in ("local", "server") and not home and not self.s.get("llm", "own_fallback")):
+                        log.info("🧠 «%s» не отвечает — в облако Dewiar не перехожу: подстраховка выключена", was)
+                        return
                 if self.account.logged_in() and (not self.s.get("cloud", "key") or self.s.get("cloud", "account")):
                     self._account_cloud(force_active=True, quiet=True)
                 elif self.s.get("cloud", "key") and PROFILE_ID in profiles:
@@ -652,8 +681,12 @@ class BrainMixin:
         while not self.stopping.is_set():
             try:
                 self._lan_fetch()                              # дома — к сайту напрямую, без прокси (до остального: оно ходит туда же)
-            except Exception:  # noqa: BLE001
-                log.exception("адрес сайта в домашней сети")
+            except Exception as e:  # noqa: BLE001
+                import httpx
+                if isinstance(e, (httpx.HTTPError, OSError)):  # №917: сеть оборвалась — не сбой программы и не отчёт «сам при сбое»
+                    log.info("Адрес сайта в домашней сети не узнал: %s", e)
+                else:
+                    log.exception("адрес сайта в домашней сети")
             try:
                 self._ensure_brain(why)
             except Exception:  # noqa: BLE001
@@ -1145,16 +1178,41 @@ class BrainMixin:
     def _fake_reminder(self, said, turn):
         """Модель сказала «поставила напоминание», а инструмент не вызывала (бывает у небольших моделей) — честно
         предупредить, а не оставить человека с несуществующим напоминанием. -> текст предупреждения или ""."""
+        if getattr(turn, "raw", False) or getattr(turn, "greet", False):
+            # владелец 21.11, 21:08: «С возвращением» — «напоминание… уже поставила на 21:26» (правда: поставлено в 19:26
+            # без модели), а следом «⚠ на самом деле не поставлено». Служебное поручение (приветствие, дело по расписанию) —
+            # не просьба человека: проверять нечего
+            return ""
         if not re.search(r"\bнапомни|\bнапоминай|\bразбуди|будильник на|таймер на|засеки|"
                          r"(?:поставь|сделай|заведи)\s+(?:мне\s+)?(?:будильник|таймер|напоминание)", (said or "").lower()):
             return ""
         if any(n in ("set_reminder", "cancel_reminder", "list_reminders") for n in getattr(turn, "tools_ok", [])):
             return ""
+        if self._reminder_says_exists(turn.full):
+            return ""                                  # о напоминании, которое правда стоит (поставлено раньше), — правда
         if not re.search(r"напомн|постав|установ|готово|сделано|добавил|запланир|будильник|таймер", turn.full.lower()):
             return ""
         log.warning("⚠ Модель сказала, что поставила напоминание, но инструмент не вызвала: %s", said[:120])
         return ("⚠ На самом деле напоминание не поставлено — модель не вызвала инструмент. Скажите так: «напомни "
                 "в пятницу в 16:30 сделать бэкап» или добавьте в студии, «Напоминания».")
+
+    def _reminder_says_exists(self, answer):
+        """Ответ называет время, на которое у человека правда стоит напоминание (например, поставленное раньше без модели):
+        «уже поставила на 21:26» — правда, а не выдумка. Сверка по списку напоминаний, не по словам."""
+        times = set(re.findall(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b", answer or ""))
+        if not times:
+            return False
+        try:
+            items = list(getattr(self.reminders, "items", None) or [])
+        except Exception:  # noqa: BLE001
+            return False
+        have = set()
+        for x in items:
+            at = str(x.get("at") or x.get("when") or "")
+            m = re.search(r"T(\d{2}):(\d{2})", at)
+            if m:
+                have.add((str(int(m[1])), m[2]))
+        return any((str(int(h)), mm) in have for h, mm in times)
 
     def _set_reminder_fast(self, r, via=None):
         """«Напомни…» разобрали сами — ставим без модели и подтверждаем одной фразой."""

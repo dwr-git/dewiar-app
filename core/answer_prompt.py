@@ -74,6 +74,8 @@ class PromptMixin:
             turns = int(self.s.get("llm", "history_turns") or 0)
             if turns > 0 and self.conv.needs_fold(self.history, turns):
                 threading.Thread(target=self._conv_fold, args=(turns,), name="conv-fold", daemon=True).start()
+            if self._scene_on() and self.conv.scene_due(self.history):   # «Ум Лиры», шаг 1 — за переключателем
+                threading.Thread(target=self._conv_scene, name="conv-scene", daemon=True).start()
         except Exception:  # noqa: BLE001
             log.exception("разговор: запомнить")
 
@@ -88,6 +90,33 @@ class PromptMixin:
             return "".join(stream_chat(dict(prof, max_tokens=1200), system, messages))
         if self.conv.fold(lambda: self.history, turns, ask):
             self.emit("conversation", **self.conv.public(self.history))
+
+    def _scene_on(self):
+        """Сцена разговора включена? llm.scene True (экзамен --scene, проба) — да; llm.scene_on True / False — как сказано;
+        None (по умолчанию с 1.0.54) — у облака Dewiar да: замер владельца 20.11 — судья 10 против 8,6, по смыслу 8 из 8 против
+        7 из 8, ничего не просело; пишет её лёгкий мозг облака (X-Dewiar-Bg), главный не нагружается. Своя модель и ключ
+        сервиса — второй запрос за их счёт: только по выбору. (llm.scene=False сохранён у всех прежним умолчанием — не выбор.)"""
+        if self.s.get("llm", "scene") is True:
+            return True
+        v = self.s.get("llm", "scene_on")
+        if v is None:
+            try:
+                return bool((self.s.active_llm() or {}).get("cloud"))
+            except Exception:  # noqa: BLE001
+                return False
+        return bool(v)
+
+    def _conv_scene(self):
+        """Сцена разговора (llm.scene): пишет активная модель коротким запросом в фоне, по свежей истории."""
+        prof = self.s.active_llm()
+        if not prof:
+            return
+
+        def ask(system, messages):
+            from llm import stream_chat
+            # облако Dewiar: сцену пишет лёгкий мозг (X-Dewiar-Bg), главный занят разговорами — сцена не стоит в их очереди
+            return "".join(stream_chat(dict(prof, max_tokens=500, _bg=True), system, messages))
+        self.conv.scene_update(list(self.history), ask)
 
     def _conv_archive(self, name, text):
         """Conversation.archive -> файл «Память/Разговоры/<дата время>.md» (последние 120; старше — удаляются)."""
@@ -226,7 +255,7 @@ class PromptMixin:
                       "Ollama — переменная OLLAMA_CONTEXT_LENGTH.")
         return system, specs, msgs
 
-    def _system(self, with_tools=False, lean=None, personal=True):
+    def _system(self, with_tools=False, lean=None, personal=True, talk=False):
         """Системная подсказка: персонаж, правила, навыки и правила действий (with_tools), затем личное (_personal).
         Она не меняется от вопроса к вопросу: время, найденное в записях, план дня, подсказки к роду просьбы (стихи, схема,
         страница) — в справке к самому вопросу (_turn_context, _put_context). Отзыв 19.10: время с минутами в подсказке не
@@ -234,10 +263,10 @@ class PromptMixin:
         «Голос без пауз» (идея №5, 04.11): сначала — общее для всех людей (_system_stable), личное — в конце; а в разговоре
         (personal=False) личное уходит справкой в начало первого сообщения (llm.put_profile): у Qwen описания инструментов
         идут сразу после подсказки, и личная мелочь ломала кэш и для них (tools/prefix_audit.py)."""
-        base = self._system_stable(with_tools, lean)
+        base = self._system_stable(with_tools, lean, talk)
         return base + (self._personal(with_tools) if personal else "")
 
-    def _system_stable(self, with_tools=False, lean=None):
+    def _system_stable(self, with_tools=False, lean=None, talk=False):
         """Часть подсказки, одинаковая у всех людей с тем же персонажем и настройками — без имени, памяти, путей и счётчиков."""
         base = self.personas.system_prompt(self.s.get("persona"), "", "")
         base += ("\n\nТекущие дата и время — в справке в начале последнего сообщения пользователя; они верные, а время и даты "
@@ -246,11 +275,14 @@ class PromptMixin:
                  "сообщению, они важнее. Память, дела и прочее бери из этих справок.")
         # идея №141 (05.11): устройство — в каждом запросе. Телефон пишет «Android» сам (app.js), здесь — компьютер; система —
         # крупно (Windows / Linux / macOS), без номера сборки: подсказка остаётся общей у многих людей (кэш начала запроса)
-        base += (f"\n\nТы работаешь на компьютере пользователя ({device_os()}) — в программе Dewiar для компьютера: команды, файлы "
-                 "и приложения — этого компьютера. Телефон — отдельное приложение Dewiar; про него не говори «открыла на телефоне», "
-                 "если не передавала туда задание.")
+        # «Чистый разговор» (talk, 21.11): в беседе — без устройства, «материала пользователя», «данных» и «как спрятать»:
+        # к разговору они не относятся; понадобится дело — следующий шаг идёт с полной подсказкой
+        if not talk:
+            base += (f"\n\nТы работаешь на компьютере пользователя ({device_os()}) — в программе Dewiar для компьютера: команды, файлы "
+                     "и приложения — этого компьютера. Телефон — отдельное приложение Dewiar; про него не говори «открыла на телефоне», "
+                     "если не передавала туда задание.")
         from boundaries import RULE, OWN_MATERIAL
-        base += "\n\n" + RULE + "\n\n" + OWN_MATERIAL
+        base += "\n\n" + RULE + ("" if talk else "\n\n" + OWN_MATERIAL)
         try:
             base += self.soul.const_prompt()           # конституция — правила, а не личное: всегда в самой подсказке
         except Exception:  # noqa: BLE001
@@ -260,10 +292,10 @@ class PromptMixin:
             base += kids.prompt()                      # детский режим: правила разговора с ребёнком (kids.py)
         elif getattr(self, "senior", None) is not None and self.senior.on():
             base += self.senior.prompt()               # «Для старших»: просто, тепло, неторопливо; осторожно с деньгами
-        if not self._slim_prompt(with_tools):            # «Ваши данные» (privacy.py); в облегчённой — справкой к вопросу о данных
+        if not talk and not self._slim_prompt(with_tools):   # «Ваши данные» (privacy.py); в облегчённой — справкой к вопросу о данных
             base += self._privacy_rule()
         # сами фразы ловит _window_cmd без модели; это — чтобы ассистент мог подсказать их, если спросят
-        base += ("\n\nЕсли спросят, как тебя спрятать или выключить: «спрячься» — виджет уходит в трей, а ты слушаешь и "
+        base += "" if talk else ("\n\nЕсли спросят, как тебя спрятать или выключить: «спрячься» — виджет уходит в трей, а ты слушаешь и "
                  "появляешься на имя; «покажись» — вернуть виджет; «отключись» — выйти из Dewiar совсем (включить снова — "
                  "Dewiar в меню приложений).")
         if with_tools:
@@ -481,11 +513,14 @@ class PromptMixin:
                 out += " " + my
         try:
             note = self.conv.turn_note()
+            if self._scene_on():                                 # «Ум Лиры», шаг 1: сцена — в справку, не в системную подсказку
+                self.conv.scene_wait(float(self.s.get("llm", "scene_wait") or 0))
+                note = (note + " " + self.conv.scene_note()).strip()
         except Exception:  # noqa: BLE001
             note = ""
         if (self.s.get("llm", "lean_prompt") or self._slim_prompt()) and text:   # описания навыков — к подходящему вопросу
             try:
-                hint = self.skills.hint_for(text)
+                hint = self.skills.hint_for(ask_core(text))
             except Exception:  # noqa: BLE001
                 hint = ""
             if hint:
@@ -508,6 +543,12 @@ class PromptMixin:
             mine = ""
         if mine:
             out += " " + mine
+        try:
+            media = self.media_now_line()
+        except Exception:  # noqa: BLE001
+            media = ""
+        if media:
+            out += " " + media
         try:                                           # 0.88: программа на английском — и ответы по-английски
             import i18n
             from lang2 import en_hint as _en_q
@@ -533,6 +574,24 @@ class PromptMixin:
             out += " " + en
         return out + (" " + note if note else "")
 
+    def media_now_line(self):
+        """Владелец 21.11, 21:34: радио включал днём и давно выключил, а Лира — «музыка всё ещё играет на фоне». Модель
+        судит по разговору («Включила радио…»), а не по тому, что есть. Если в разговоре была музыка — справка к вопросу
+        говорит, что на самом деле сейчас: играет такое-то или не играет. Состояние — из программы, не из памяти модели."""
+        hist = getattr(self, "history", None) or []
+        said = " ".join(str(m.get("content") or "")[:400] for m in hist[-24:] if isinstance(m.get("content"), str))
+        if not re.search(r"(?i)радио|музык|трек|песн|плейлист|play_radio|play_music|yandex_music|играет|включила|включил", said):
+            return ""
+        radio = getattr(self, "radio", None)
+        st = (radio.status() if radio is not None and hasattr(radio, "status") else {}) or {}
+        if st.get("playing"):
+            name = re.sub(r"[\x00-\x1f«»\"`<>\[\]{}]+", " ", str(st.get("station") or "")).strip()[:80]
+            return f"Сейчас в Dewiar играет{' «' + name + '»' if name else ' музыка'}."
+        if st.get("paused"):
+            return "Сейчас музыка в Dewiar на паузе."
+        return ("Сейчас в Dewiar музыка не играет — если раньше в разговоре она играла, её уже выключили; "
+                "не говори, что она звучит.")
+
     def _plugin_hint(self, text):
         """№461, №463, №483 (ПК 0.76: «плагины не работают — „сейчас посмотрю“ и всё»): просьба к установленному плагину —
         в справку к вопросу: какой навык прочитать и какие действия плагина вызвать сразу (или что они не запустились)."""
@@ -541,7 +600,7 @@ class PromptMixin:
             return ""
         try:
             m = getattr(self, "mcp", None)
-            ask = text.split("\n\nВложения:")[0]
+            ask = ask_core(text)
             h = pl.hint_for(ask, m.plugin_tools() if m else {}, m.plugin_errors() if m else {})
             if h:
                 return h

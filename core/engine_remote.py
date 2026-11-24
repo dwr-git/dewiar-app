@@ -453,6 +453,17 @@ class RemoteMixin:
         №194: «произношение фраз на английском — жесть»: русский голос читал их русскими звуками). Голос сервера и
         ElevenLabs многоязычные — им как раньше. Английского голоса ещё нет — один раз скачиваем в фоне, а пока читаем
         по-русски. Частота — как у первого куска (иначе плеер перезапускался бы между кусками)."""
+        from act_cue import CUE_TEXTS
+        if text in CUE_TEXTS or text in getattr(self, "_cue_set", ()):                             # «Ищу в интернете…» — со второго раза мгновенно (act_cue.py)
+            key = (getattr(eng, "name", type(eng).__name__), text, json.dumps(voice, sort_keys=True, default=str), round(sp, 3))
+            cache = self.__dict__.setdefault("_cue_audio", {})
+            if key not in cache:
+                got = list(self._synth_mixed(eng, text + " ", voice, sp))      # пробел — мимо кэша, синтез как обычно
+                if len(cache) > 60:
+                    cache.pop(next(iter(cache)))
+                cache[key] = got
+            yield from cache[key]
+            return
         from tts import LANG_VOICES, resample, split_lang
         parts = split_lang(text) if not isinstance(eng, RemoteTTS) and self.s.get("tts", "english") is not False else [("ru", text)]
         g = "male" if voice.get("_gender") == "male" else "female"

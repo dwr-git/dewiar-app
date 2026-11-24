@@ -25,7 +25,7 @@ from pathlib import Path
 KEEP = 5000
 VARS_MAX = 5              # прежних вариантов ответа («Ещё раз») — не больше
 THREADS_MAX = 200         # отложенных бесед — не больше (самые старые уходят)
-META_KEYS = ("model", "first", "total", "tin", "tout", "cached", "stopped")
+META_KEYS = ("model", "first", "total", "tin", "tout", "cached", "stopped", "xray", "brain")   # xray — номер рентгена хода (кнопка «Рентген»)
 
 
 def _meta(meta):
@@ -37,6 +37,10 @@ def _meta(meta):
             continue
         if k == "model":
             out[k] = str(v)[:80]
+        elif k == "brain":                         # кто ответил на самом деле: «лёгкий мозг (qwen3-4b)»
+            out[k] = str(v)[:120]
+        elif k == "xray":                          # владелец 21.11: «рентгена нигде не вижу» — номер терялся здесь
+            out[k] = str(v)[:40]
         elif isinstance(v, (int, float)) and v >= 0:
             out[k] = round(float(v), 2) if k in ("first", "total") else int(v)
     return out

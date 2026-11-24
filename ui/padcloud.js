@@ -69,7 +69,9 @@
         + `<button type="button" class="cl-no" data-no>Отмена</button></div></div>`;
       return `<div role="button" tabindex="0" class="cl-f k-${esc(f.kind)}${moving ? " moving" : ""}" data-f="${esc(f.name)}" title="${esc(f.name)}"><i>${K[f.kind] || "TXT"}</i>`
         + `<span>${esc(f.name)}</span><small>${mb(f.size || 0)}${f.here ? "" : " · скоро будет здесь"}</small>`
-        + (moving ? "" : `<button type="button" class="cl-x" data-x aria-label="Убрать «${esc(f.name)}»" title="Убрать отовсюду">×</button>`) + `</div>`; }).join("")
+        + (moving ? "" : (f.here ? `<button type="button" class="cl-dl" data-dl aria-label="Скачать «${esc(f.name)}»" title="Скачать — сохранить копию в папку">`
+          + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19h14"/></svg></button>' : "")
+          + `<button type="button" class="cl-x" data-x aria-label="Убрать «${esc(f.name)}»" title="Убрать отовсюду">×</button>`) + `</div>`; }).join("")
       || (checking ? '<div class="cl-f cl-sk" aria-hidden="true"></div>'.repeat(3) : "");
     el("#cl-grid").setAttribute("aria-busy", checking ? "true" : "false");
   }
@@ -185,6 +187,15 @@
     }
     const b = e.target.closest("[data-f]"); if (!b) return;
     if (e.target.closest("[data-x]")) { CL.ask = b.dataset.f; render(); const y = el("#cl-grid [data-no]"); if (y) y.focus(); return; }
+    if (e.target.closest("[data-dl]")) {            // копия файла — куда человек выберет (окно «Сохранить»)
+      const a = A(), name = b.dataset.f;
+      try {
+        const src = await core.call("drive_path", { name });
+        const to = a && a.save_copy ? await a.save_copy(src, name) : "";
+        if (to) say(`«${name}» сохранён: ${to}`);
+      } catch (er) { say(er.message); }
+      return;
+    }
     core.call("drive_open", { name: b.dataset.f }).catch(er => say(er.message));
   });
   el("#cl-grid").addEventListener("keydown", (e) => {

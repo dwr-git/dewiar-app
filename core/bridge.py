@@ -134,7 +134,11 @@ class Bridge:
             return
         try:
             data = await self._call("hello", {})
-            await ws.send(json.dumps({"type": "hello", "data": data}, ensure_ascii=False))
+            msg = json.dumps({"type": "hello", "data": data}, ensure_ascii=False)
+            if len(msg) > 1_000_000 and isinstance(data, dict):     # 20.11: у людей бывало ~5 МБ — в журнал, из чего
+                big = sorted(((len(json.dumps(v, ensure_ascii=False)), k) for k, v in data.items()), reverse=True)[:4]
+                log.info("Ответ окну тяжёлый: %d КБ (%s)", len(msg) // 1024, ", ".join(f"{k} {n // 1024} КБ" for n, k in big))
+            await ws.send(msg)
             self.clients.add(ws)
             self.seen = True
             async for raw in ws:
@@ -165,10 +169,14 @@ class Bridge:
         finally:
             self.inflight.pop(key, None)
 
+    # фоновые чтения студии, которые никого не держат (пул большой): долгие — не повод виджету писать «Занят» (20.11,
+    # владелец: «Занят: mail_inbox — 37 с» — «Почта» на «Главной» студии тянула письма с медленного сервера)
+    QUIET = {"mail_inbox"}
+
     def busy(self):
         """Ответ на «ping» прямо из цикла связи (без пула): жив ли и что выполняется дольше всех."""
         now = time.monotonic()
-        slow = sorted(((now - t, c) for c, t in list(self.inflight.values())), reverse=True)
+        slow = sorted(((now - t, c) for c, t in list(self.inflight.values()) if c not in self.QUIET), reverse=True)
         return {"ok": True, "inflight": len(slow), "oldest": round(slow[0][0], 1) if slow else 0,
                 "cmd": slow[0][1] if slow else ""}
 

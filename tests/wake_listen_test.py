@@ -39,7 +39,7 @@ def stub():
     e.tones = []
     e.play_tone = lambda k: e.tones.append(k)
     e._media_stop_word = lambda *a, **k: None
-    e.note = lambda m: e.calls.append(("note",))
+    e.note = lambda m, ttl=0: e.calls.append(("note",))
     return e
 
 

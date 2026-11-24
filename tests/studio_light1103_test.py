@@ -132,7 +132,7 @@ try:
         nav("look"); time.sleep(0.6)
         pg.evaluate("document.querySelector('#sh-sets [data-set=\"min\"]').click()"); time.sleep(1.2)
         vis = set(pg.evaluate(NAVVIS))
-        want = {"home", "chat", "calendar", "reminders", "notes", "close", "memory", "course", "dw", "personas", "brain", "ears", "voice", "look", "sound", "hands", "skills", "features", "about"}
+        want = {"home", "chat", "calendar", "reminders", "notes", "close", "memory", "course", "dw", "personas", "brain", "ears", "voice", "look", "sound", "hands", "features", "about"}   # «Плагины» — «Все плагины» в своей группе (№907)
         ok(vis - {"soul", "const", "me"} == want, "«Минимум»: в меню только главное и настройки; лишнее: " + ", ".join(sorted(vis - want - {"soul", "const", "me"})) + "; нет: " + ", ".join(sorted(want - vis)))
         ok(pg.evaluate("document.querySelector('#sh-sets [aria-pressed=true]')?.dataset.set") == "min", "набор «Минимум» отмечен")
         if SHOTS:

@@ -119,12 +119,16 @@ function openPcInfo() {
     s.innerHTML = `<div class="grab"></div><h2 id="pci-h">${esc(tbT("pci.h"))}</h2><div id="pci-body"></div>`;
     document.body.appendChild(s);
   }
-  const pcs = (typeof syncStatus !== "undefined" && syncStatus.devices || []).filter(x => x.pc && Date.now() / 1000 - (x.seen || 0) < 14 * 86400);
-  const on = pcs.length > 0;
+  // №930 (20.11): зелёное «на связи» — только если компьютер правда отвечал последние 3 минуты (как pcOnline); связан, но
+  // выключен — без зелёного: «сейчас не на связи», поручения он возьмёт, когда включится
+  const pcs = (typeof syncStatus !== "undefined" && syncStatus.devices || []).filter(x => x.pc && x.name !== "Облако Dewiar" && Date.now() / 1000 - (x.seen || 0) < 14 * 86400)
+    .sort((a, b) => (b.seen || 0) - (a.seen || 0));
+  const on = pcs.length > 0, live = on && Date.now() / 1000 - (pcs[0].seen || 0) < 180;
   const li = (xs) => `<ul class="pci-l">${xs.map(([b, t]) => `<li><b>${esc(b)}</b><small>${esc(t)}</small></li>`).join("")}</ul>`;
   const I = (k) => [tbT("pci.i." + k), tbT("pci.i." + k + "_d")];
-  $("#pci-body").innerHTML = `<div class="card pci-st${on ? " ok" : ""}"><b>${esc(on ? tbT("pci.on", { name: pcs[0].name || tbT("pci.pc") }) : tbT("pci.off"))}</b>
-      <small class="hint">${esc(tbT(on ? "pci.on_p" : "pci.off_p"))}</small>
+  const nm = on ? pcs[0].name || tbT("pci.pc") : "";
+  $("#pci-body").innerHTML = `<div class="card pci-st${live ? " ok" : ""}"><b>${esc(live ? tbT("pci.on", { name: nm }) : on ? tbT("pci.idle", { name: nm }) : tbT("pci.off"))}</b>
+      <small class="hint">${esc(tbT(live ? "pci.on_p" : on ? "pci.idle_p" : "pci.off_p"))}</small>
       ${on ? "" : `<button class="btn p" id="pci-dl">${esc(tbT("pci.dl"))}</button>`}</div>
     <h3>${esc(tbT("pci.ask_h"))}</h3>
     <p class="pci-p">${esc(tbT("pci.ask_p"))}</p>

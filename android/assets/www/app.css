@@ -194,6 +194,7 @@ body.typing #bar { padding-top: 6px; padding-bottom: calc(10px + var(--safe-b));
 #atts .at { position: relative; flex: none; height: 64px; border-radius: 14px; background: var(--field); display: flex; align-items: center; overflow: hidden; }
 #atts .at img { height: 64px; width: 64px; object-fit: cover; display: block; }
 #atts .at span { padding: 0 34px 0 12px; font-size: 13px; max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#atts .at.pasted { cursor: pointer; }
 #atts .at button { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; }
 #atts .at button svg { width: 13px; height: 13px; stroke-width: 2.4; }
 #card .attshow { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
@@ -1957,6 +1958,16 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sf-ib:active, .sf-item:active, .sf-add:active { transform: scale(.97); }
 .sf-fine { text-align: center; margin: 14px 8px 0; font-size: 12.5px; color: var(--dim, var(--muted)); }
 #sf-gate .res { text-align: center; }
+.sf-biob { width: 100%; max-width: 420px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.sf-biob svg, .sf-offer > svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; flex: none; }
+.sf-or { color: var(--muted); font-size: 13px; margin: 10px 0 8px; }
+.sf-gate > .res { margin: 0 0 10px; }
+.sf-offer { display: flex; align-items: center; gap: 12px; padding: 12px 8px 12px 14px; margin: 0 0 10px; border-radius: 16px;
+  background: var(--frost); box-shadow: inset 0 0 0 1px var(--glass-line); color: var(--accent); }
+.sf-offer span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.sf-offer small { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+.sf-offer .btn { flex: none; padding: 9px 14px; }
+.sf-fine a { color: var(--accent); } .sf-bioline { margin-top: 4px; }
 
 .sf-bar { display: flex; gap: 8px; position: sticky; top: -8px; z-index: 1; padding: 2px 0 10px; }
 .sf-find { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 16px; background: var(--field); box-shadow: inset 0 0 0 1px var(--glass-line); }
@@ -2109,6 +2120,34 @@ body.tab-wide.pane #stage { display: flex; flex-direction: column; padding: 0 16
 body.tab-wide.pane #stage #talk { max-width: none; width: 100%; }
 body.tab-wide.pane #stage #orbwrap { width: min(28vw, 30vh, 260px); }
 
+/* широкий экран и веб-версия на компьютере (владелец 20.11: «блок сообщений урезанный и кривой… середину и сообщения
+   ограничить максимальную шириной, привести к порядку»). Полоса «облик слева, ответ справа» считала ширину от окна, а не
+   от области правее меню: на мониторе 1900 точек ответу оставалось 270. Теперь всё — одной полосой до 1040 точек по центру
+   области разговора: верхние кнопки, облик с ответом и поле ввода с кнопками; ответ — во всю свою колонку. */
+:root { --bandw: 1040px; --bandpad: max(24px, calc((100vw - var(--railw) - var(--bandw)) / 2)); }
+@media (orientation: landscape) and (min-width: 700px) {
+  body.tab #stage { padding: 0 var(--bandpad); grid-template-columns: minmax(200px, 340px) minmax(0, 1fr); column-gap: 48px; }
+  body.tab #stage.quiet { grid-template-columns: minmax(0, 1fr) 0px; column-gap: 0; }
+  body.tab #stage.quiet.tries { grid-template-columns: minmax(200px, 340px) minmax(0, 1fr); column-gap: 48px; }
+  /* поля под тень: колонка ответа прокручивается (overflow) и обрезала светлые тени пузыря и кнопок по краям (владелец 20.11:
+     «тени светлые по бокам режутся») — ответ отступает от краёв колонки на ширину тени */
+  body.tab #stage #talk { max-width: 720px; padding: 18px 22px 26px; }
+  body.tab #bar { padding-left: var(--bandpad); padding-right: var(--bandpad); }
+  body.tab #top { padding-left: calc(var(--bandpad) - 12px); padding-right: calc(var(--bandpad) - 12px); }
+}
+/* раздел открыт рядом: разговор — колонкой до 680 точек по центру оставшегося места, поле ввода — той же ширины */
+body.tab-wide.pane { --bandpad: max(18px, calc((100vw - var(--railw) - var(--panew) - 24px - 760px) / 2)); }
+body.tab-wide.pane #stage #talk { max-width: 720px; margin: 0 auto; padding: 18px 22px 26px; }
+body.tab-wide.pane #bar { padding-left: var(--bandpad); padding-right: var(--bandpad); }
+body.tab-wide.pane #top { right: calc(var(--panew) + 24px); padding-left: 12px; padding-right: 12px; }
+/* прокрутка меню и разделов — тонкая и полупрозрачная, в цвет страницы (владелец: «скролл слева грубый и не в цвет») */
+body.tab #rail, body.tab .sheet { scrollbar-width: thin; scrollbar-color: rgba(128,132,150,.35) transparent; }
+body.tab #rail::-webkit-scrollbar, body.tab .sheet::-webkit-scrollbar { width: 8px; }
+body.tab #rail::-webkit-scrollbar-track, body.tab .sheet::-webkit-scrollbar-track { background: transparent; }
+body.tab #rail::-webkit-scrollbar-thumb, body.tab .sheet::-webkit-scrollbar-thumb { background: rgba(128,132,150,.28); border-radius: 8px;
+  border: 2px solid transparent; background-clip: padding-box; }
+@media (hover: hover) { body.tab #rail::-webkit-scrollbar-thumb:hover, body.tab .sheet::-webkit-scrollbar-thumb:hover { background-color: rgba(128,132,150,.5); } }
+
 /* ---------- «Клиенты» и «Сделки» (clients.js, 0.9.32): список, карточка, доска сделок ---------- */
 #sh-clients input:not([type=range]), #sh-clients select, #sh-clients textarea { min-width: 0; padding: 11px 13px; border-radius: 13px; border: 0; background: var(--field); outline: none; }
 body.neu #sh-clients input:not([type=range]), body.neu #sh-clients select, body.neu #sh-clients textarea { box-shadow: var(--press); }
@@ -2246,3 +2285,9 @@ body.light .blg-del { color: #c23a5a; }
 .cl-co[hidden], #cl-join[hidden] { display: none; }
 .cl-co .btn { align-self: flex-start; }
 #cl-join-code { text-transform: uppercase; letter-spacing: .06em; font-family: ui-monospace, Menlo, monospace; }
+
+/* образы персонажа (1.0.55): кружки в листе «Кто отвечает» */
+.plook .plg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 4px; margin-top: 10px; }
+.plook .plg button { display: flex; flex-direction: column; align-items: center; gap: 5px; border: 0; background: none; padding: 2px 0; color: var(--muted); font: 600 11px/1.2 Manrope, sans-serif; }
+.plook .plg img { width: 54px; height: 54px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.06); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+.plook .plg button.on { color: var(--ink); } .plook .plg button.on img { box-shadow: 0 0 0 2px var(--bg, #111), 0 0 0 3.5px var(--ink); }

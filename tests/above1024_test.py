@@ -39,18 +39,22 @@ rep.Gtk = types.SimpleNamespace(Window=types.SimpleNamespace(list_toplevels=lamb
 rep.GdkX11 = types.SimpleNamespace(X11Window=X11Window)
 gi.repository = rep; sys.modules["gi"] = gi; sys.modules["gi.repository"] = rep
 ns = {"TITLES": {"card": "Dewiar", "mini": "Dewiar — значок"}, "PAD_TITLE": "Dewiar — блокнот", "ABOVE_TITLES": None, "sys": sys,
-      "ON_TOP": [True]}                                          # 0.68: «Виджет поверх всех окон» можно выключить (№48)
+      "ON_TOP": [True], "STUDIO_FRONT": [False]}                  # 0.68: «Виджет поверх всех окон» можно выключить (№48)
 exec(ast.get_source_segment(src, fn), ns)
 r = ns["keep_above_guard"]()
 ok(r is True and wins[0].calls == [False, True], f"виджет потерял «поверх» — поставлен снова: {wins[0].calls}")
 ok(wins[1].calls == [] and wins[2].calls == [] and wins[3].calls == [], "блокнот и так поверх, спрятанный значок и чужие окна — не трогаем")
 ns["keep_above_guard"]()
 ok(wins[0].calls == [False, True], "второй круг — всё уже поверх, ничего не делаем")
-# выключили «поверх» (идея №48) — виджет не поднимаем, блокнот — по-прежнему
+# выключили «поверх» (идея №48) — не поднимаем ни виджет, ни блокнот (владелец 24.11: «виджет спрятался, а редактор остался»)
 ns["ON_TOP"][0] = False
 wins[0].gdw.above = False; wins[0].calls = []; wins[1].gdw.above = False; wins[1].calls = []
 ns["keep_above_guard"]()
-ok(wins[0].calls == [] and wins[1].calls == [False, True], f"«поверх» выключен — виджет не поднимаем, блокнот поднимаем: {wins[0].calls} {wins[1].calls}")
+ok(wins[0].calls == [] and wins[1].calls == [], f"«поверх» выключен — ни виджет, ни блокнот не поднимаем: {wins[0].calls} {wins[1].calls}")
+app_src = src
+ok("on_top=ON_TOP[0], hidden=True," in app_src[app_src.index("win = webview.create_window(PAD_TITLE"):][:400], "блокнот создаётся «поверх» так же, как виджет")
+so = app_src[app_src.index("    def set_on_top(self, on):"):app_src.index("    def pick_folder(self):")]
+ok('getattr(self, "_pad", None)' in so, "переключатель «поверх всех» меняет и блокнот")
 ok("GLib.timeout_add_seconds(3, keep_above_guard)" in src, "сторож запускается с интерфейсом (Linux)")
 
 if fails:

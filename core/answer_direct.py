@@ -164,6 +164,61 @@ class DirectMixin:
         if media and w in MEDIA_STOP | {"stop", "останови"}:
             threading.Thread(target=self._media_stop_word, args=(w, False), daemon=True).start()
 
+    MEDIA_STOP_LONE_S = 1.6           # «стоп» командой — короткая фраза с тишиной вокруг, а не слово посреди разговора
+
+    def _media_stop_heard(self, word, now, in_speech):
+        """Быстрый слух (Vosk) услышал одно слово-стоп без имени, пока Лира ждёт. Своё радио — на паузу сразу, как
+        раньше. Чужую музыку (плеер в другой программе) — только если и точная проверка согласна: 20.11 (владелец:
+        «ложное "стой"… всегда ставит музыку на паузу… пару раз за рабочий день») Vosk с грамматикой из одних команд
+        натягивал на «стой» обрывок разговора рядом. Решаем по самой фразе — когда она закончится (_media_stop_utt)."""
+        if self.radio.playing:
+            threading.Thread(target=self._media_stop_word, args=(word,), daemon=True).start()
+            return
+        uid = getattr(self, "utt_id", 0)
+        last = getattr(self, "_idle_utt_last", None)
+        if not in_speech and last and last[2] == uid and now - last[1] < 2.5:
+            self._media_stop_check(word, last[0])        # фраза уже кончилась — звук есть
+        else:
+            self._media_stop_cand = (word, now, uid)     # ещё звучит — проверим, когда кончится
+
+    def _media_stop_utt(self, pcm, now):
+        """Конец любой фразы: запомнить её (для «стоп», которое быстрый слух дослышит чуть позже) и, если по ней ждёт
+        решение «стоп» для чужой музыки, — отдать на проверку."""
+        uid = getattr(self, "utt_id", 0)
+        self._idle_utt_last = (pcm, now, uid)
+        cand = getattr(self, "_media_stop_cand", None)
+        if cand and cand[2] == uid and now - cand[1] < 4:
+            self._media_stop_cand = None
+            self._media_stop_check(cand[0], pcm)
+
+    def _media_stop_check(self, word, pcm):
+        """Чужая музыка и «стоп» без имени: фраза длиннее ~1,6 с — это разговор, в котором мелькнуло слово, не команда.
+        Короткую — перепроверяет точная модель (GigaAM, если стоит; в потоке проверок), её нет — верим короткой фразе."""
+        dur = len(pcm) / 2 / RATE
+        if dur > self.MEDIA_STOP_LONE_S:
+            log.info("«%s» внутри разговора (%.1f с) — музыку не трогаю", word, dur)
+            return
+        if self._stop_checker() is None:
+            threading.Thread(target=self._media_stop_word, args=(word,), daemon=True).start()
+            return
+        if self.check_q.qsize() < 3:
+            self.check_q.put(("media_stop", pcm, word))
+
+    def _media_stop_verify(self, pcm, word):
+        """Поток проверок: точная модель слышит в короткой фразе только слово-стоп (одно-два слова) — пауза; слышит
+        другое («с той стороны», «постой-ка, Вань») — нет. Не проверилось — верим быстрому слуху, как раньше."""
+        text = None
+        try:
+            text = self._stop_checker().transcribe(pcm).strip()
+        except Exception as e:  # noqa: BLE001
+            log.debug("проверка «%s» для музыки не удалась: %s", word, e)
+        if text is not None:
+            ws = re.findall(r"[\wё]+", _norm(text))
+            if not ws or len(ws) > 2 or not self._stop_hit(text):
+                log.info("«%s» — точная проверка слышит «%s»: музыку не трогаю", word, text[:60])
+                return
+        self._media_stop_word(word)
+
     def _media_stop_word(self, word, force=False):
         """«Пауза» / «стоп» без имени, пока играет музыка — ставим её на паузу -> True, если поставили. Если ничего
         не играет — молчим (слово могли сказать не ассистенту). force — после имени: если узнать, играет ли что-то,
@@ -340,6 +395,8 @@ class DirectMixin:
         prev = next((m.get("content") for m in reversed(self.history[:-1]) if m.get("role") == "assistant" and m.get("content")), "")
         if not prev:
             return
+        if hasattr(self, "day_miss"):
+            self.day_miss("correction", said, prev)         # «Ум Лиры», шаг 3 — замер: человек поправил
 
         def run():
             from llm import stream_chat
@@ -354,3 +411,70 @@ class DirectMixin:
                 log.info("📘 Урок из поправки: %s", rule)
                 self.emit("lesson", text=rule)
         threading.Thread(target=run, name="learn", daemon=True).start()
+
+
+# «Лира, смени образ», «надень локоны», «образ „Шёлк“», «выбирай образ сама», «верни обычный образ» (1.0.55)
+# 21.11 (владелец: «Смени облик» — ответ «не могу сменить собственный облик», позвала персонажа): говорят не только «образ»
+LOOK_W = r"(?:образ\w*|облик\w*|внешност\w*|наряд\w*|прич[её]ск\w*)"
+LOOK_RX = re.compile(r"(?i)^(?:[а-яё]+,?\s+)?(?:(?P<next>(?:(?:смени|поменяй|измени|другой|другую|новый|новую|следующий|следующую)\s+"
+                     r"(?:(?:свой|свою|себе)\s+)?" + LOOK_W + r")|переоденься)"
+                     r"|(?P<auto>(?:выбирай|меняй|подбирай)\s+" + LOOK_W + r"\s+(?:сама?|по\s+(?:сезону|погоде|времени))"
+                     r"|" + LOOK_W + r"\s+(?:сама?|по\s+сезону))"
+                     r"|(?P<plain>(?:верни|сними)\s+(?:обычн\w+\s+" + LOOK_W + r"|" + LOOK_W + r")|обычн\w+\s+" + LOOK_W + r")"
+                     r"|(?:надень|переоденься\s+в|образ|облик)\s+[«\"]?(?P<name>[а-яё]+))[»\".!? ]*$")
+
+
+class LookMixin:
+    def set_look(self, pid, look=None, auto=None):
+        """Образ персонажа: look — id или "" (обычный), "next" — следующий по кругу; auto — «Сама — по времени дня».
+        Хранится в настройках (looks: {pid: {look, auto}}), персонажи заново — окнам. -> public-персонаж или None."""
+        p = self.personas.get(pid)
+        cur = next((x for x in self.personas.public() if x["id"] == p["id"]), None)
+        if not cur or not cur.get("looks"):
+            return None
+        all_ = self.s.get("looks") or {}
+        pref = dict(all_.get(p["id"]) or {})
+        ids = [x["id"] for x in cur["looks"]]
+        if look == "next":
+            look = ids[(ids.index(cur.get("look") or "") + 1) % len(ids)]
+            auto = False
+        if look is not None and look in ids:
+            pref["look"] = look
+            if auto is None:
+                pref["auto"] = False
+        if auto is not None:
+            pref["auto"] = bool(auto)
+        self.s.update({"looks": {**all_, p["id"]: pref}})
+        pub = self.personas.public()
+        self.emit("personas", personas=pub)
+        return next((x for x in pub if x["id"] == p["id"]), None)
+
+    def _direct_look(self, text, via=None):
+        """Смена образа словами — сразу, без модели. -> True, если это была такая просьба."""
+        m = LOOK_RX.match((text or "").strip())
+        if not m:
+            return False
+        pid = self.s.get("persona")
+        cur = next((x for x in self.personas.public() if x["id"] == pid), None)
+        if not cur or not cur.get("looks"):
+            return False
+        names = {x["name"].lower(): x["id"] for x in cur["looks"]}
+        if m.group("next"):
+            q = self.set_look(pid, "next")
+        elif m.group("auto"):
+            q = self.set_look(pid, auto=True)
+        elif m.group("plain"):
+            q = self.set_look(pid, "")
+        else:
+            w = m.group("name").lower().replace("ё", "е")         # «шелковый» — «Шёлк», «домашний» — «Дома»
+            hit = next((i for n, i in names.items() if n.replace("ё", "е")[:3] == w[:3]), None)
+            if hit is None:
+                return False
+            q = self.set_look(pid, hit)
+        if not q:
+            return False
+        name = next((x["name"] for x in q["looks"] if x["id"] == q.get("look")), "Обычная")
+        msg = ("Хорошо, образ буду выбирать сама — каждый час новый. Сейчас — «" + name + "».") if q.get("look_auto") \
+            else ("Вернула обычный образ." if not q.get("look") else f"Готово — образ «{name}».")
+        self._say_quick(msg, text, via)
+        return True

@@ -140,7 +140,7 @@ Mac пишет «Не удалось проверить разработчика
 При первом разговоре Mac спросит доступ к микрофону — разрешите: так Лира услышит своё имя.
 Обновления Dewiar ставит сам: «Доступна версия…» → «Обновить».
 
-dewiar.pro/dwrapp/download.php
+dewiar.pro/dwrapp/download
 TXT
 OUT="$OUTDIR/Dewiar-$VERSION-mac$SUFFIX.dmg"
 rm -f "$OUT"

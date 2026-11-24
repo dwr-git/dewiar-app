@@ -35,6 +35,34 @@ GENRES = {"джаз": "jazz", "рок": "rock", "классика": "classical",
           "ретро": "retro", "дип хаус": "deep house", "хаус": "house", "рок-н-ролл": "rock'n'roll", "80-е": "80s", "90-е": "90s", "фолк": "folk", "регги": "reggae", "соул": "soul"}
 
 
+
+PLAYLIST_RX = _re.compile(r"\.(?:m3u|pls|asx|xspf)(?:[?#].*)?$", _re.I)       # .m3u8 — это HLS, его ffmpeg играет сам
+_pl_cache = {}
+
+
+def playlist_stream(url):
+    """№920 (ПК 1.0.48): «не воспроизводит поток sovietwave.su/sovietwave.m3u — в VLC играет»: ffmpeg не открывает
+    список воспроизведения («Invalid data found»). Ссылка на .m3u/.pls/.asx/.xspf — скачиваем список и берём первый
+    адрес потока. -> адрес или "" (не список, не скачался, адреса нет — играем как есть)."""
+    if not url or not PLAYLIST_RX.search(url.split("?")[0]) or not url.startswith(("http://", "https://")):
+        return ""
+    if url in _pl_cache:
+        return _pl_cache[url]
+    real = ""
+    try:
+        import httpx
+        r = httpx.get(url, timeout=10, follow_redirects=True, headers={"User-Agent": STREAM_UA})
+        text = r.text[:20000] if r.status_code == 200 else ""
+        m = _re.search(r"(?im)^\s*File\d+\s*=\s*(https?://\S+)", text) or _re.search(r"(?im)^\s*(https?://[^\s#<>\"]+)", text) \
+            or _re.search(r'(?i)(?:href|location)\s*[=>]\s*"?(https?://[^"<\s]+)', text)
+        real = m.group(1).strip() if m else ""
+    except Exception as e:  # noqa: BLE001
+        log.info("Радио: список %s не скачался: %s", url, e)
+    if real and real != url:
+        log.info("📻 Список %s → поток %s", url, real)
+        _pl_cache[url] = real
+    return real if real != url else ""
+
 class RadioError(Exception):
     pass
 
@@ -404,6 +432,9 @@ class Radio:
         if not ff:
             raise RadioError("для радио нужен ffmpeg, а он не запускается — переустановите ffmpeg (sudo apt install --reinstall ffmpeg) или Dewiar")
         self._ff = ff
+        real = playlist_stream(station.get("url") or "")
+        if real:                                       # №920: ссылка на список (.m3u, .pls) — играем поток из него
+            station = dict(station, url=real, page=station.get("url"))
         self.stop(keep_pause=False)
         with self._lock:
             self._gen += 1

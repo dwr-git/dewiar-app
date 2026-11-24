@@ -25,6 +25,7 @@ const CH_I = {
   copy: '<path d="M8.5 8.5h10v11h-10z"/><path d="M15.5 8.5v-3h-10v11h3"/>',
   again: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
   info: '<circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/>',
+  xray: '<circle cx="6" cy="12" r="2"/><circle cx="18" cy="6.5" r="2"/><circle cx="18" cy="17.5" r="2"/><path d="M8 11l8-3.5M8 13l8 3.5"/>',
   edit: '<path d="M4.5 19.5h4l10-10-4-4-10 10z"/><path d="m13 7 4 4"/>',
   ok: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
 };
@@ -35,6 +36,8 @@ const chNum = (v) => Number(v).toLocaleString("ru-RU");
 function chatMeta(s) {
   const m = s.meta || {}, p = chatWho(s.who), rows = [];
   if (m.model) rows.push(["Модель", `<span class="ch-mono">${escH(m.model)}</span>`]);
+  // владелец 21.11 («через Лиру — как у 4B»): у облака профиль один, а отвечать может лёгкий мозг — кто ответил на самом деле
+  if (m.brain) rows.push(["Ответил", escH(m.brain)]);
   if (m.first != null) rows.push(["Первое слово", `через ${chSec(m.first)}`]);
   if (m.total != null) {
     const k = m.first != null && m.total > 0 ? Math.max(4, Math.min(96, m.first / m.total * 100)) : 0;
@@ -54,13 +57,15 @@ function chatActs(x, s, lastA, lastU) {
     return `<div class="ch-acts out last"><button class="ch-a" type="button" data-edit="${escH(x.id)}" ${CH.busy ? "disabled" : ""}>${chIco("edit")}Изменить</button></div>`;
   }
   if (!s.text) return "";
-  const id = escH(x.id), open = CH.info.has(x.id) && (s.meta || x.vars);
+  const info = s.meta && Object.keys(s.meta).some(k => k !== "xray") ? s.meta : null;   // одна метка рентгена — не «Подробности»
+  const id = escH(x.id), open = CH.info.has(x.id) && (info || x.vars);
   const pg = s._of > 1 ? `<span class="ch-pg" role="group" aria-label="Варианты ответа"><button type="button" data-vp="${id}" data-d="-1" ${s._n === 0 ? "disabled" : ""} aria-label="Предыдущий вариант"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button><b>${s._n + 1} из ${s._of}</b><button type="button" data-vp="${id}" data-d="1" ${s._n === s._of - 1 ? "disabled" : ""} aria-label="Следующий вариант"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg></button></span>` : "";
   return `<div class="ch-acts${lastA ? " last" : ""}">${pg}`
     + `<button class="ch-a" type="button" data-copy="${id}" title="Скопировать текст ответа">${chIco("copy")}<span>Копировать</span></button>`
     + (lastA ? `<button class="ch-a" type="button" data-regen="${id}" ${CH.busy ? "disabled" : ""} title="Спросить модель ещё раз тем же вопросом — новый ответ появится вариантом рядом">${chIco("again")}Ещё раз</button>` : "")
-    + (s.meta ? `<button class="ch-a" type="button" data-info="${id}" aria-expanded="${open ? "true" : "false"}" aria-controls="ch-meta-${id}">${chIco("info")}Подробности</button>` : "")
-    + `</div>${open && s.meta ? chatMeta(s) : ""}`;
+    + (info ? `<button class="ch-a" type="button" data-info="${id}" aria-expanded="${open ? "true" : "false"}" aria-controls="ch-meta-${id}">${chIco("info")}Подробности</button>` : "")
+    + (s.meta && s.meta.xray ? `<button class="ch-a" type="button" data-xray="${escH(s.meta.xray)}" title="Как Лира шла к этому ответу: что услышала, как поняла, что ушло в модель, что сделала и проверила">${chIco("xray")}Рентген</button>` : "")
+    + `</div>${open && info ? chatMeta(s) : ""}`;
 }
 function chatBubble(x0, lastWho, lastA, lastU) {
   const x = chatShown(x0);
@@ -78,6 +83,8 @@ const chatWhoHtml = (pid) => { const p = chatWho(pid);
 function chatBubble1(x, lastWho) {
   const out = x.role === "user", p = out ? null : chatWho(x.who);
   const hm = new Date(x.ts * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  // идея №374 (21.11): «кроме времени — и дату»: над днём — разделитель («Сегодня», «20 ноября»), а у времени — полная дата
+  const full = new Date(x.ts * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   // имя персонажа — над его первым ответом за день и когда отвечает другой персонаж (не над каждым ответом)
   const head = !out && lastWho !== (x.who || "")
     ? `<div class="ch-who"><i style="background:${escH((p && p.color) || "#8A9BFF")}"></i>${escH((p && p.name) || "Ассистент")}</div>` : "";
@@ -91,7 +98,7 @@ function chatBubble1(x, lastWho) {
     : a.kind === "image" && a.thumb
     ? `<button class="ch-img" data-path="${escH(a.path || "")}" title="${escH(a.name)} — открыть"><img src="${escH(a.thumb)}" alt="${escH(a.name)}"></button>`
     : `<button class="cl-f" data-path="${escH(a.path || "")}" data-key="${escH(a.key || "")}" title="${escH(a.label || a.name)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${escH(a.name)}</span><small>${a.size ? chatSize(a.size) : ""}</small></button>`).join("");
-  return `${head}<div class="cl-m${out ? " out" : ""}${gal ? " wide" : ""}" data-id="${escH(x.id)}">${x.via ? `<small class="ch-via">${x.via === "dev" ? "ответ разработчика" : "из мессенджера"}</small>` : ""}${att ? `<div class="ch-att">${att}</div>` : ""}${body}${gal}<time>${x.edited ? `<span class="ch-tag">изменено</span>` : ""}${x.meta && x.meta.stopped ? `<span class="ch-tag">остановлено</span>` : ""}${hm}${!out && x.text ? `<button class="ch-listen" data-listen="${escH(x.id)}" title="Прослушать ответ" aria-label="Прослушать ответ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>Прослушать</button>` : ""}</time></div>`;
+  return `${head}<div class="cl-m${out ? " out" : ""}${gal ? " wide" : ""}" data-id="${escH(x.id)}">${x.via ? `<small class="ch-via">${x.via === "dev" ? "ответ разработчика" : "из мессенджера"}</small>` : ""}${att ? `<div class="ch-att">${att}</div>` : ""}${body}${gal}<time title="${escH(full)}">${x.edited ? `<span class="ch-tag">изменено</span>` : ""}${x.meta && x.meta.stopped ? `<span class="ch-tag">остановлено</span>` : ""}${hm}${!out && (x.text || "").length >= 600 ? `<button class="ch-read" data-read="${escH(x.id)}" title="Открыть по центру — крупно и удобно для чтения" aria-label="Читать"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5c3-1 6-1 8.5 1v13c-2.5-2-5.5-2-8.5-1zM20.5 5.5c-3-1-6-1-8.5 1v13c2.5-2 5.5-2 8.5-1z"/></svg>Читать</button>` : ""}${!out && x.text ? `<button class="ch-listen" data-listen="${escH(x.id)}" title="Прослушать ответ" aria-label="Прослушать ответ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>Прослушать</button>` : ""}</time></div>`;
 }
 /* Что сделано за ход (YouTube 26.10: «в чате не было информации о выполнении команды»): ✓ готово, ✕ не вышло (с причиной),
    «Разрешение: … — разрешено / отказано». Больше трёх — «ещё N» (раскрыть). */
@@ -319,9 +326,21 @@ async function chatAddFiles(list) {
   chAtts = chAtts.slice(0, 10);
   chatAttsRender();
 }
+/* Длинная вставка — вложением (№918, владелец 20.11: «вставил текст на 21000 символов… удобнее, если большое — превращается
+   в файл»), как в виджете: поле — для вопроса, модель получает текст целиком; нажатие на карточку — текст обратно в поле. */
+const PASTE_AS_FILE = 2000;
+async function chatAddPasted(txt) {
+  const f = new File([txt], "Вставленный текст.txt", { type: "text/plain" });
+  chAtts.push({ kind: "file", name: f.name, b64: await chatB64(f), size: f.size, pasted: txt });
+  chAtts = chAtts.slice(0, 10); chatAttsRender();
+}
+const pasteTitle = (a) => `${a.pasted.length.toLocaleString("ru-RU")} симв. — нажмите, чтобы вернуть текст в поле`;
 function chatAttsRender() {
-  $("#ch-atts").innerHTML = chAtts.map((a, i) => `<span class="ch-chip">${a.kind === "image" ? `<img src="${escH(a.url)}" alt="">` : `<i>${escH((a.name.split(".").pop() || "").slice(0, 4).toUpperCase())}</i>`}<b>${escH(a.name)}</b><button data-i="${i}" title="Убрать" aria-label="Убрать">✕</button></span>`).join("");
-  $$("#ch-atts button").forEach(b => b.onclick = () => { chAtts.splice(+b.dataset.i, 1); chatAttsRender(); });
+  $("#ch-atts").innerHTML = chAtts.map((a, i) => `<span class="ch-chip${a.pasted ? " pasted" : ""}"${a.pasted ? ` data-p="${i}" title="${escH(pasteTitle(a))}"` : ""}>${a.kind === "image" ? `<img src="${escH(a.url)}" alt="">` : `<i>${escH((a.name.split(".").pop() || "").slice(0, 4).toUpperCase())}</i>`}<b>${escH(a.name)}</b><button data-i="${i}" title="Убрать" aria-label="Убрать">✕</button></span>`).join("");
+  $$("#ch-atts button").forEach(b => b.onclick = (ev) => { ev.stopPropagation(); chAtts.splice(+b.dataset.i, 1); chatAttsRender(); });
+  $$("#ch-atts .ch-chip.pasted").forEach(c => c.onclick = () => {
+    const a = chAtts[+c.dataset.p], t = $("#ch-text"); chAtts.splice(+c.dataset.p, 1);
+    t.value = a.pasted + (t.value.trim() ? "\n\n" + t.value : ""); t.dispatchEvent(new Event("input")); chatAttsRender(); t.focus(); });
   chatGoSync();
 }
 function chatSend() {
@@ -330,7 +349,7 @@ function chatSend() {
   const atts = chAtts;
   t.value = ""; t.style.height = ""; chAtts = []; chatAttsRender(); $("#ch-res").textContent = "";
   if (!core.connected) $("#ch-res").textContent = "Нет связи с ядром — сообщение не потеряется: отправлю, как только ядро вернётся";
-  core.sendLater("say", { text: q, files }).then(() => { if (/отправлю, как только/.test($("#ch-res").textContent)) $("#ch-res").textContent = ""; })
+  core.sendLater("say", { text: q, files, typed: true }).then(() => { if (/отправлю, как только/.test($("#ch-res").textContent)) $("#ch-res").textContent = ""; })
     .catch(e => {   // не дошло — текст обратно в поле, набирать заново не нужно (№200)
       if (!t.value.trim()) { t.value = q; t.dispatchEvent(new Event("input")); }
       if (!chAtts.length) { chAtts = atts; chatAttsRender(); }
@@ -341,6 +360,8 @@ $("#ch-file").onchange = (e) => { chatAddFiles([...e.target.files]); e.target.va
 $("#ch-text").addEventListener("paste", (e) => {
   const files = [...(e.clipboardData && e.clipboardData.items || [])].filter(x => x.kind === "file").map(x => x.getAsFile()).filter(Boolean);
   if (files.length) { e.preventDefault(); chatAddFiles(files); return; }
+  const txt = e.clipboardData && e.clipboardData.getData("text");
+  if (txt && txt.length > PASTE_AS_FILE) { e.preventDefault(); chatAddPasted(txt); return; }
   // WebKitGTK часто не отдаёт странице картинку из буфера — спрашиваем окно (Api.clipboard_image, как в виджете)
   if (e.clipboardData && !e.clipboardData.getData("text")) { e.preventDefault(); chatClipImage(); }
 });

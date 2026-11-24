@@ -59,7 +59,7 @@ ok("instruct" not in seen[-1], "свой сервер голоса челове�
 
 # --- служба голосов: манера на фразу — и встроенным дикторам, и голосам по описанию ---
 app = (ROOT / "server/voices/app.py").read_text(encoding="utf-8")
-ok('spec.get("kind") in ("speaker", "design") or role_for(spec) == "cosy"' in app, "служба голосов: тон фразы — встроенным, по описанию и CosyVoice3")
+ok('if body.get("instruct") and spec.get("kind") in ("speaker", "design"):' in app, "служба голосов: тон фразы — встроенным и голосам по описанию")
 
 # --- синтез ответа и лицо ---
 er = (ROOT / "core/engine_remote.py").read_text(encoding="utf-8")

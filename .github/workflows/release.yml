@@ -138,6 +138,21 @@ jobs:
           cp dewiar-notes-*.txt dewiar-notes.txt
           for f in Dewiar-[0-9]*-hands.apk; do [ -f "$f" ] && cp "$f" Dewiar-hands.apk; done
           for f in Dewiar-[0-9]*.apk; do case "$f" in *-hands.apk) ;; *) cp "$f" Dewiar.apk;; esac; done
+          # 1.0.67 (№1005: «Версия не обновляется» — dewiar.pro из сети человека не открывается): сведения о выпуске для
+          # обновления мимо сайта — …/releases/latest/download/Dewiar-latest.json (core/updater.py GH_JSON), адреса полные
+          V=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' ../core/version.py) R="https://github.com/$GITHUB_REPOSITORY/releases/download/v$V" python3 - <<'PY'
+          import glob, hashlib, json, os
+          V, R = os.environ["V"], os.environ["R"]
+          def item(f, **kw):
+              return dict(kw, url=f"{R}/{f}", sha256=hashlib.sha256(open(f, "rb").read()).hexdigest(), size=os.path.getsize(f))
+          out = {"name": "Dewiar", "version": V, "source": "github"}
+          deb, exe = glob.glob(f"dewiar-assistant_{V}_all.deb"), glob.glob(f"Dewiar-Setup-{V}-online.exe")
+          if deb:
+              out.update(item(deb[0], deb=f"{R}/{deb[0]}"))
+          if exe:
+              out["windows"] = item(exe[0], version=V, exe=f"{R}/{exe[0]}")
+          json.dump(out, open("Dewiar-latest.json", "w"), ensure_ascii=False, indent=1)
+          PY
           ls -la
 
       - name: Приложить к выпуску и написать, где что скачать
@@ -147,7 +162,7 @@ jobs:
           V=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' core/version.py)
           PH=$(sed -n 's/.*static final String VERSION = "\([0-9.]*\)".*/\1/p' android/src/pro/dewiar/app/BuildInfo.java)
           say() { out=$("$@" 2>&1) || { echo "::error::$* → $out"; echo "$out"; return 1; }; echo "$out"; }   # ошибка — в замечания запуска
-          say gh release upload "v$V" dist/*.deb dist/*.exe dist/*.txt $(ls dist/*.apk 2>/dev/null) --clobber
+          say gh release upload "v$V" dist/*.deb dist/*.exe dist/*.txt dist/Dewiar-latest.json $(ls dist/*.apk 2>/dev/null) --clobber
           R="https://github.com/$GITHUB_REPOSITORY/releases/download/v$V"
           L="https://github.com/$GITHUB_REPOSITORY/releases/latest/download"
           {
@@ -155,7 +170,7 @@ jobs:
             echo
             echo "## Скачать — Dewiar $V · телефон $PH"
             echo
-            echo "Проще всего — страница **[dewiar.pro/dwrapp/download.php](https://dewiar.pro/dwrapp/download.php)**: сама узнаёт устройство и даёт свежую версию."
+            echo "Проще всего — страница **[dewiar.pro/dwrapp/download](https://dewiar.pro/dwrapp/download)**: сама узнаёт устройство и даёт свежую версию."
             echo
             echo "| Где | Файл этой версии | Всегда самая свежая |"
             echo "|---|---|---|"

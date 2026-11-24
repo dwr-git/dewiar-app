@@ -19,6 +19,9 @@ class NameMixin:
             if kind == "stop":
                 self._stop_check(pcm, uid)
                 continue
+            if kind == "media_stop":
+                self._media_stop_verify(pcm, uid)
+                continue
             if self._check_voiceprint(kind, pcm, uid):
                 continue
             checker = self.wake_checker()
@@ -35,8 +38,11 @@ class NameMixin:
                 continue
             pid, _ = find_name(text, self._wake_aliases(), strict=True)
             short = len(pcm) / 2 / RATE <= 1.6 and len(text.split()) <= 2
-            if not pid and self.vosk_wake_check == uid and short and text and self._name_like(text):
-                # «Лира» одна, с паузой: точная модель ослышала короткое имя («Лиру», «Ира») — это и было имя
+            if not pid and self.vosk_wake_check == uid and text and (
+                    (short and self._name_like(text)) or self._name_like(text, 0.7)):
+                # «Лира» одна, с паузой: точная модель ослышала короткое имя («Лиру», «Ира») — это и было имя.
+                # 20.11 (владелец: «приходится по 5 раз звать»): и в начале фразы — «Лера, какая погода» — если быстрый
+                # слух слышал имя, а первое слово точной модели на него похоже заметно (≥ 0,7): два слуха сходятся — зов
                 pid = self.personas.wake_map(kids=True).get(getattr(self, "_vosk_wake_word", "")) or None
             if pid and kind == "barge" and not self.status.get("aec_real") and self._is_self_echo(text, barge=True):
                 log.info("🔁 Имя поверх ответа — в моей же фразе из колонок, не перебиваю: «%s»", text[:80])
@@ -55,11 +61,13 @@ class NameMixin:
                     self.vosk_wake_check = -1
                     self._wake_count("wake_no")
                     self.wake_time = 0.0                            # следующая фраза — не «по имени»
-                    log.info("🎧 «%s» от быстрого слуха не подтвердилось — это не обращение, молча жду дальше", self._vosk_wake_word)
+                    log.info("🎧 «%s» от быстрого слуха не подтвердилось — это не обращение, жду дальше", self._vosk_wake_word)
                     self.set_state("idle")
+                    self._wake_dismiss()
                 continue
             if self.vosk_wake_check == uid:
                 self.vosk_wake_check = -1
+                self._wake_soft_tone = 0.0                  # подтвердилось — «отбоя» не будет
                 self._wake_count("wake_ok")
                 self._voice_turn_t = time.monotonic()
             log.info("🎤 Имя распознано точной моделью: «%s»", text)
@@ -93,6 +101,16 @@ class NameMixin:
                 self.health_use(what)
         except Exception:  # noqa: BLE001
             pass
+
+    def _wake_dismiss(self):
+        """Второй сигнал — «отбой» (владелец 22.11: «как в умных колонках, два звука: на ложное срабатывание — звук отбоя,
+        иначе нет ощущения, что всё закончилось»). Звучит, только если «слушаю» уже прозвучало до сверки, а точная модель имя
+        не подтвердила; подтвердилось или сигнала не было (вокруг разговор) — тишина."""
+        at = getattr(self, "_wake_soft_tone", 0.0)
+        self._wake_soft_tone = 0.0
+        if at and time.monotonic() - at < 15:
+            self.play_tone("dismiss")
+            log.info("🔕 Отбой: имя не подтвердилось")
 
     def _wake_was_false(self, why):
         """Человек сказал, что это было не ему («не тебе», «я не с тобой»), или остановил кнопкой ответ, начатый голосом:
@@ -231,7 +249,7 @@ class NameMixin:
             return spotted, 0
         return None, 0
 
-    def _name_like(self, text):
+    def _name_like(self, text, need=0.55):
         """Похоже ли короткое распознанное на ослышанное имя («Игрова», «Элла» вместо «Эва»), а не на ответ человека.
         Отчёт 11.10: «Лира» → «Слушаю…», затем быстрое «спасибо» / «как дела» принимались за ослышанное имя — фраза
         терялась, и снова «Слушаю…». Пусто или первое слово хоть немного похоже на имя (≥ 0,55) — имя; иначе — фраза."""
@@ -240,7 +258,7 @@ class NameMixin:
         if not w:
             return True
         names = [_norm(a).replace(" ", "") for al in self.aliases.values() for a in al]
-        return any(difflib.SequenceMatcher(None, w[0], a).ratio() >= 0.55 for a in names)
+        return any(difflib.SequenceMatcher(None, w[0], a).ratio() >= need for a in names)
 
     def listen_for_command(self, seconds=None):
         """Имя услышали без вопроса: ждём вопрос seconds секунд (без имени) и даём короткий сигнал. По умолчанию —

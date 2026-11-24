@@ -9,6 +9,36 @@
    llm.profiles в patch ядро заменяет целиком (settings._merge: удалённый профиль не должен вернуться), поэтому
    любая правка профиля шлёт весь словарь S.llm.profiles. */
 let openProf = null, profSig = "";
+/* Свой прокси сервиса (владелец 21.11: «обычно вносится отдельно IP, порт, логин и пароль — собирать ссылку сложно»): поля
+   по отдельности, ядру — одной строкой (net.normalize_proxy понимает её). Вставили всю строку от продавца прокси в «Адрес» —
+   разберём сами. */
+function pxParse(v) {
+  const o = { type: "http", host: "", port: "", user: "", pass: "" }; v = String(v || "").trim(); if (!v) return o;
+  let m = /^(socks5h?|socks|https?):\/\//i.exec(v); if (m) { o.type = /^socks/i.test(m[1]) ? "socks5" : "http"; v = v.slice(m[0].length); }
+  m = /^([^:@\s]+):([^@\s]*)@([^:\/@\s]+):(\d{1,5})\/?$/.exec(v);                 // логин:пароль@адрес:порт
+  if (m) return Object.assign(o, { user: decodeURIComponent(m[1]), pass: decodeURIComponent(m[2]), host: m[3], port: m[4] });
+  m = /^([^:\/@\s]+):(\d{1,5}):([^:@\s]+):(\S+)$/.exec(v);                           // адрес:порт:логин:пароль
+  if (m) return Object.assign(o, { host: m[1], port: m[2], user: m[3], pass: m[4] });
+  m = /^([^:\/@\s]+)(?::(\d{1,5}))?\/?$/.exec(v);                                     // адрес[:порт]
+  if (m) return Object.assign(o, { host: m[1], port: m[2] || "" });
+  return Object.assign(o, { host: v });
+}
+function pxCompose(o) {
+  const host = String(o.host || "").trim(); if (!host) return "";
+  if (/[:@\/]/.test(host)) { const p = pxParse(host); if (p.host !== host) return pxCompose(Object.assign({}, p, o.type && !/:\/\//.test(host) ? { type: o.type } : {})); }
+  const cred = o.user ? `${encodeURIComponent(o.user)}:${encodeURIComponent(o.pass || "")}@` : "";
+  return `${o.type === "socks5" ? "socks5" : "http"}://${cred}${host}${o.port ? ":" + String(o.port).trim() : ""}`;
+}
+function pxFields(id, v) {          // разметка полей прокси (id — приставка для data-px, v — нынешняя строка)
+  const o = pxParse(v);
+  return `<div class="px-row" data-pxbox="${id}"><label class="f px-type">Тип<select data-px="type"><option value="http"${o.type === "http" ? " selected" : ""}>HTTP</option><option value="socks5"${o.type === "socks5" ? " selected" : ""}>SOCKS5</option></select></label>`
+    + `<label class="f px-host">Адрес<input data-px="host" value="${escH(o.host)}" placeholder="185.12.33.4" autocomplete="off" spellcheck="false"></label>`
+    + `<label class="f px-port">Порт<input data-px="port" value="${escH(o.port)}" inputmode="numeric" placeholder="8000" autocomplete="off"></label>`
+    + `<label class="f px-user">Логин<input data-px="user" value="${escH(o.user)}" placeholder="если есть" autocomplete="off" spellcheck="false"></label>`
+    + `<label class="f px-pass">Пароль<input data-px="pass" type="password" value="${escH(o.pass)}" placeholder="если есть" autocomplete="new-password"></label></div>`;
+}
+function pxRead(box) { const o = {}; box.querySelectorAll("[data-px]").forEach(i => { o[i.dataset.px] = i.value.trim(); }); return pxCompose(o); }
+
 function uid() { return "p" + Math.random().toString(36).slice(2, 8); }
 function renderProfiles() {
   const box = $("#profiles"); box.innerHTML = "";
@@ -37,6 +67,7 @@ function renderProfiles() {
       <div class="mpick" id="mp-${id}" hidden></div>
       ${p.cloud ? "" : `<div class="f econ"><span>Экономный режим</span><div class="econ-row"><input type="text" data-f="economy" list="ml-${id}" placeholder="выключен">
         <button class="btn small" data-a="econ">Подобрать</button></div><span class="hint">Недорогая модель того же сервиса для простых вопросов — «привет», «что такое…». Поручения, длинное и сложное — основной модели; не ответит — ответит основная.</span></div>`}
+      ${p.cloud ? "" : `<div class="f px-f"><span>Прокси — если сервис не открывается из вашей страны</span>${pxFields(id, p.proxy)}<span class="hint">Пусто — напрямую. Через прокси пойдут только запросы к этому сервису.</span></div>`}
       <label class="f">Максимум токенов в ответе<input type="number" data-f="max_tokens" placeholder="600"></label>
       <label class="f">Температура<input type="number" step="0.1" min="0" max="2" data-f="temperature" placeholder="0.7"></label>
       <label class="f" style="justify-content:end"><span><input type="checkbox" data-f="disable_thinking"> отключать «размышления» (Qwen3 и подобные в vLLM)</span></label>
@@ -49,6 +80,8 @@ function renderProfiles() {
       if (p.cloud && k === "kind") { inp.value = "openai"; inp.disabled = true; inp.title = "Облако Dewiar отвечает по OpenAI-протоколу"; }   // №706
       inp.onchange = () => { let v = inp.type === "checkbox" ? inp.checked : inp.value; if (inp.type === "number") v = v === "" ? null : +v; S.llm.profiles[id][k] = v; save({ llm: { profiles: S.llm.profiles } }, true).then(renderProfiles); };
     });
+    const pxb = el.querySelector("[data-pxbox]");
+    if (pxb) pxb.addEventListener("change", () => { S.llm.profiles[id].proxy = pxRead(pxb); save({ llm: { profiles: S.llm.profiles } }, true).then(renderProfiles); });
     $(".head input", el).onclick = (ev) => { ev.stopPropagation(); save({ llm: { active: id } }).then(renderProfiles); };
     $(".head .btn", el).onclick = (ev) => { ev.stopPropagation(); openProf = openProf === id ? null : id; renderProfiles(); };
     const res = $(".head .res", el);
@@ -548,7 +581,7 @@ function renderDone(d) {
     all.filter(a => a.got).forEach(a => chips.push(`<span class="dach on" title="${dEsc(a.what)} · получено">${a.icon} ${dEsc(a.name)}</span>`));
     if (next) chips.push(`<span class="dach" title="${dEsc(next.what)} · сейчас ${next.val} из ${next.n}">${next.icon} ${Math.min(next.val, next.n)}/${next.n}</span>`);
   }
-  head.innerHTML = `<div class="dnum"><b>${d.today}</b><span>${d.today ? dela(d.today) + " сегодня" : "дел сегодня"}</span></div>`
+  head.innerHTML = `<div class="dnum"><b>${d.today}</b><span>Сделано сегодня</span></div>`
     + `<div class="dmid"><div class="dstreak">${d.streak >= 2 ? `🔥 ${d.streak} ${dney(d.streak)} подряд` : d.today ? "Первый день серии" : d.total ? "Отметьте дело — серия продолжится" : "Сделали дело — отметьте его"}`
     + `<small>всего ${d.total} · лучший день ${d.best_day} · лучшая серия ${d.best_streak}</small></div><div class="dachs">${chips.join("")}</div></div>`
     + `<div class="dweek" aria-label="Дела за неделю">${d.week.map((w, i) => `<div title="${w.day}: ${w.n}"><i style="height:${Math.round(6 + 52 * w.n / max)}px"${i === 6 ? ' class="now"' : ""}></i><small>${WD[new Date(w.day + "T12:00").getDay()]}</small></div>`).join("")}</div>`;

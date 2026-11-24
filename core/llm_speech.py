@@ -153,7 +153,11 @@ class CodeFilter:
 _FILE_EXT = r"(?:html?|pdf|pptx?|docx?|xlsx?|csv|json|md|txt|py|js|css|zip|png|jpe?g|svg|mp3|wav|mp4)"
 
 
-_SPEAK = [(r"(?:https?://|www\.)\S+", ""),
+from speechnorm import DOMAIN_RX  # noqa: E402
+
+_SPEAK = [(r"https?://\S+", ""),
+          (DOMAIN_RX, r"\1"),                                              # сайт — его именем, до правила путей ниже
+          (r"www\.\S+", ""),
           (r"(?<![\w.])(?:[~/]?[\w.-]+/)+[\w-]+\." + _FILE_EXT + r"\b", ""),
           (r"(?<![\w.])(?:/?[A-Za-z0-9_.~-]+/){2,}[A-Za-z0-9_.-]*", ""),
           (r"(?<![\w.])([\w-]+)\." + _FILE_EXT + r"\b", r"\1"),

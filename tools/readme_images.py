@@ -238,7 +238,7 @@ def main():
 
 def site_faces(tmp):
     """Круглые лица всей команды (team-<id>.webp, прозрачные углы) и team.json — для раздела «Команда» на странице
-    «Скачать» (server/dwrapp/download.php): там они на HTML, чтобы и на телефоне подписи читались."""
+    «Скачать» (server/dwrapp/download): там они на HTML, чтобы и на телефоне подписи читались."""
     ps = people()
     for k in ("lira", "patrik"):
         ps[k]["photo"] = f"av/{k}.webp"

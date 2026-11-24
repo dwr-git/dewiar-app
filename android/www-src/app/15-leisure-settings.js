@@ -120,7 +120,7 @@ function tasksHtml() {
     + q.map(x => `<div class="it"><div class="bd"><b>${esc(x.title)}</b><small>⏳ отправляю…</small></div></div>`).join("")
     + taskSentList().map(taskSentHtml).join("")
     + (ts.length ? `<div class="bugh">Задачи</div>` + ts.map(([id, t]) => `<details class="dday task ${esc(t.status || "")}"${t.status === "done" && (t.files || []).length ? " open" : ""}><summary><div class="bd"><b>${esc(t.title)}</b><small><span class="tst">${esc(TASK_RU[t.status] || t.status || "")}</span>${t.where === "cloud" ? " · в облаке" : ""}${t.activity && t.status === "running" ? " · " + esc(t.activity) : ""}</small></div></summary>
-        <div class="dtext tk">${t.question && t.status === "waiting" ? `<p><b>Вопрос:</b> ${esc(t.question)}</p>` : ""}${t.result ? `<p>${mdLite(t.result)}</p>` : `<p class="hint">${esc(t.goal || "")}</p>`}${t.error ? `<p style="color:#FF8FA8">${esc(t.error)}</p>` : ""}${taskFiles(t)}
+        <div class="dtext tk" translate="no">${t.question && t.status === "waiting" ? `<p><b>Вопрос:</b> ${esc(t.question)}</p>` : ""}${t.result ? `<p>${mdLite(t.result)}</p>` : `<p class="hint">${esc(t.goal || "")}</p>`}${t.error ? `<p style="color:#FF8FA8">${esc(t.error)}</p>` : ""}${taskFiles(t)}
         ${t.status === "waiting" && t.where !== "cloud" ? `<div class="tkans"><textarea rows="2" data-ans-t="${esc(id)}" placeholder="Ваш ответ — задача продолжит"></textarea><button class="btn p" data-ans="${esc(id)}">Ответить</button></div>` : ""}
         <button class="tkdel" data-del="${esc(id)}"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Удалить задачу</button></div></details>`).join("") : "");
 }
@@ -169,11 +169,18 @@ function renderSoul() {
   $$("#soul-tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === soulTab));
   const off = on ? "" : `<div class="card"><b>Нужна синхронизация</b><p class="hint">Дневник и душу персонажей ведёт компьютер с Dewiar — они приходят сюда через синхронизацию. Нужен тот же ключ Dewiar или вход аккаунтом, что на компьютере.</p><button class="btn p" id="so-sync">Открыть настройки</button></div>`;
   if (soulTab === "diary") {
-    const days = Object.keys(m.diary).sort().reverse(), ins = m.insights;
+    // №904 (19.11, «открываю Душу — приложение замирает»): дневник за месяцы — сотни записей сразу целиком размечались в
+    // страницу. Теперь — последние 30 дней («Показать ещё» — следующие), а текст дня размечается, только когда его открыли
+    const days = Object.keys(m.diary).sort().reverse(), ins = m.insights, shown = +box.dataset.days || 30;
+    const snip = (t) => { t = String(t || ""); return t.slice(0, 600).replace(/^#+ [^\n]*$/gm, "").replace(/[#*_]/g, "").replace(/\s+/g, " ").trim().slice(0, 120); };
     box.innerHTML = off + (ins && (ins.lines || []).length ? `<div class="card soulins"><small class="hint" style="margin:0">Выводы на завтра${ins.title ? " · «" + esc(ins.title) + "»" : ""}</small>${ins.lines.map(x => `<div>• ${esc(x)}</div>`).join("")}</div>` : "")
-      + (days.length ? days.map(k => { const e = m.diary[k]; const night = /## 🌙/.test(e.text);
-        return `<details class="dday"><summary><div class="tm">${esc(dayHuman(k))}</div><div class="bd"><b>${esc(e.title || (night ? "Ночная запись" : "Записи дня"))}</b><small>${esc(e.mood || "")}${e.mood ? " · " : ""}${esc(String(e.text).replace(/^#+ [^\n]*$/gm, "").replace(/[#*_]/g, "").replace(/\s+/g, " ").trim().slice(0, 120))}</small></div></summary><div class="dtext">${mdLite(e.text)}</div></details>`; }).join("")
+      + (days.length ? days.slice(0, shown).map(k => { const e = m.diary[k] || {}; const night = /## 🌙/.test(String(e.text || "").slice(0, 4000));
+        return `<details class="dday" data-k="${esc(k)}"><summary><div class="tm">${esc(dayHuman(k))}</div><div class="bd"><b>${esc(e.title || (night ? "Ночная запись" : "Записи дня"))}</b><small>${esc(e.mood || "")}${e.mood ? " · " : ""}${esc(snip(e.text))}</small></div></summary><div class="dtext" translate="no"></div></details>`; }).join("")
+        + (days.length > shown ? `<button class="btn w" id="so-more">Показать ещё (${days.length - shown})</button>` : "")
         : (on ? `<div class="empty">Дневник пока пуст.<br>Его ведёт ассистент на компьютере: ночью пишет о прожитом дне — о разговорах и там, и здесь.</div>` : ""));
+    $$("details.dday", box).forEach(d => d.addEventListener("toggle", () => { const t = $(".dtext", d);
+      if (d.open && t && !t.dataset.done) { t.dataset.done = "1"; t.innerHTML = mdLite(String((m.diary[d.dataset.k] || {}).text || "").slice(0, 60000)); } }));
+    if ($("#so-more")) $("#so-more").onclick = () => { box.dataset.days = shown + 30; renderSoul(); };
   } else if (soulTab === "soul") {
     const p = persona(), names = [...new Set([p.name, ...Object.keys(m.souls)])];
     const cur = box.dataset.sname && names.includes(box.dataset.sname) ? box.dataset.sname : p.name;
@@ -181,7 +188,7 @@ function renderSoul() {
       ${names.length > 1 ? `<div class="chips">${names.map(n => `<button class="chip${n === cur ? " on" : ""}" data-n="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}
       ${box.dataset.edit === "soul" ? `<label class="f"><span>Душа · ${esc(cur)}</span><textarea id="so-text" rows="14" placeholder="Душа появится, когда в дневнике наберётся пара ночных записей.">${esc((m.souls[cur] || {}).text || "")}</textarea></label>
       <div class="row2"><button class="btn p" id="so-save" style="flex:1">Сохранить</button><button class="btn" id="so-cancel" style="flex:1">Отмена</button></div>`
-      : `${((m.souls[cur] || {}).text || "").trim() ? `<div class="dtext soulv">${mdLite(m.souls[cur].text)}</div>` : `<div class="empty">Душа появится, когда в дневнике наберётся пара ночных записей.</div>`}
+      : `${((m.souls[cur] || {}).text || "").trim() ? `<div class="dtext soulv" translate="no">${mdLite(m.souls[cur].text)}</div>` : `<div class="empty">Душа появится, когда в дневнике наберётся пара ночных записей.</div>`}
       <button class="btn w" id="so-edit">Изменить</button>`}</div>`;
     $$(".chip[data-n]", box).forEach(b => b.onclick = () => { box.dataset.sname = b.dataset.n; box.dataset.edit = ""; renderSoul(); });
     if ($("#so-edit")) $("#so-edit").onclick = () => { box.dataset.edit = "soul"; renderSoul(); };
@@ -191,7 +198,7 @@ function renderSoul() {
     box.innerHTML = off + `<div class="card"><p class="hint" style="margin-top:0">Принципы, которые все персонажи соблюдают всегда — с любым характером и настроением. Пишете вы; правка уйдёт и на компьютер.</p>
       ${box.dataset.edit === "const" ? `<label class="f"><span>Конституция</span><textarea id="co-text" rows="16" placeholder="Придёт с компьютера после синхронизации.">${esc(m.constitution || "")}</textarea></label>
       <div class="row2"><button class="btn p" id="co-save" style="flex:1">Сохранить</button><button class="btn" id="co-cancel" style="flex:1">Отмена</button></div>`
-      : `${(m.constitution || "").trim() ? `<div class="dtext soulv">${mdLite(m.constitution)}</div>` : `<div class="empty">Придёт с компьютера после синхронизации.</div>`}
+      : `${(m.constitution || "").trim() ? `<div class="dtext soulv" translate="no">${mdLite(m.constitution)}</div>` : `<div class="empty">Придёт с компьютера после синхронизации.</div>`}
       <button class="btn w" id="co-edit">Изменить</button>`}</div>`;
     if ($("#co-edit")) $("#co-edit").onclick = () => { box.dataset.edit = "const"; renderSoul(); };
     if ($("#co-cancel")) $("#co-cancel").onclick = () => { box.dataset.edit = ""; renderSoul(); };
@@ -210,7 +217,7 @@ const CLOUD = {
   anthropic: { name: "Claude (Anthropic)", url: "https://api.anthropic.com/v1", model: "claude-sonnet-5-5", key: "https://platform.claude.com/settings/keys" },
   // признанные поставщики напрямую (20.10): официальные OpenAI-совместимые адреса; модель — первая из rec, что есть у сервиса
   gemini: { name: "Google Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-flash-latest", key: "https://aistudio.google.com/apikey",
-            rec: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-pro-latest"] },
+            rec: ["gemini-flash-latest", "gemini-pro-latest", "gemini-flash-lite-latest"] },   // «-latest» — у Google всегда новейшая
   kimi: { name: "Kimi (Moonshot)", url: "https://api.moonshot.ai/v1", model: "kimi-latest", key: "https://platform.moonshot.ai/console/api-keys",
           rec: ["kimi-latest", "kimi-k2-turbo-preview", "kimi-k2-0905-preview", "moonshot-v1-32k"] },
   glm: { name: "GLM (Z.ai)", url: "https://api.z.ai/api/paas/v4", model: "glm-4.6", key: "https://z.ai/manage-apikey/apikey-list", rec: ["glm-4.6", "glm-4.5-air", "glm-4.5"] },
@@ -334,7 +341,9 @@ async function openLessons() {
     const l = items.find(x => x.id === b.dataset.id); if (!l) return;
     if (!l.video && l.youtube) return D.openUrl(l.youtube);
     const v = $("#lsn-v"); v.poster = l.poster || ""; v.src = l.video; $("#lsn-t").textContent = `Урок ${l.n} · ${l.title}`;
-    $("#lsn-player").hidden = false; $("#lessons-body").scrollTop = 0; v.play().catch(() => { });
+    // плеер — над списком: долистали до урока внизу и нажали — звук был, а видео — за краем экрана (владелец 20.11);
+    // прокручиваем к плееру тот лист, что прокручивается на самом деле (scrollTop у #lessons-body ничего не делал)
+    const pl = $("#lsn-player"); pl.hidden = false; pl.scrollIntoView({ block: "start", behavior: "smooth" }); v.play().catch(() => { });
   });
 }
 

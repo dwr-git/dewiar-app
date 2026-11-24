@@ -71,7 +71,7 @@ ok(not EM.MusicMixin._listen_watchdog(w), "окно ещё открыто — н
 w.follow_up_until, w.hold = 0, {"pcm": []}
 ok(not EM.MusicMixin._listen_watchdog(w), "держат «говорить» — не трогаем")
 ea = srctext.text(ROOT, "core/engine_answer.py")
-ok('if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0):\n            follow = 0.0' in ea,
+ok('if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0) or getattr(turn, "typed", False):\n            follow = 0.0' in ea,
    "микрофон выключен — «ваша очередь» после ответа не открывается")
 au = srctext.text(ROOT, "core/engine_audio.py")
 mu = (ROOT / "core/engine_music.py").read_text(encoding="utf-8")

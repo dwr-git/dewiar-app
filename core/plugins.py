@@ -345,8 +345,14 @@ class Plugins:
         toks = re.findall(r"[a-zа-яё0-9]+", str(text or "").lower().replace("ё", "е"))
         if not toks:
             return None
+        # «Нарисуй схему: как заявка проходит…» — схема (её Лира рисует сама, блоком mermaid), а не рисунок: «Художника» не
+        # предлагаем (20.11: справка «это умеет Художник» и проверка «нарисуй схему» тянули модель в разные стороны)
+        from quality import DIAGRAM_ASK
+        diagram = bool(DIAGRAM_ASK.search(str(text or "")))
         on = self._on()
         for pid in self.OFFER_NEED:
+            if diagram and pid == "artist":
+                continue
             p = self.items.get(pid)
             if not p or pid in on or not p.get("builtin"):
                 continue

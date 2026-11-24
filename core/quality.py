@@ -22,7 +22,7 @@ from quality_answer import (  # noqa: F401,E402 — прежние имена qu
     _FAKE_HEAD, FAKE_NUDGE, _FAKE_WAIT, FEATURE_DENY, feature_deny, _FILLER, found_pics_claim, _FOUND_SAID, _GEN_PIC,
     _GENERIC, _HM, _HM_COLON, hold_sentence, hold_step, _HONEST_FAIL, HTML_DOC, INFO_TOOLS_ALL, INFO_TOOLS_Q,
     invented_numbers, system_invented, SYS_ASK, note_claim, plugin_offer_missed, habit_said, _LOOK_ONLY, looks_like_promise, looks_like_refusal, _MIN_SAID, _MONEY_ASK, money_claim,
-    _MONEY_DONE, _MONEY_PLAN, _MONEY_VERB, _NET, NO_DEALS, _NOW, number_mismatch, _NUMW, _OFFER, OPEN_ASK,
+    _MONEY_DONE, _MONEY_PLAN, _MONEY_VERB, _NET, NO_DEALS, NO_TOOLS_GIVEUP, no_tools_claim, _NOW, number_mismatch, _NUMW, _OFFER, OPEN_ASK,
     open_claim, OPEN_TOOLS, _OPENED, PAGE_ASK, page_html_in, _PLACE_IN_ASK, _place_root, PLUGIN_ASK, PLUGIN_EDIT_ASK,
     PLUGIN_NOTE, plugin_skipped, PLUGIN_TOOLS, poem_check, POEM_LINES, poem_lines, _POEM_MANY, _POEM_SING,
     _POEM_TITLE, PROMISE, PROMISE_GIVEUP, PROMISE_NOW, promise_nudge, _RATE, RATE_ASK, _READ_ASK, REFUSAL,

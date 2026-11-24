@@ -107,7 +107,7 @@ t = Turn(1); t.asked = "Найди LIRA_02_OPERATING_SYSTEM.md"
 r1 = e._use_tool(t, {"name": "search_documents", "args": {"query": "x"}, "bracket": True}, None)
 r2 = e._use_tool(t, {"name": "send_telegram", "args": {"text": "привет"}, "bracket": True}, None)
 r3 = e._use_tool(t, {"name": "send_telegram", "args": {"text": "привет"}}, None)
-ok(r1 == "сделано" and "search_documents" in BRACKET_READ, "из скобок: поиск по документам (№603) — сразу")
+ok(__import__("outside_guard").plain(r1) == "сделано" and "search_documents" in BRACKET_READ, "из скобок: поиск по документам (№603) — сразу")
 ok(ASKED == ["Выполнить send_telegram?"] and "отказался" in r2 and r3 == "сделано",
    f"из скобок: отправка — только после «Выполнить?» (настоящий вызов — как раньше): {ASKED}")
 # владелец 19.11: «на завтра напомнить попросил — а она зачем-то спросила разрешение»: модель записала set_reminder текстом

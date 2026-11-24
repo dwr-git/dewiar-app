@@ -69,8 +69,8 @@ $$("nav button[data-p]").forEach(b => { const i = b.dataset.p === "diary" ? ICON
 // заголовок с id переписывается кодом целиком (textContent) — значок в нём не выжил бы, такие пропускаем
 $$("main section[id^='p-']").forEach(s => { const i = ICONS[s.id.slice(2)], h = s.querySelector("h1"); if (i && h && !h.id) h.insertAdjacentHTML("afterbegin", `<svg class="hi" viewBox="0 0 24 24">${i}</svg>`); });
 /* «?» у заголовка каждого раздела — как он работает, как настроить, что сказать голосом */
-// раздел студии → раздел руководства на сайте (server/dwrapp/guide.php, текст — data/guide.json)
-const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
+// раздел студии → раздел руководства на сайте (server/dwrapp/guide, текст — data/guide.json)
+const GUIDE_URL = "https://dewiar.pro/dwrapp/guide";
 const GUIDE_OF = { ideas: "ideas", devices: "sync", personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", music: "music", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
   me: "notes-memory", folder: "folder-docs", docs: "my-docs", senior: "senior", watch: "watch", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
   hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting",

@@ -74,7 +74,7 @@ function qaOpen(id) {
     + ((s.tips || []).length ? `<h4>Советы</h4><ul class="qa-tips">${li(s.tips)}</ul>` : "")
     + `<div class="qa-acts">${sec && $(`nav button[data-p="${sec}"]`) ? `<button class="btn primary" id="qa-go">Открыть раздел</button>` : ""}`
     + `<button class="btn" id="qa-lira">Не получилось — спросить Лиру</button>`
-    + `<a class="qa-site" href="${typeof GUIDE_URL !== "undefined" ? GUIDE_URL : "https://dewiar.pro/dwrapp/guide.php"}#${escH(s.id)}" target="_blank" rel="noopener">На сайте, со снимками</a></div>`;
+    + `<a class="qa-site" href="${typeof GUIDE_URL !== "undefined" ? GUIDE_URL : "https://dewiar.pro/dwrapp/guide"}#${escH(s.id)}" target="_blank" rel="noopener">На сайте, со снимками</a></div>`;
   $$("#qa-art .qa-try").forEach(b => b.onclick = async () => {
     b.disabled = true;
     try { await core.call("say", { text: s.say[+b.dataset.i] }); toast("Отправил Лире — смотрите виджет", 2500); } catch (e) { toast(e.message); }

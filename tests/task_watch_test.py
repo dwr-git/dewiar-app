@@ -171,6 +171,7 @@ me = types.SimpleNamespace(turn=None, state="idle", alarm=None, ask=fake_ask, _j
 _mm = next(c for c in vars(EM).values() if isinstance(c, type) and "_run_job" in vars(c))
 me.job_nothing = lambda text: _mm.job_nothing(text) if "job_nothing" in vars(_mm) else False   # 0.51: «ничего нового» — молчать
 me._run_job = lambda item, attempt=0: run(item, attempt)
+me._eve_done_today = lambda item: False                   # итог дня (20.11): здесь не вечер
 
 
 def run(item, attempt=0):

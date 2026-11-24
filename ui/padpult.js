@@ -311,7 +311,7 @@
     const steps = nt.concat(mem, PU.steps.map(s => ({ t: s.t, s: s.s })));
     if (PU.state === "thinking" && !PU.steps.some(s => s.s === "run")) steps.push({ t: "Собираю ответ", s: "run" });
     if (PU.state === "speaking") steps.push({ t: "Отвечаю", s: "done" });
-    el("#pu-steps").innerHTML = steps.slice(-5).map(s => `<li class="${s.s === "run" ? "run" : s.s === "error" ? "err" : "ok"}${s.k ? " " + s.k : ""}"><i aria-hidden="true"></i>${esc(s.t)}</li>`).join("");
+    el("#pu-steps").innerHTML = steps.slice(-3).map(s => `<li class="${s.s === "run" ? "run" : s.s === "error" ? "err" : "ok"}${s.k ? " " + s.k : ""}"><i aria-hidden="true"></i>${esc(s.t)}</li>`).join("");
   }
   const hhmm = (ts) => { try { return new Date(ts * 1000).toLocaleTimeString(window.dwLocale ? dwLocale() : "ru", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } };
   const ago = (ts) => { const m = Math.round((Date.now() / 1000 - ts) / 60); return m < 2 ? "только что" : m < 60 ? `${m} мин назад` : `в ${hhmm(ts)}`; };

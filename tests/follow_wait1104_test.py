@@ -81,7 +81,7 @@ def stub(follow_s=15):
     e.emit = lambda *a, **k: None
     e.play_tone = lambda k: None
     e._media_stop_word = lambda *a, **k: None
-    e.note = lambda m: e.calls.append(("note",))
+    e.note = lambda m, ttl=0: e.calls.append(("note",))
     return e
 
 

@@ -118,6 +118,8 @@ class QuickMixin:
                 if not m.get("repeat"):
                     self.reminders.remove(m["id"])
                     closed.append(m.get("text") or "")
+                else:
+                    self.reminders.done_round(m["id"])
                 lst.append({"title": m.get("text") or t, "rid": m["id"]})
             else:
                 lst.append({"title": t})

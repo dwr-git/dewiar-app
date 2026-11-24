@@ -16,9 +16,29 @@ const VISION_HINT = "К сообщению приложено фото. Если
 /* «слушай встреча с Ирой переносится… напомни мне завтра в 9» (экзамен 0.9.18) — модель отвечала «Слушаю тебя.»: «слушай»
    в начале длинной фразы — не просьба послушать, а присказка. Модели — без неё (в истории фраза остаётся как сказана) */
 const LISTEN_LEAD = /^\s*(?:слушай(?:те)?|послушай(?:те)?|слышь|смотри|короче)\s*[,!.—–-]*\s+(?=(?:\S+\s+){3}\S)/i;
+/* Вопрос, не ушедший из-за связи, — отправить самому, когда она вернётся (событие online, возврат в приложение, раз в 20 с),
+   если за это время не спросили другое и прошло не больше 10 минут */
+const NET_RETRY_MS = 10 * 60e3;
+let netRetry = null, netRetryTimer = 0;
+function netRetryArm(text, opts) {
+  netRetry = { text, opts, at: Date.now() };
+  clearInterval(netRetryTimer); netRetryTimer = setInterval(netRetryTry, 20000);
+}
+function netRetryTry() {
+  const r = netRetry;
+  if (!r) { clearInterval(netRetryTimer); return; }
+  if (Date.now() - r.opts.netFirst > NET_RETRY_MS || lastUserAct > r.at + 500) { netRetry = null; clearInterval(netRetryTimer); return; }
+  if (busy || navigator.onLine === false) return;
+  netRetry = null; clearInterval(netRetryTimer);
+  plog("info", "📶 связь вернулась — отправляю вопрос сам");
+  showBot("Связь вернулась — отправляю ваш вопрос", "wait");
+  ask(r.text, Object.assign({}, r.opts, { resent: true }));
+}
+window.addEventListener("online", () => setTimeout(netRetryTry, 1500));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && netRetry) setTimeout(netRetryTry, 1500); });
 async function ask(text, opts = {}) {
   text = String(text || "").trim(); if (!text) return;
-  if (!opts.hidden) { lastUserAct = Date.now(); fsMark("ask"); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
+  if (!opts.hidden && !opts.resent) { lastUserAct = Date.now(); fsMark("ask"); const t = triesState(); if (t.n < TRIES_MAX) { t.n++; saveS(); } }
   stopListen(); interrupt(true);
   if (!opts.hidden && !(opts.attach || []).length && PHOTO_NOW_RX.test(text)) {
     showYou(text); setState("thinking"); showBot("Включаю камеру — держите телефон ровно", "wait");
@@ -71,6 +91,7 @@ async function ask(text, opts = {}) {
   plog("info", `❓ ${clip(text)} → ${S.llm.cloud ? "Dewiar Облако" : (S.llm.name || S.llm.model || "модель")}`);
   const ctl = turnAbort = new AbortController();
   const sink = sentenceSink();
+  let cueArmed = false;                          // голос во время долгого действия (actCueArm) — один раз за ход
   if (!opts.hidden && CALC_TURN.test(text)) sink.holdNums(true);   // просят посчитать — числа до calc придерживаем
   if (!opts.hidden && !D.web && UPD_SELF_RX.test(text)) sink.holdAll(true);   // про версию приложения — сначала убедиться, что проверила
   const rudeNow = !opts.hidden && isRude(text);
@@ -122,10 +143,10 @@ async function ask(text, opts = {}) {
   creativeTurn = !opts.hidden && CREATIVE_ASK.test(text) && !reading(text);
   if (creativeTurn) plog("info", "🎨 творческая просьба — смелее (температура " + llmTemp() + ")");
   if (deep) { plog("info", "🧠 сложная просьба — модель подумает перед ответом"); showBot("Подумаю как следует — минутку", "wait"); }
-  let final = "", switchTo = null;
+  let final = "", switchTo = null, ranTools = false;
   lastDone = "";
   try {
-    let guided = false;                                      // руководство приложено к вопросу (как вызов app_help)
+    let guided = false, dayPlans = false;                   // руководство приложено к вопросу (как вызов app_help); планы дня — справкой
     const ctxParts = [turnContext(text)].concat(turnNotes);   // меняющееся — в справку к вопросу, подсказка остаётся прежней
     if (!opts.hidden) {
       const kb = await personaKnowledge(text);
@@ -138,15 +159,21 @@ async function ask(text, opts = {}) {
         guided = true; plog("info", "📖 вопрос о приложении — руководство приложено к вопросу");
         if (SANDBOX) SANDBOX.dev.push({ name: "app_help", args: clip(text, 80), argsObj: { query: text }, result: "руководство приложено к вопросу приложением", t: Date.now() });
       }
-      const pl = agendaPlans(text);                    // «что у меня в среду?» — запомненное и напоминания на этот день сразу
+      const pl = agendaPlans(text); dayPlans = !!pl;                    // «что у меня в среду?» — запомненное и напоминания на этот день сразу
       if (pl) ctxParts.push("ПЛАНЫ ПОЛЬЗОВАТЕЛЯ на этот день (кроме календаря):" + pl);
       if (DIAGRAM_ASK.test(text))                      // экзамен 15.10: «Схема готова, она уже на экране» — а схемы нет
         ctxParts.push("СЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши «схема готова» или «на экране», не нарисовав её, и не делай схему через make_app. Сначала блок, потом одна-две фразы о главном.");
     }
     // фото в вопросе (или только что снятое): перевод, документ, еда — как отвечать (идеи пользователей 24.10; компьютер — VISION_HINT)
     { const lm = msgs[msgs.length - 1]; if (lm && Array.isArray(lm.content) && lm.content.some(x => x.type === "image_url")) ctxParts.push(VISION_HINT); }
+    // «Чистый разговор» (1.0.61): беседа без дел — модели характер, разговор и главное; дело — модель просит действия (more_tools),
+    // и следующий круг идёт с полной подсказкой. Справка к вопросу и личное — те же, что и всегда
+    let lean = talkLeanOn() && !opts.hidden && !att.length && !kidsOn() && !guided && !dayPlans && !deep && !longGen && !photoTurn
+      && !DIAGRAM_ASK.test(text) && talkTurn(text, liveHistory()), leanKeep = false;
+    if (lean) { msgs[0].content = systemStable(true); plog("info", `🍃 чистый разговор: подсказка ${Math.round(msgs[0].content.length / 1000)} тыс. знаков, действия — по просьбе модели`); }
     putContext(msgs, ctxParts.filter(Boolean).join("\n\n"));
     putProfile(msgs, systemPersonal());               // личное — справкой в начале разговора, не в подсказке
+    let seenOut = "", outRead = false;               // безопасность 22.11: прочитанное в ходе и был ли текст извне (outsideCheck)
     const called = new Set(); let nudged = false;      // какие инструменты уже вызваны в этом ходе; напоминали ли «сделай по-настоящему»
     let netOk = true, netTurn = false;                 // «Сеть Лиры»: только первый круг хода; ответил ли узел (пометка в истории)
     if (guided) called.add("app_help");
@@ -158,7 +185,7 @@ async function ask(text, opts = {}) {
     const round1 = async (tools) => {
       for (let tries = 0; ; tries++) {
         try {
-          const r = await llmStream(msgs, tools, (p) => { if (turnAbort === ctl) sink.push(p); }, ctl.signal, Object.assign({ net: netOk }, deep ? { think: true } : {}, longGen ? { idle: 300000 } : {}));
+          const r = await llmStream(msgs, tools, (p) => { if (turnAbort === ctl) sink.push(p); }, ctl.signal, Object.assign({ net: netOk, voice: !!opts.voice }, deep ? { think: true } : {}, longGen ? { idle: 300000 } : {}));
           if (S.llm.cloud && !String(r.text || "").trim() && !r.calls.length && !r.finish && !ctl.signal.aborted)
             throw Object.assign(new Error("связь оборвалась — ответ пришёл пустым"), { net: true });
           if (tries) netHealed(tries);                 // повтор помог — это не сбой для разработчика (пакет 22.10, №189)
@@ -179,13 +206,18 @@ async function ask(text, opts = {}) {
     let xAsked = false;                              // экзамен 0.9.18: одна дополнительная проверка за ход (xfix)
     for (let round = 0; round < maxRounds; round++) {
       let r;
+      if (round && lean && !leanKeep) {               // понадобилось дело (more_tools или поправка) — дальше полная подсказка и все действия
+        lean = false; msgs[0].content = systemStable(); plog("info", "🍃 → полная подсказка: нужны действия");
+      }
+      leanKeep = false;
+      const specs = () => round < maxRounds - 1 ? (lean ? talkLeanSpecs() : toolSpecs()) : null;
       if (round) sink.round();                       // №435: следующий круг не повторяет уже сказанное
       try {
-        try { r = await round1(round < maxRounds - 1 ? toolSpecs() : null); }
+        try { r = await round1(specs()); }
         catch (e0) {                                  // недорогая модель не ответила — тот же вопрос основной
           if (!econ || round || sink.text().trim() || turnAbort !== ctl || ctl.signal.aborted) throw e0;
           plog("warn", `💸 недорогая модель ${econ} не ответила (${clip(e0.message || e0, 80)}) — отвечает основная`);
-          econ = ""; modelOnce = ""; r = await round1(round < maxRounds - 1 ? toolSpecs() : null);
+          econ = ""; modelOnce = ""; r = await round1(specs());
         }
         const lm = msgs[msgs.length - 1];
         if (lm && Array.isArray(lm.content) && !String(r.text || "").trim() && !r.calls.length) throw new Error("пустой ответ на снимок");
@@ -213,7 +245,8 @@ async function ask(text, opts = {}) {
         continue;
       }
       // и после других инструментов: «узнала погоду» (weather) и «сделала презентацию» словами — без make_app
-      const claim = !r.calls.length && !nudged && String(r.text || "").length < 1500 ? claimedAction(r.text || "", called, text) : null;
+      const aboutMe = ABOUT_ME.test(text) && !called.size;   // рассказ о себе — описание возможностей, не обещания
+      const claim = !aboutMe && !r.calls.length && !nudged && String(r.text || "").length < 1500 ? claimedAction(r.text || "", called, text) : null;
       if (claim) {
         nudged = true;
         // «Звоню маме», «Включаю Маяк», «Фотографирую» — а инструмент не вызван (модель повторила прошлый ответ из истории):
@@ -230,9 +263,9 @@ async function ask(text, opts = {}) {
       }
       const fix = !r.calls.length && !numChecked ? numberMismatch(r.text || "", doneCalls) : "";
       if (fix) { numChecked = true; msgs.push(aMsg(r.text), { role: "user", content: fix }); sink.push(" "); continue; }   // «на 79 минут», а поставлено 59
-      const rfix = !r.calls.length && !remindAsked && round < maxRounds - 1 ? remindClaim(r.text || "", called) : "";
+      const rfix = !aboutMe && !r.calls.length && !remindAsked && round < maxRounds - 1 ? remindClaim(r.text || "", called) : "";
       if (rfix) { remindAsked = true; plog("info", "✋ пообещала напомнить без напоминания — прошу поставить"); msgs.push(aMsg(r.text), { role: "user", content: rfix }); sink.push(" "); continue; }
-      const sfix = !r.calls.length && !nudged && round < maxRounds - 1 ? (remindMissing(text, called) || (!called.size ? savedClaim(text, r.text || "") : "")) : "";
+      const sfix = !aboutMe && !r.calls.length && !nudged && round < maxRounds - 1 ? (remindMissing(text, called) || (!called.size ? savedClaim(text, r.text || "") : "")) : "";
       if (sfix) { nudged = true; msgs.push(aMsg(r.text), { role: "user", content: sfix }); sink.push(" "); continue; }   // «Готово», а ничего не сделано (№66)
       const dfix = !r.calls.length && !drew && round < maxRounds - 1 ? diagramMissing(text, sink.text() + (r.text || ""), called) : "";
       if (dfix) { drew = true; msgs.push(aMsg(r.text), { role: "user", content: dfix }); sink.push(" "); continue; }   // «нарисуй схему» — словами
@@ -248,9 +281,10 @@ async function ask(text, opts = {}) {
       // «в Dewiar такого нет» без руководства; «через сколько дней» — без числа; поручение — «Я проверю.» (один раз за ход)
       const xfix = !opts.hidden && !r.calls.length && !xAsked && round < maxRounds - 1 ? (sameMinutesFix(text, doneCalls) || inventedFacts(text, sink.text() + (r.text || ""), called) || lawUnsourced(text, sink.text() + (r.text || ""), called)
         || imagesMissing(text, r.text || "", called) || appHelpMissing(text, r.text || "", called) || daysMissing(text, sink.text() + (r.text || ""), called)
-        || (!nudged ? orderUndone(text, r.text || "", called) : "")) : "";
+        || (!nudged && !aboutMe ? orderUndone(text, r.text || "", called) : "")) : "";
       if (xfix) { xAsked = true; msgs.push(aMsg(r.text), { role: "user", content: xfix }); sink.push(" "); continue; }
       if (!r.calls.length) break;
+      leanKeep = r.calls.every(c => TALK_LEAN_KEEP.has(c.name));   // только «запомнить» и «коллега» — беседа продолжается налегке
       msgs.push({ role: "assistant", content: (r.fromNet ? NET_WRAP : "") + (r.text || ""), tool_calls: r.calls.map(c => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.args || "{}" } })) });
       const shots = [];
       if (r.calls.some(c => HANDS_SET.has(c.name))) maxRounds = 30;
@@ -261,7 +295,12 @@ async function ask(text, opts = {}) {
         const key = c.name + " " + JSON.stringify(safeJSON(c.args));
         if (once.has(key)) { msgs.push({ role: "tool", tool_call_id: c.id, name: c.name, content: "(то же самое уже сделано этим ответом — не повторяй)" }); continue; }
         once.add(key);
-        try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
+        ranTools = true;
+        if (!cueArmed && !opts.hidden) { cueArmed = true; actCueArm(c.name, ctl, sink); }
+        if (c.name === "more_tools") res = "Действия подключены — следующим шагом вызови нужное и только потом говори о сделанном.";
+        else if (outsideCheck(c.name, safeJSON(c.args), text, seenOut, outRead)) {
+          res = outsideCheck(c.name, safeJSON(c.args), text, seenOut, outRead); plog("info", `🛡 ${c.name}: outside_guard`);
+        } else try { res = await runTool(c.name, safeJSON(c.args)); } catch (e) { res = "Ошибка: " + e.message; }
         plog("info", `🔧 ${c.name} → ${clip(String((res && res.text) || res || "").split("\n")[0], 90)}`);   // что сделано — видно в отчёте (№56)
         if (c.name === "calendar_add" && /^Записано/.test(String(res))) called.add("calendar_write");   // правда записано, а не только спросили
         if (c.name === "call_persona" && res && res.switchTo) { switchTo = res.switchTo; res = res.text; }
@@ -271,8 +310,10 @@ async function ask(text, opts = {}) {
         if (r.finish === "length" && /^Ошибка/.test(String(res)))   // ответ оборвался по лимиту — вызов пришёл не целиком
           res = String(res) + " (Твой ответ оборвался по лимиту длины, и вызов пришёл не целиком. Сделай короче: меньше текста и "
             + "комментариев, компактный код — и вызови снова.)";
+        seenOut = (seenOut + "\n" + String(res)).slice(-60000);
+        if (OUT_READ.has(c.name) && !/^Ошибка/.test(String(res))) { outRead = true; res = OUT_NOTE + String(res); }
         msgs.push({ role: "tool", tool_call_id: c.id, name: c.name, content: String(res).slice(0, 8000) });
-        doneCalls.push({ name: c.name, args: safeJSON(c.args), result: String(res).slice(0, 300) });
+        doneCalls.push({ name: c.name, args: safeJSON(c.args), result: String(res).replace(OUT_NOTE, "").slice(0, 300) });
       }
       if (shots.length) {                            // снимок с камеры — модели картинкой (сама модель со зрением, если есть)
         msgs.push({ role: "user", content: [{ type: "text", text: "Снимок с камеры телефона:" }, ...shots.map(u => ({ type: "image_url", image_url: { url: u } }))] });
@@ -319,6 +360,7 @@ async function ask(text, opts = {}) {
     plog("info", `💬 ответ ${((sink.text() || final).trim() || quiet).length} симв.${quiet ? " (сам: " + clip(quiet) + ")" : ""} за ${((Date.now() - t0) / 1000).toFixed(1)} с`);
     if (!opts.hidden) history.push({ role: "user", content: text + (att.length ? ` [приложено: ${att.map(a => a.kind === "image" ? "фото" : "файл «" + a.name + "»").join(", ")}]` : "") });
     history.push(Object.assign({ role: "assistant", content: (sink.text() || final).trim() || quiet, who: persona().id, t: Date.now() },
+      ranTools ? { acts: [...called].filter(n => !TALK_LEAN_KEEP.has(n) && n !== "more_tools").slice(0, 8) } : {},
       photoTurn ? { note: "[снимок с камеры показан на экране; показать снова — show_photo, новый — take_photo]" } : {}, netTurn ? { net: true } : {},
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }
@@ -349,6 +391,12 @@ async function ask(text, opts = {}) {
     }
     else if (e.human) { plog("warn", "облако: " + e.message); showBot(e.message, "err"); say(e.message); }       // облако Dewiar объясняет само: «много людей…»
     else if (!D.mock && SELF_HOST_RX.test(llmBase() + "/")) { const m = "Не получилось связаться с мозгом: " + SELF_HOST_TEXT; console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом: адрес модели указывает на сам телефон. Как поправить — на экране."); }
+    else if (e.net && !ranTools && !opts.hidden && !sink.text().trim() && Date.now() - (opts.netFirst || Date.now()) < NET_RETRY_MS) {
+      // №289 (идея, 17.11) и «Голос»: 112 вопросов за неделю на телефоне — «нет связи». Вопрос не теряется: связь вернулась —
+      // уходит сам (ничего ещё не сделано — повтор безопасен; за 10 минут — дальше уже не к месту)
+      netRetryArm(text, Object.assign({}, opts, { netFirst: opts.netFirst || Date.now() }));
+      const m = "Нет связи с мозгом ({1}). Вопрос отправится сам, как только связь вернётся.".replace("{1}", e.message); console.warn(m); showBot(m, "err"); say("Нет связи. Вопрос отправится сам, как только связь вернётся.");
+    }
     else { const m = "Не получилось связаться с мозгом: " + e.message + netHint(); console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом."); }
   } finally {
     if (turnAbort === ctl) { busy = false; turnAbort = null; }

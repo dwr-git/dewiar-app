@@ -44,7 +44,9 @@ class BrainCommands:
             return after
         if cmd == "llm_test":
             prof = a.get("profile") or {}
-            r = test_profile(prof)
+            import net
+            with net.profile_proxy(prof):                # свой прокси профиля (21.11) — и в проверке до сохранения
+                r = test_profile(prof)
             if r.get("tools_mode"):
                 key = self._tools_key(dict(prof, model=prof.get("model") or ""))
                 # проверка заодно узнала, как этот сервер принимает инструменты, — запомним, чтобы не проверять снова
@@ -61,12 +63,16 @@ class BrainCommands:
                     return {"on": on, "ready": False, "error": f"не получилось подключить мозг Dewiar: {e}"}
             return {"on": on, "ready": ready}
         if cmd == "llm_models":
-            return list_models(a.get("profile") or {})
+            import net
+            with net.profile_proxy(a.get("profile") or {}):
+                return list_models(a.get("profile") or {})
         if cmd == "llm_economy_suggest":                  # экономный режим: недорогая модель того же сервиса (economy.py)
             import economy
             pr = a.get("profile") or {}
             try:
-                ms = list_models(pr)
+                import net
+                with net.profile_proxy(pr):
+                    ms = list_models(pr)
             except Exception as e:  # noqa: BLE001
                 return {"model": "", "error": str(e)[:200]}
             return {"model": economy.suggest(ms, pr.get("model") or ""), "count": len(ms)}

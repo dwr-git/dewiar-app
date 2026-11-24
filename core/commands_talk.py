@@ -37,6 +37,8 @@ class TalkCommands:
                 text = self._attach_files(text, files, images)
             if text.strip() or images:
                 self._chat_keep_partial(self.turn)        # новый вопрос посреди ответа — написанное остаётся в ленте
+            if a.get("typed"):                            # набран в поле (не кнопка-подсказка) — после ответа фон не слушаем
+                self._typed_t = time.monotonic()
             self.ask(text, images)
             return True
         if cmd == "screenshot_attach":               # кнопка «снимок экрана» в поле вопроса
@@ -95,6 +97,11 @@ class TalkCommands:
             if self.state in ("speaking", "thinking", "listening"):
                 self._ptt_stop_at = now
                 by_voice = now - (getattr(self, "wake_time", 0.0) or 0.0) < 25   # начато голосом, а не кнопкой
+                # имя подтвердила точная модель (1.0.43, проверка каждого имени) — это был зов, а кнопка — просто «хватит»
+                # (владелец 20.11: «приходится по 5 раз звать»: после остановки ответа кнопкой Лира минуту не слышала имя)
+                if by_voice and now - float(getattr(self, "_voice_turn_t", -99.0) or -99.0) < 30:
+                    by_voice = False
+                    self.wake_time = 0.0
                 if self.state == "listening":
                     self.go_sleep("кнопка", media=False)     # второе нажатие — перестать слушать
                 else:
@@ -184,6 +191,11 @@ class TalkCommands:
         if cmd == "persona_set":
             self.switch_persona(a["id"])
             return True
+        if cmd == "persona_look":                       # образ: {id, look} или {id, auto}; look "next" — следующий
+            q = self.set_look(a.get("id") or self.s.get("persona"), a.get("look"), a.get("auto"))
+            if q is None:
+                raise ValueError("У этого персонажа нет образов")
+            return {"look": q.get("look", ""), "look_auto": q.get("look_auto", False)}
         if cmd == "persona_save":
             pid = self.personas.save(a["persona"])
             p = self.personas.get(pid)

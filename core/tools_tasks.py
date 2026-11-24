@@ -1,5 +1,6 @@
 """Действия модели: фоновые задачи (начать, состояние, дополнить, остановить, продолжить) и позвать персонажа."""
 
+import re
 from pathlib import Path
 from tools_base import ToolError
 
@@ -27,6 +28,52 @@ def _wants_net(a):
     return v is True or str(v).strip().lower() == "true"
 
 
+FOLDER_ROOTS = ("Documents", "Документы", "Desktop", "Рабочий стол", "Downloads", "Загрузки", "OneDrive")
+
+
+def guess_folders(goal, home=None, limit=4000):
+    """№935 (20.11, 1.0.44: «основываясь на структуре папки „Тренировка“» — задача не видела папку и стояла, пока человек не
+    дал доступ сам; «это всё сказано в файлах задания»). Папки, названные в цели: полный путь, который есть на диске, или имя
+    в кавычках после слова «папка» — если такая папка одна в Документах, на рабочем столе, в Загрузках (до 4 уровней).
+    Весь диск и домашняя папка целиком — никогда. -> [полные пути]."""
+    out = []
+    text = str(goal or "")
+    for m in re.finditer(r"(?:(?<![\w:/.])[A-Za-z]:\\|(?<![\w:/.])/(?=\w)|~/)[^\s«»\"'<>|*?]+", text):
+        fp = Path(m.group(0).rstrip(".,;:)»")).expanduser()
+        try:
+            if fp.is_dir() and fp.resolve() != Path(fp.resolve().anchor) and fp.resolve() != Path.home().resolve():
+                out.append(str(fp.resolve()))
+        except OSError:
+            continue
+    names = {n.strip() for n in re.findall(r"папк\w*\s+[«\"'„“]([^»\"'“”]{2,60})[»\"'“”]", text, re.I)}
+    if names:
+        home = Path(home or Path.home())
+        hits = {n: [] for n in names}
+        seen = 0
+        for r in FOLDER_ROOTS:
+            base = home / r
+            if not base.is_dir():
+                continue
+            stack = [(base, 0)]
+            while stack and seen < limit:
+                d, depth = stack.pop()
+                try:
+                    kids = [x for x in d.iterdir() if x.is_dir() and not x.name.startswith(".")]
+                except OSError:
+                    continue
+                for k in kids:
+                    seen += 1
+                    for n in names:
+                        if k.name.casefold() == n.casefold():
+                            hits[n].append(k)
+                    if depth < 3:
+                        stack.append((k, depth + 1))
+        for n, xs in hits.items():
+            if len(xs) == 1:                               # одна такая — она; несколько — пусть спросит
+                out.append(str(xs[0].resolve()))
+    return list(dict.fromkeys(out))
+
+
 def t_start_task(a, ctx):
     goal = (a.get("goal") or "").strip()
     if not goal:
@@ -45,6 +92,9 @@ def t_start_task(a, ctx):
     try:
         fl = a.get("folders") or []
         fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
+        found = [x for x in guess_folders(goal) if x not in fl]
+        if found:                                          # №935: папку назвали в цели — задача видит её сразу
+            fl += found
         kw = {"folders": fl} if fl else {}
         if _wants_net(a):                                  # сеть для кода задачи — с «да» человека (Toolbox.guard)
             kw["net"] = True

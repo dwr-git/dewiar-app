@@ -47,7 +47,9 @@ function coSetup() {
 function coHist(list) {
   $("#co-hist").innerHTML = list.length ? list.map(h => `<li><button type="button" data-f="${coEsc(h.file)}"><b>${coEsc(h.title)}</b><small>${new Date(h.t * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</small></button></li>`).join("")
     : `<li class="co-none">Здесь появятся протоколы советов — их можно открыть и перечитать.</li>`;
-  $$("#co-hist [data-f]").forEach(b => b.onclick = () => core.call("ws_open", { path: b.dataset.f }).catch(e => toast(e.message)));
+  // №941: «ws_open» отдавал файл системе — на Windows без программы для .md протокол не открывался, удалить было негде.
+  // Протокол — обычный файл папки: открываем его в «Моих файлах» (там же «Удалить», PDF, «Скачать»), как из «Дня» и «Памяти»
+  $$("#co-hist [data-f]").forEach(b => b.onclick = () => { $('nav button[data-p="folder"]').click(); setTimeout(() => openFile(b.dataset.f), 250); });
 }
 
 /* стол: живые облики. Говорит (пришли новые слова) — облик «говорит» и светится; думает — «думает»; ждёт — покой */

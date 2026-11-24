@@ -222,7 +222,7 @@ class TasksCommands:
             snap = self.s.snapshot()
             llm = snap.get("llm") or {}
             prof = (llm.get("profiles") or {}).get(llm.get("active")) or {}
-            keep = {k: prof[k] for k in ("name", "kind", "base_url", "api_key", "model", "economy", "disable_thinking", "temperature", "cloud", "title") if prof.get(k) not in (None, "")}
+            keep = {k: prof[k] for k in ("name", "kind", "base_url", "api_key", "model", "economy", "disable_thinking", "temperature", "cloud", "title", "proxy") if prof.get(k) not in (None, "")}
             import net as _net
             keep["base_url"], was_local = _net.lan_url(keep.get("base_url", ""))   # 127.0.0.1 на телефоне — сам телефон (19.10)
             local_note = ""

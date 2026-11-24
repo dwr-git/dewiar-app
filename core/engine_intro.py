@@ -202,8 +202,10 @@ class IntroMixin:
     def first_try(self):
         return ["Какая завтра погода?", "Напомни через 5 минут проверить чайник", "Что ты умеешь?"]
 
-    def first_asked(self):
+    def first_asked(self, text=""):
         """Человек спросил — подсказки больше не нужны."""
+        if hasattr(self, "first_mark"):
+            self.first_mark("try" if text and text in self.first_try() else "ask")
         if self.s.get("ui", "first_ask") is False:
             self.s.update({"ui": {"first_ask": True}})
             self.emit("first_ask", on=False)
@@ -237,6 +239,8 @@ class IntroMixin:
                 self.s.update({"ui": {"first_nudged": True}})
                 tries = self.first_try()
                 self.emit("first_ask", on=True, phrases=tries)
+                if hasattr(self, "first_mark"):
+                    self.first_mark("nudge")
                 self._dj_say(f"Я здесь, если что. Спросите что угодно — например, «{tries[0].rstrip('?')}?» — голосом"
                              + (f", позвав меня по имени — «{name}»," if name else ",") + " или нажмите на подсказку под портретом.")
                 return
@@ -307,6 +311,11 @@ class IntroMixin:
             return
         no_mic = hearing and self._mic_absent()
         self._intro_probe = None
+        if hasattr(self, "first_mark"):                  # «Первая минута» (20.11): что человек увидел и услышал
+            self.first_mark("greet", "nomic" if no_mic else "voice" if hearing else "quiet")
+            self.first_mark("tries")
+            if no_mic:
+                self.first_mark("mic_no")
         if no_mic:                                       # говорить некуда — не просим, а показываем, как писать
             self._intro_say("Микрофона я не слышу — напишите мне: кнопка с клавиатурой внизу окошка.", "mic_none", buttons=["b-type"])
             return

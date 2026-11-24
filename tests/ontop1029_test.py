@@ -30,7 +30,7 @@ w1.on_top = w2.on_top = False
 ok(a.set_on_top(True) and w1.on_top and app.ON_TOP[0], "включили — снова поверх")
 src = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok(src.count('on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=bridge') == 2, "при запуске виджет создаётся как выбрано (Linux и Windows)")
-ok("if not ON_TOP[0] and gw.get_title() != PAD_TITLE:" in src, "сторож «поверх окон» не поднимает виджет, если выключено")
+ok("if not ON_TOP[0]:                              # виджет «не поверх» — не поднимаем ни его, ни блокнот" in src, "сторож «поверх окон» не поднимает ни виджет, ни блокнот, если выключено")
 ok(src.index('ON_TOP[0] = ui_settings().get("on_top", True) is not False') < src.index("return main_win(args, extra)"), "настройка читается до выбора системы")
 hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
 ok("const top = ui.on_top !== false;" in hud and "a.set_on_top(top)" in hud, "виджет зовёт set_on_top при смене настройки")

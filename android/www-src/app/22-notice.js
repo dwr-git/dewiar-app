@@ -186,7 +186,7 @@ addEventListener("pagehide", welcomeSeen);
 setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока открыто — «последний раз видели» свежее
 
 /* 1.0.29: согласие одной строкой — в первой карточке, где человек и так нажимает «Подключить» (Политика и Условия на сайте) */
-const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы принимаете <a href="${siteUrl("dwrapp/terms.php")}">Условия</a> и <a href="${siteUrl("dwrapp/privacy.php")}">Политику конфиденциальности</a>.</p>`;
+const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы принимаете <a href="${siteUrl("dwrapp/terms")}">Условия</a> и <a href="${siteUrl("dwrapp/privacy")}">Политику конфиденциальности</a>.</p>`;
 (function boot() {
   applyPersona(); setState("idle"); quietCheck();
   const last = history.filter(m => m.role === "assistant").slice(-1)[0];

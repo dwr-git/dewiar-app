@@ -44,6 +44,14 @@ _lan = {"public": "", "base": "", "id": "", "ok_until": 0.0, "bad_until": 0.0, "
 # (http://127.0.0.1:порт/dwrapp/) — когда домен не отвечает. Проверка — той же подписью метки, что и «дома».
 _ssh = {"public": "", "base": "", "id": "", "ok_until": 0.0, "bad_until": 0.0, "lock": threading.Lock()}
 on_lan_ok = None                       # engine: «сайт ответил напрямую» — запомнить, что этот компьютер бывает рядом с сервером
+# 21.11 (пакет: сайт отдаёт первое слово модели за 1,2 с, а у людей первый байт — через 5,6 с): адрес сайта в домашней сети
+# сайт сообщает ВСЕМ, у кого есть ключ, — и каждый компьютер раз в 3 минуты проверял 192.168.x.x прямо на пути запроса
+# (соединение до 1,5 с, а чужой сервер по тому же адресу — до 4 с чтения). Голос после паузы платил эти секунды каждый раз.
+# Теперь на пути запроса проверяют только компьютеры, которые уже бывали дома у сервера (lan_seen); остальные — в фоне,
+# только из той же подсети, а не вышло — следующая попытка через LAN_FAR_SEC.
+lan_seen = False
+LAN_FAR_SEC = 6 * 3600
+_lan_bg = {"busy": False}
 
 
 def set_lan(public="", base="", lid=""):
@@ -124,6 +132,37 @@ def _lan_ok(st=None):
         return ok
 
 
+def _same_net(base):
+    """Этот компьютер в той же подсети (/24), что и домашний адрес сайта, — иначе дома у сервера мы точно не сейчас."""
+    host = urlparse(base).hostname or ""
+    ip = my_lan_ip()
+    return bool(ip and re.fullmatch(r"\d+\.\d+\.\d+\.\d+", host) and ip.rsplit(".", 1)[0] == host.rsplit(".", 1)[0])
+
+
+def _lan_try(st):
+    """Можно ли идти домой сейчас, не задерживая запрос. Бывал дома (lan_seen) или туннель SSH — проверка на месте, как
+    раньше (дома по имени сайт может и не открыться). Не бывал — только по свежему «да»; иначе проверка в фоне."""
+    if st is not _lan or lan_seen:
+        return _lan_ok(st)
+    now = time.time()
+    if now < st["ok_until"]:
+        return True
+    if now >= st["bad_until"] and not _lan_bg["busy"]:
+        if not _same_net(st["base"]):
+            st["bad_until"] = now + LAN_FAR_SEC          # другая сеть — дома у сервера нас нет
+            return False
+        _lan_bg["busy"] = True
+
+        def bg():
+            try:
+                if not _lan_ok(st):
+                    st["bad_until"] = time.time() + LAN_FAR_SEC
+            finally:
+                _lan_bg["busy"] = False
+        threading.Thread(target=bg, name="lan-probe", daemon=True).start()
+    return False
+
+
 class _LanFirst(httpx.BaseTransport):
     """Адреса папки сайта — сначала на внутренний адрес (дома), иначе — inner (прокси или напрямую)."""
 
@@ -132,7 +171,7 @@ class _LanFirst(httpx.BaseTransport):
 
     def handle_request(self, request):
         url = str(request.url)
-        st = next((x for x in (_lan, _ssh) if x["public"] and url.startswith(x["public"]) and _lan_ok(x)), None)   # дома, иначе туннель
+        st = next((x for x in (_lan, _ssh) if x["public"] and url.startswith(x["public"]) and _lan_try(x)), None)   # дома, иначе туннель
         if st is not None:
             pub = st["public"]
             new = st["base"] + url[len(pub):]
@@ -387,6 +426,36 @@ def reserve():
     return "" if px else rv
 
 
+try:
+    from socksio.exceptions import ProtocolError as _SocksProto      # «Malformed reply» приходит отсюда, мимо httpx
+except ImportError:  # noqa: BLE001 — без socksio SOCKS5 нет вовсе
+    class _SocksProto(Exception):
+        pass
+
+
+_px_alt = {}                           # прокси -> тот же адрес другим типом, если так он отвечает (SOCKS5 ↔ HTTP)
+
+
+def _wrong_type(e, px):
+    """Прокси ответил не на языке своего типа: SOCKS5-клиент получил «Malformed reply» (там HTTP-прокси), HTTP-клиент —
+    обрыв без ответа или мусор вместо строки статуса (там SOCKS5)."""
+    m, sch = str(e), (px or "").split(":", 1)[0].lower()
+    if sch.startswith("socks"):
+        return isinstance(e, httpx.ProxyError) and bool(re.search(r"malformed|protocol|invalid|unexpected", m, re.I))
+    return isinstance(e, (httpx.RemoteProtocolError, httpx.ProxyError)) and bool(
+        re.search(r"disconnected without sending|illegal status line|invalid http|malformed|protocol", m, re.I))
+
+
+def _px_other(px):
+    """socks5://… -> http://… и обратно (логин и пароль те же)."""
+    sch = (px or "").split(":", 1)[0].lower()
+    if sch.startswith("socks"):
+        return "http" + px[len(sch):]
+    if sch in ("http", "https"):
+        return "socks5" + px[len(sch):]
+    return ""
+
+
 class _Lazy(httpx.BaseTransport):
     """Транспорт через прокси, который создаётся только при первом запросе (обычные запросы не платят за него)."""
 
@@ -425,13 +494,41 @@ class _Lazy(httpx.BaseTransport):
         """Платные и общие прокси нередко отвечают на соединение «502 Bad Gateway» или обрывают его — со второго-третьего
         раза проходит. Повторяем сами, пока запрос не ушёл дальше прокси (до сервера ничего не дошло — повтор безопасен);
         чтение ответа оборвалось — повторяем только запросы без последствий (GET/HEAD)."""
+        if self.proxy in _px_alt:                       # тип прокси уже угадан (SOCKS5 ↔ HTTP) — сразу верный
+            self.proxy, self.t = _px_alt[self.proxy], None
         if self.t is None:
             self.t = httpx.HTTPTransport(proxy=self.proxy, verify=self.verify, cert=self.cert)
         safe = request.method in ("GET", "HEAD", "OPTIONS")
         for attempt in range(RETRIES + 1):
             try:
                 return self.t.handle_request(request)
-            except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout) as e:
+            except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError, _SocksProto) as e:
+                if isinstance(e, _SocksProto):                # socksio не оборачивается в httpx — сами: это ошибка прокси
+                    e = httpx.ProxyError(f"SOCKS5: {e}")
+                alt = _px_other(self.proxy) if attempt == 0 and _wrong_type(e, self.proxy) else ""
+                if alt:
+                    # владелец 22.11: Gemini через купленный прокси — «Malformed reply». Продавцы дают SOCKS5 и HTTP на разных
+                    # портах, а тип в настройках выбирают наугад: прокси ответил не на своём языке — пробуем тот же адрес
+                    # другим типом и, если прошло, дальше ходим им (до сервера ничего не ушло — повтор безопасен)
+                    t2 = httpx.HTTPTransport(proxy=alt, verify=self.verify, cert=self.cert)
+                    try:
+                        r = t2.handle_request(request)
+                    except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError, _SocksProto):
+                        t2.close()
+                    else:
+                        log.warning("🌐 Прокси %s отвечает как %s, а не %s — дальше хожу так", hide(self.proxy),
+                                    alt.split(":", 1)[0].upper(), self.proxy.split(":", 1)[0].upper())
+                        _px_alt[self.proxy] = alt
+                        self.proxy, self.t = alt, t2
+                        return r
+                if str(e).startswith("SOCKS5: "):             # ответ не по протоколу — повтор ничего не изменит
+                    raise e from None
+                if isinstance(e, httpx.RemoteProtocolError):
+                    if not safe or attempt >= RETRIES:
+                        raise e
+                    log.info("Прокси оборвал ответ (%s) — повтор %d", e or type(e).__name__, attempt + 1)
+                    time.sleep(BACKOFF[min(attempt, len(BACKOFF) - 1)])
+                    continue
                 if "407" in str(e):
                     # владелец 12.11, утренняя сводка: «Не получилось: 407 Proxy Authentication Required» дважды — логин
                     # прокси Dewiar, полученный заранее, устарел; повтор с ним бесполезен — взять свежий и не повторять
@@ -440,11 +537,11 @@ class _Lazy(httpx.BaseTransport):
                             on_proxy_auth()
                         except Exception:  # noqa: BLE001
                             log.debug("net: on_proxy_auth", exc_info=True)
-                    raise
+                    raise e
                 if attempt >= (1 if isinstance(e, httpx.ConnectTimeout) else RETRIES):   # молчащий прокси — один повтор (каждый ждёт таймаут)
-                    raise
+                    raise e
                 log.info("Прокси: %s — повтор %d (%s)", e or type(e).__name__, attempt + 1, request.url.host)
-            except (httpx.RemoteProtocolError, httpx.ReadError) as e:
+            except httpx.ReadError as e:
                 if not safe or attempt >= RETRIES:
                     raise
                 log.info("Прокси оборвал ответ (%s) — повтор %d", e or type(e).__name__, attempt + 1)
@@ -493,6 +590,47 @@ class _DirectFirst(httpx.BaseTransport):
         self.lazy.close()
 
 
+_host_px = {"provider": None}
+
+
+def bind_hosts(provider):
+    """provider() -> {имя сервера: прокси} — свой прокси у профиля модели (владелец 21.11: «сервер стоит в стране, где
+    запросы к модели заблокированы… возможность ставить свой прокси»). Только к этим адресам; остальное — как было."""
+    _host_px["provider"] = provider
+
+
+def _host_proxies():
+    out = {}
+    f = _host_px.get("provider")
+    if f:
+        try:
+            out = {h: px for h, px in dict(f() or {}).items() if h and px}
+        except Exception:  # noqa: BLE001
+            log.debug("net: прокси профилей не прочитались", exc_info=True)
+    out.update(getattr(_tl, "host_px", None) or {})
+    return out
+
+
+class profile_proxy:
+    """with net.profile_proxy(профиль): запросы этого потока к серверу профиля — через его прокси, ещё до сохранения
+    (студия: «Подключить» по ключу через прокси — список моделей и проверка). Нет прокси — ничего не меняет;
+    прокси не разобран — NetError с понятным текстом."""
+
+    def __init__(self, prof):
+        px = str((prof or {}).get("proxy") or "").strip()
+        h = host_of((prof or {}).get("base_url") or "")
+        self.map = {h: normalize_proxy(px)} if px and h else {}
+
+    def __enter__(self):
+        self.prev = getattr(_tl, "host_px", None)
+        _tl.host_px = {**(self.prev or {}), **self.map}
+        return self
+
+    def __exit__(self, *exc):
+        _tl.host_px = self.prev
+        return False
+
+
 def _patched_init(self, *a, **kw):
     """Замена httpx.Client.__init__: адреса Dewiar (и их поддомены) — через прокси.
     mounts, переданные вызывающим явно, важнее наших."""
@@ -504,6 +642,8 @@ def _patched_init(self, *a, **kw):
         for h in hosts:
             m[f"all://{h}"] = t
             m[f"all://*.{h}"] = t
+    for h, hp in (_host_proxies().items() if not off else ()):      # свой прокси у профиля модели — к его серверу
+        m[f"all://{h}"] = _Lazy(hp, kw.get("verify", True), kw.get("cert"))
     lh = host_of(_lan["public"] if _lan["base"] else _ssh["public"]) if (_lan["base"] or _ssh["base"]) and not off else ""
     if lh:                                            # дома — к папке сайта напрямую (остальное — как выше)
         inner = m.get(f"all://{lh}") or _Plain(kw.get("verify", True), kw.get("cert"), kw.get("trust_env", True))
@@ -540,12 +680,29 @@ def keylog_guard():
         return True
 
 
+def certs_guard():
+    """№908 (20.11, Mac): «Близкие», синхронизация и обновление падали каждые 6 с: FileNotFoundError из
+    load_verify_locations — у человека в окружении SSL_CERT_FILE (или SSL_CERT_DIR) указывает на файл, которого нет
+    (так бывает после удаления Homebrew, conda, старого Python), а httpx берёт сертификаты оттуда. Нет такого файла —
+    переменную для Dewiar убираем (сертификаты — из системы и встроенные). -> что убрали."""
+    gone = []
+    for k in ("SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+        v = os.environ.get(k)
+        if v and not os.path.exists(v):
+            os.environ.pop(k, None)
+            gone.append(k)
+    if gone:
+        log.warning("%s указывает на несуществующий путь — для Dewiar отключено, иначе не работала бы сеть", ", ".join(gone))
+    return gone
+
+
 def install():
     """Подменить httpx.Client.__init__ — один раз при запуске ядра (main.py); повторный вызов ничего не делает.
     И сертификаты — из хранилища системы (trust_system)."""
     global _installed
     if not _installed:
         keylog_guard()
+        certs_guard()
         trust_system()
         httpx.Client.__init__ = _patched_init
         _installed = True

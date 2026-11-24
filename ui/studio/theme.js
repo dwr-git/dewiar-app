@@ -28,7 +28,8 @@
     root.classList.toggle("st-skin", sk.id !== "brand");
     root.dataset.skin = sk.id;
     Object.values(VARS).forEach(v => root.style.removeProperty(v));
-    if (sk.id === "brand") { root.style.removeProperty("--scene"); return; }
+    // №965: основной цвет темы — для подложки окна на Mac (macui.match_page_bg): «Фирменная» — тёмная
+    if (sk.id === "brand") { root.style.removeProperty("--scene"); root.style.setProperty("--sk-base", "#0a0a0f"); return; }
     const probe = document.createElement("div");
     probe.className = "lk-prev skin-" + sk.id;
     probe.style.cssText = "position:fixed;left:-9999px;top:0;width:10px;height:10px;visibility:hidden;pointer-events:none";
@@ -39,6 +40,7 @@
     const color = cs.backgroundColor && !/^rgba\(0, 0, 0, 0\)$|^transparent$/.test(cs.backgroundColor) ? cs.backgroundColor : "";
     if (color) { if (layers.length) layers[layers.length - 1] += " " + color; else layers.push(color); }
     if (layers.length) root.style.setProperty("--scene", layers.join(", "));
+    root.style.setProperty("--sk-base", cs.getPropertyValue("--skin-bg").trim() || color || (sk.light ? "#e3eaf4" : "#0a0a0f"));
     Object.entries(VARS).forEach(([from, to]) => { const v = cs.getPropertyValue(from).trim(); if (v) root.style.setProperty(to, v); });
     probe.remove();
   };

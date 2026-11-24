@@ -113,6 +113,7 @@ LLM_PRESETS = {
 DEFAULTS = {
     "version": 1,
     "persona": "lira",
+    "looks": {},                    # образы персонажей (1.0.55): {id: {"look": id образа, "auto": «Сама — по времени и сезону»}}
     "all_names": False,             # отзываться на имя любого персонажа (19.11, владелец: по умолчанию — только активного;
                                     # другого зовут через него: «Лира, позови Патрика»)
     "team": {"route": True,         # главный (Агент) сам передаёт вопрос специалисту: код — Кодеру, письмо — Лире…
@@ -124,8 +125,15 @@ DEFAULTS = {
         "persona": {},              # id персонажа -> id профиля: свой мозг у персонажа («» — общий, active). 27.10
         "persona_model": {},        # id персонажа -> своя модель того же профиля (№403, 29.10: у Ollama много моделей)
         "history_turns": 8,
+        "xray": True,               # «Рентген» ответа: путь хода, подсказка, действия, проверки (core/xray.py)
+        "talk_lean": True,          # «Чистый разговор» (core/talk_lean.py): включён для всех с 1.0.60 — стенд 22.11: «Разговор»
+                                    # 88–98 % → 95 %, «Как твои дела?» 2/6 → 3/3, «Понимание ситуации» 73 % → 79 %; False — как раньше
+        "ledger": False,            # «Каркас хода»: ответ сверяется с журналом сделанного (core/ledger.py) — проба, стенд
         "key_fallback": True,       # сервис по ключу (Gemini, Kimi…) не ответил — мозг Dewiar (15.11, «Кто чем думает»)
         "own_fallback": False,      # своя модель не отвечает — мозг Dewiar (по согласию; engine_answer._own_fallback)
+        "scene": False,             # «Ум Лиры», шаг 1: проба сцены разговора (экзамен --scene) — True включает всегда
+        "scene_on": None,           # сцена разговора в справке к вопросу (conversation.py): None — у облака Dewiar да (1.0.54)
+        "scene_wait": 0,            # сек.: ждать дописанную сцену перед ответом (экзамен; людям — 0, голос не ждёт)
         "lean_prompt": False,       # проба: короткая инструкция — навыки только именами, описания — к подходящему вопросу
         "think_auto": True,         # сложная просьба (стих, расчёт, анализ, план, код) — модель думает перед ответом (llm.wants_think)
         "tools_modes": {},          # «адрес|модель» → native | prompt | none: как модель вызывает инструменты (проверяется само)
@@ -201,7 +209,7 @@ DEFAULTS = {
            # первый вопрос (0.74): None — прежний пользователь (не трогаем), False — новичок ещё не спросил, True — спросил
            "first_ask": None, "first_nudged": False,
            "mode_seen": 0,                  # первый экран «Для кого эта Лира?» показан (studio/modes.js, 0.58)
-           "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
+           "pad_w": None, "pad_h": None, "prompter_w": None, "prompter_h": None,    # свои размеры блокнота и суфлёра (№364); блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
            "pad_colors": None,              # цвета текста в блокноте: forest/sea/dusk/theme/plain (ui/pad.js colorScheme); пусто — «Чернила»
            "pult_on": True,                 # «Пульт Лиры» — первая вкладка блокнота и значок у виджета (ui/padpult.js); «Оформление»
@@ -247,7 +255,7 @@ DEFAULTS = {
     "calendars": {"items": [], "remind_minutes": 10},   # календари по ссылке iCal (Google, Яндекс…), напомнить за N минут
     "cloud": {"key": "", "url": "", "account": False, "stt_ok": False, "tts_ok": False,
               "net_share": True, "net_pub": "",   # «Сеть Лиры»: пускать общие вопросы на узлы людей; ключ сети (доверие при первом использовании)
-              "join": {}},      # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
+              "join": {}, "gift_seen": "", "paid_seen": None},     # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
     "kids": {"on": False},   # детский режим (kids.py): ребёнок, время, что можно; PIN — в STATE_DIR/kids.json
     "net": {"proxy": "", "dewiar": False, "web_via": True,   # прокси для серверов Dewiar, если провайдер блокирует dewiar.pro: свой (socks5://… или http://…) или «Использовать прокси Dewiar»
             "dewiar_secret": "", "dewiar_at": 0,                # прокси, выданный dewiar.pro, и когда получен (обновляется раз в 6 часов, engine_brain.py)
@@ -358,6 +366,7 @@ class Settings:
                 if (raw.get("llm") or {}).get("history_reset_seconds") in (300, 1200):
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
                 self._cloud_kind()
+                self._dedupe_profiles()
             except FileNotFoundError:
                 self.data = copy.deepcopy(DEFAULTS)
                 if system_dark():                                         # №259 (25.10): тёмная система — с первого запуска
@@ -377,6 +386,35 @@ class Settings:
             if isinstance(p, dict) and p.get("cloud") and "/dwrapp/cloud.php" in str(p.get("base_url") or "") \
                     and p.get("kind") != "openai":
                 p["kind"] = "openai"
+
+    def _dedupe_profiles(self):
+        """Владелец 22.11: «в выборе мозга три Гугла и мозг Dewiar — непонятно, что выбирать». Каждое «Подключить» по ключу
+        добавляло новый профиль. Одинаковые (сервис, адрес, модель, ключ, прокси) — один: остаётся выбранный (или первый),
+        ссылки персонажей на лишние переходят к нему. -> сколько убрано."""
+        llm = self.data.get("llm") or {}
+        profs = llm.get("profiles") or {}
+        seen, drop = {}, {}
+        order = sorted(profs, key=lambda k: (k != llm.get("active"), list(profs).index(k)))
+        for pid in order:
+            p = profs.get(pid)
+            if not isinstance(p, dict) or p.get("cloud"):
+                continue
+            key = (p.get("kind") or "openai", str(p.get("base_url") or "").rstrip("/").lower(), str(p.get("model") or ""),
+                   str(p.get("api_key") or ""), str(p.get("proxy") or ""))
+            if not key[1]:
+                continue
+            if key in seen:
+                drop[pid] = seen[key]
+            else:
+                seen[key] = pid
+        for pid, keep in drop.items():
+            profs.pop(pid, None)
+            for who, ref in list((llm.get("persona") or {}).items()):
+                if ref == pid:
+                    llm["persona"][who] = keep
+        if drop:
+            log.info("Мозг: одинаковых подключений убрано — %d", len(drop))
+        return len(drop)
 
     def save(self):
         """Через .tmp с правами 600 (в файле ключи API): файл не останется недописанным и не будет виден другим."""

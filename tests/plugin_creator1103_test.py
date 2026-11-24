@@ -525,7 +525,7 @@ with sync_playwright() as pw:
     h = st.evaluate("() => chatBubble({ id: 'x', role: 'assistant', ts: Date.now() / 1000, text: 'Готово', att: [{ kind: 'plugin', plugin: 'water', name: 'Вода', icon: '💧' }] }, null)")
     ok('class="ch-plg"' in h and 'data-plg="water"' in h and "Открыть" in h, "в «Чате» под ответом — кнопка «Открыть» плагина")
     # каталог «Плагины» — кнопка «Создать плагин словами»
-    st.click('nav button[data-p="skills"]'); st.wait_for_timeout(600)
+    st.evaluate("navGo('skills')"); st.wait_for_timeout(600)   # №907 (1.0.47): каталог — «Плагины» → «Все плагины», пункт в «Настройке» скрыт
     st.click("#plg-new"); st.wait_for_timeout(500)
     ok(st.evaluate("document.querySelector('#p-plgnew').classList.contains('cur')") and "Сделанные Лирой" in st.inner_text("#pmk") and "Вода" in st.inner_text("#pmk-mine"),
        "из каталога — «Создать плагин словами»; «Сделанные Лирой» — список")
