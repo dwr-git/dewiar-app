@@ -56,6 +56,9 @@ from urllib.parse import urljoin, urlparse
 WIN = os.name == "nt"
 MAC = sys.platform == "darwin"
 MAC_JSON = "https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-mac.json"
+# 1.0.67 (№1005: «Версия не обновляется» — dewiar.pro из сети человека не открывается, а значит, и о новой версии программа
+# не узнавала): сведения о последнем выпуске открытой копии — их кладёт её release.yml; адреса файлов в нём полные
+GH_JSON = "https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-latest.json"
 MAC_DL = "https://github.com/dwr-git/dewiar-app/releases/download/"
 
 log = logging.getLogger("dewiar.update")
@@ -304,6 +307,30 @@ class Updater:
             pass
         return m, base
 
+    def _fetch_github(self, err):
+        """Сайт не ответил (нет связи, тайм-аут, 5xx) -> сведения о выпуске с GitHub (GH_JSON) или (None, None). Не на Mac
+        (у него своё), не при своём адресе обновлений, не при выключенном updates.mirror_github и не когда сайт ответил,
+        но «нет такого» (4xx). sha256 файла сверяется как всегда."""
+        import httpx
+        if MAC or self.url != DEFAULT_URL or (self.s and self.s.get("updates", "mirror_github") is False):
+            return None, None                  # свой адрес обновлений (своя сборка, компания) — GitHub не подставляем
+        if isinstance(err, httpx.HTTPStatusError) and err.response.status_code < 500:
+            return None, None
+        if not isinstance(err, (httpx.HTTPError, OSError, ValueError)):
+            return None, None
+        try:
+            r = httpx.get(GH_JSON, timeout=15, follow_redirects=True, headers={"Cache-Control": "no-cache"})
+            r.raise_for_status()
+            m = r.json()
+            if not isinstance(m, dict) or not m.get("version"):
+                raise ValueError("нет версии")
+        except Exception as e:  # noqa: BLE001
+            log.info("Обновления с GitHub: %s", e)
+            return None, None
+        log.info("Сайт обновлений не ответил — сведения о выпуске с GitHub (%s)", m.get("version"))
+        self.last["error"] = ""
+        return m, str(r.url)
+
     def model(self, key):
         """Где взять модель на своём сайте: {"url", "sha256", …} или None. Сайт спрашиваем один раз за запуск
         (быстро, до скачивания моделей); недоступен — последний сохранённый список."""
@@ -347,7 +374,9 @@ class Updater:
             except Exception as e:  # noqa: BLE001
                 self.last["error"] = f"{self.url}: {e}"
                 log.info("Обновления: %s", self.last["error"])
-                return None
+                m, base = self._fetch_github(e)
+                if m is None:
+                    return None
             self.last["error"] = ""
             if MAC:
                 return self._check_mac(m, base, download, manual, wait)

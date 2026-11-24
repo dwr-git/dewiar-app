@@ -42,14 +42,28 @@ public final class Net {
                     c.setConnectTimeout(15000);
                     c.setReadTimeout(timeoutMs > 0 ? timeoutMs : 120000);
                     c.setRequestProperty("User-Agent", "Dewiar-Android/" + BuildInfo.VERSION);
+                    boolean gz = false;
                     if (headers != null && !headers.isEmpty()) {
                         JSONObject h = new JSONObject(headers);
                         Iterator<String> it = h.keys();
-                        while (it.hasNext()) { String k = it.next(); c.setRequestProperty(k, h.getString(k)); }
+                        while (it.hasNext()) {
+                            String k = it.next(), v = h.getString(k);
+                            c.setRequestProperty(k, v);
+                            if ("content-encoding".equalsIgnoreCase(k) && "gzip".equalsIgnoreCase(v.trim())) gz = true;
+                        }
                     }
                     if (body != null && !body.isEmpty()) {
                         c.setDoOutput(true);
                         byte[] b = body.getBytes("UTF-8");
+                        // 1.0.67: «Content-Encoding: gzip» от страницы — тело сжимаем здесь (запрос к облаку Dewiar: 60–150 КБ
+                        // подсказки, а сети по пути «замирают» на больших запросах к зарубежным адресам)
+                        if (gz) {
+                            ByteArrayOutputStream zb = new ByteArrayOutputStream(b.length / 3 + 64);
+                            java.util.zip.GZIPOutputStream zo = new java.util.zip.GZIPOutputStream(zb);
+                            zo.write(b);
+                            zo.close();
+                            b = zb.toByteArray();
+                        }
                         c.setFixedLengthStreamingMode(b.length);
                         OutputStream os = c.getOutputStream();
                         os.write(b);

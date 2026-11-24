@@ -14,6 +14,7 @@ function wellFormed(o) {
   if (o && typeof o === "object") { const r = {}; for (const k of Object.keys(o)) r[k] = wellFormed(o[k]); return r; }
   return o;
 }
+let NO_GZ = "";                         // адрес облака Dewiar, не принявший сжатый запрос (сайт старше 1.0.67)
 async function llmStream(messages, tools, onText, signal, opt = {}) {
   const model = await resolveModel();
   const think = opt.think != null ? !!opt.think : thinkMode() === "on";
@@ -205,10 +206,19 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   // вызов целиком в конце (экзамен 0.9.18: «Сделай программу: 3D-модель атома» — 322 с и «сервер замолчал посреди ответа»)
   const hdr = llmHeaders(); if (opt.net && netHeaderOk()) hdr["X-Dewiar-Net"] = "1";
   if (opt.voice && S.llm.cloud) hdr["X-Dewiar-Voice"] = "1";   // сказано голосом: простой вопрос — лёгкому мозгу (сайт решает сам)
+  // 1.0.67: облаку Dewiar — тело сжатым (сжимает Net.java): запрос 60–150 КБ, а сети по пути «замирают» на больших запросах.
+  // Сайт старше 1.0.67 ответит 400 — этому адресу дальше как раньше (NO_GZ). Веб-версия и браузерные проверки (D.mock: fetch,
+  // заголовок сжатия требует CORS-предзапроса) шлют как раньше
+  const gz = !D.web && !D.mock && !ollama && brainKind() === "dewiar" && NO_GZ !== llmBase();
+  if (gz) hdr["Content-Encoding"] = "gzip";
   const r = await http("POST", url, { headers: hdr, body, stream: true, timeout: 180000, signal, idle: opt.idle || 75000,
     onChunk: (chunk) => { if (err) return; buf += chunk; const parts = buf.split("\n"); buf = parts.pop(); try { parts.forEach(line); } catch (e) { err = e; } } });
   if (buf) { try { line(buf); } catch (e) { err = err || e; } }
   if (!err) { gateEnd(); feedInner("", true); }      // остаток, придержанный на случай разрезанного тега
+  if (r.status >= 400 && gz && (r.status === 400 || r.status === 415) && /bad_request|Нужен JSON|gzip/i.test(String(r.body || ""))) {
+    NO_GZ = llmBase(); plog("info", "Dewiar cloud: gzip request rejected (old site) — sending uncompressed");
+    return llmStream(messages, tools, onText, signal, opt);
+  }
   if (r.status >= 400) {
     let msg = r.body || "", ej = {}; try { let j = JSON.parse(msg); if (Array.isArray(j)) j = j[0] || {}; ej = (j && typeof j.error === "object" && j.error) || {}; msg = (j.error && (j.error.message || j.error)) || j.detail || msg; } catch (e) { }   // Gemini — ошибкой-списком
     // Gemini из России и др. (пакет 22.10): «User location is not supported» — повторять бесполезно, сказать, что делать

@@ -712,6 +712,30 @@ def _stream_retry(method, url, tries=2, **kw):
         return
 
 
+_NO_GZ = set()                       # хосты облака Dewiar, которые сжатый запрос не приняли (сайт старше 1.0.67)
+
+
+def _host_of(url):
+    return (re.match(r"^\w+://\[?([^/\]:?#]+)", str(url)) or [None, ""])[1].lower()
+
+
+def _gz_send(p, url, body):
+    """1.0.67 (владелец 24.11: «каждый ответ неимоверно медленный»; сайт видел первое слово модели через 1,1 с, а компьютер
+    — заголовки через 10 с): запрос к облаку Dewiar — 60–150 КБ, а сети по пути (ТСПУ в РФ) «замирают» на соединениях к
+    зарубежным адресам после ~25 пакетов. Облаку Dewiar — тело в UTF-8 без \\u-кодов и сжатое gzip (в 4–5 раз меньше);
+    сайт старше 1.0.67 откажет 400 — тогда этому серверу как раньше. Чужим серверам — как было: json=.
+    -> (аргументы httpx, заголовки, сжато ли)."""
+    hdrs = _headers(p)
+    host = _host_of(url)
+    # дома и в своей сети сжимать незачем (и поддельные облака проверок читают тело как есть)
+    if not p.get("cloud") or host in _NO_GZ or os.environ.get("DEWIAR_NO_GZIP") or LOCAL_HOST_RX.match(host) \
+            or LAN_HOST_RX.search(host):
+        return {"json": body}, hdrs, False
+    import gzip
+    raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    return {"content": gzip.compress(raw, 5)}, dict(hdrs, **{"Content-Encoding": "gzip"}), True
+
+
 _SURR = re.compile("[\ud800-\udfff]")
 
 
@@ -821,10 +845,16 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             col.net_enums = frozenset(net_enums([t.get("parameters") for t in tools_all or []]))
         bare = BareCallCatcher(known_names if prompt_tools_mode(p) or native else [])
         got_text = False
-        with _stream_retry("POST", url, json=body, headers=_headers(p), timeout=timeout) as r:
+        send, hdrs, gz = _gz_send(p, url, body)
+        with _stream_retry("POST", url, **send, headers=hdrs, timeout=timeout) as r:
             if r.status_code >= 400:
                 r.read()
                 err = r.text.lower()
+                if gz and r.status_code in (400, 415) and re.search(r"bad_request|нужен json|gzip", err):
+                    _NO_GZ.add(_host_of(url))          # сайт ещё старый (без req_body) — этому серверу шлём как раньше
+                    log.info("Облако Dewiar не принимает сжатый запрос — шлю несжатым")
+                    yield from stream_events(p, system, messages, cancel, tools, _retry)
+                    return
                 n = int(p.get("_rl") or 0)
                 if r.status_code in (400, 413, 422) and CTX_RX.search(err):
                     # не хватило окна — это не отказ формата: не упрощать историю вызовов (_flat запоминается для сервера

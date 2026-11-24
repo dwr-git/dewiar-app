@@ -90,7 +90,7 @@ TRANSPARENT = [False]                   # Linux с композитором: о�
 
 ABOVE_TITLES = None          # заголовки окон, которые должны быть «поверх всех» (виджет, значок, блокнот) — см. keep_above_guard
 ON_TOP = [True]              # виджет поверх всех окон (ui.on_top; идея №48 — можно выключить в «Оформлении»)
-STUDIO_FRONT = [False]       # студия в фокусе — окна Лиры не «поверх» (_studio_focus_hook), сторож их не поднимает
+STUDIO_FRONT = [False]       # студия в фокусе и сама «поверх» (_studio_focus_hook) — сторож окна Лиры не переподнимает
 
 
 def keep_above_guard():
@@ -2517,9 +2517,8 @@ class Api:
         reshape()
 
     def _studio_focus_win(self, win):
-        """Windows — как _studio_focus_hook: студия активна — окна Лиры без TopMost и студия их перекрывает; ушли из
-        студии или закрыли её — снова TopMost («поверх всех» выключено — не трогаем). TopMost других форм — из
-        отдельного потока (_topmost_ui делает Invoke в их поток; из потока студии — риск взаимной блокировки)."""
+        """Windows — как _studio_focus_hook: пока студия активна, она сама TopMost и выше окон Лиры; ушли из неё — обычное
+        окно. Окна Лиры не трогаем. TopMost — через _topmost_ui в отдельном потоке (Invoke в поток формы)."""
         import threading
         try:
             from webview.platforms.winforms import BrowserView
@@ -2530,52 +2529,45 @@ class Api:
             return
         self._studio_focus_form = f
 
-        def put(above):
-            if not ON_TOP[0]:
-                return
-            for w in list(getattr(self, "wins", {}).values()):
-                if w is not win:
-                    _topmost_ui(w, above)
+        def put(front):
+            if ON_TOP[0]:
+                STUDIO_FRONT[0] = front
+                _topmost_ui(win, front)
 
-        def on(above):
-            return lambda *_: threading.Thread(target=put, args=(above,), daemon=True).start()
+        def on(front):
+            return lambda *_: threading.Thread(target=put, args=(front,), daemon=True).start()
         try:
-            f.Activated += on(False)
-            f.Deactivate += on(True)
-            f.FormClosed += on(True)
+            f.Activated += on(True)
+            f.Deactivate += on(False)
         except Exception as e:  # noqa: BLE001
-            _ui_log(f"поверх окон при фокусе студии: {e}")
+            _ui_log(f"студия впереди: {e}")
             return
-        on(False)()
+        on(True)()
 
     def _studio_focus_hook(self):
         """Владелец 24.11 (Ubuntu): «виджет всегда выше всех — открываю студию, она под виджетом… на чём фокус, то и
-        выше». Как у плавающих окон в программах (палитры, мини-плееры): пока студия в фокусе — окна Лиры не «поверх
-        всех» и студия их перекрывает; ушли из студии (в виджет, в другую программу) — Лира снова поверх. «Поверх всех»
-        выключено в «Оформлении» — не трогаем. Главный поток GTK; подключается к окну студии один раз."""
+        выше». 1.0.67 (владелец 16:49: «стало только хуже» — студия выходит и тут же прячется, виджет мигает, блокнот
+        остаётся сверху): окна Лиры больше не опускаем. Пока студия активна, она сама «поверх всех» — среди окон этого
+        слоя впереди та, с которой работают, и она перекрывает и виджет, и блокнот; ушли из неё — обычное окно, Лира снова
+        над ней. Как у плавающих палитр и мини-плееров. «Поверх всех» у Лиры выключено — студия как обычное окно.
+        Главный поток GTK; подключается к окну студии один раз."""
         gw = self._studio_gw()
         if gw is None or getattr(gw, "_dw_focus", False):
             return
         gw._dw_focus = True
 
         def on_active(g, _p=None):
-            if not ON_TOP[0]:
+            if not ON_TOP[0]:                              # Лира не «поверх всех» — студии слой не нужен
+                STUDIO_FRONT[0] = False
                 return
+            front = g.is_active()
+            STUDIO_FRONT[0] = front
             try:
-                from webview.platforms.gtk import BrowserView
-            except Exception:  # noqa: BLE001
-                return
-            above = not g.is_active()
-            STUDIO_FRONT[0] = not above
-            for w in list(getattr(self, "wins", {}).values()):
-                bv = BrowserView.instances.get(getattr(w, "uid", None))
-                if bv is not None and getattr(bv, "window", None) is not None:
-                    try:
-                        bv.window.set_keep_above(above)
-                    except Exception as e:  # noqa: BLE001
-                        _ui_log(f"поверх окон при фокусе студии: {e}")
+                g.set_keep_above(front)
+            except Exception as e:  # noqa: BLE001
+                _ui_log(f"студия впереди: {e}")
         gw.connect("notify::is-active", on_active)
-        gw.connect("destroy", lambda *_: on_active(type("G", (), {"is_active": staticmethod(lambda: False)})()))
+        gw.connect("destroy", lambda *_: STUDIO_FRONT.__setitem__(0, False))
         on_active(gw)
 
     def _studio_gw(self):
@@ -2606,7 +2598,9 @@ class Api:
             except Exception:  # noqa: BLE001 — не X11 (Wayland без XWayland)
                 pass
             gw.present_with_time(ts)
-            GLib.timeout_add(700, lambda: (gw.set_keep_above(False), False)[1])
+            # «на миг» — только чтобы GNOME пустил вперёд; студия уже активна и Лира «поверх всех» — слой держит
+            # _studio_focus_hook (владелец 24.11, 1.0.67: флажок снимался и под работой — студия пряталась под виджет)
+            GLib.timeout_add(700, lambda: (None if (ON_TOP[0] and gw.is_active()) else gw.set_keep_above(False), False)[1])
             return True
         try:
             self._gtk(run)
