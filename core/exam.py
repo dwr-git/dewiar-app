@@ -866,7 +866,10 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                 said = fill(stp["say"])
                 ans, ev = await core.say(said, img)
                 src = [x.get("label") or x.get("name") for e in ev if e.get("type") == "answer" and e.get("done") for x in e.get("sources") or []]
-                res["steps"].append({"say": said, "image": stp.get("image"), "answer": ans[:2000], "tools": tools_of(ev), "sources": src})
+                # ответила сама программа (быстрая команда: диск, дело по расписанию, напоминание) — у ответов модели model=True
+                quick = bool(ans.strip()) and not any(e.get("model") for e in ev if e.get("type") == "answer")
+                res["steps"].append({"say": said, "image": stp.get("image"), "answer": ans[:2000], "tools": tools_of(ev), "sources": src,
+                                     "quick": quick})
                 # проверки шага (Б12 «Человек в контуре», 17.11): что должно быть в ответе ИМЕННО этого шага и каких действий
                 # на нём быть не должно («сначала спроси, потом отправляй»)
                 n_ = len(res["steps"])
@@ -925,6 +928,10 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                                    for x in res["checks"] if "ответе" not in x["name"])
         transcript = "\n".join((f"Пользователь: {s['say']}" + (" [приложена картинка]" if s.get("image") else "")
                                 + "".join(f"\n  [помощник вызвал {x['name']}({x['args']}) → {x['result'] or x['error']}]" for x in s.get("tools") or [])
+                                # стенд 25.11: «На диске свободно 200 ГБ из 490» и «беру на себя: по будням в 8:00» судья считал
+                                # выдумкой — не видел, что ответила сама программа по настоящим данным
+                                + ("\n  [ответила сама программа, без модели: быстрая команда — данные настоящие, действие выполнено]"
+                                   if s.get("quick") and not s.get("tools") else "")
                                 + f"\nПомощник: {s['answer']}") for s in res["steps"])
         try:
             mem = (core.tmp / "ws" / "Память" / "Обо мне.md").read_text(encoding="utf-8")

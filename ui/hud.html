@@ -772,7 +772,7 @@ const entity = new DewiarEntity($("cv"), { style: "nexus", color: "#8A9BFF", pla
 const VOICE_FX = ["bars", "pulse", "wave"];
 function applyLook(ui) {                      // тема карточки и облика (assets/skins.*) + чем голос отзывается вокруг портрета
   ui = ui || {};
-  const top = ui.on_top !== false;             // идея №48: «окошко Лиры поверх всех окон» — выключатель в «Оформлении»
+  const top = ui.on_top === true;              // идея №48: «окошко Лиры поверх всех окон» — выключатель в «Оформлении» (с 1.0.71 выкл.)
   // №438: при загрузке окно уже создано как выбрано — зовём только при смене (вызов сразу после старта вешал окно)
   if (window.__onTop !== top) { const first = window.__onTop === undefined; window.__onTop = top;
     if (!first) try { const a = api(); if (a && a.set_on_top) a.set_on_top(top); } catch (e) { } }

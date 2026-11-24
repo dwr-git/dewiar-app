@@ -20,6 +20,7 @@ for k in [k for k in os.environ if "proxy" in k.lower()]:
 sys.path.insert(0, str(ROOT / "core"))
 import updater as UP  # noqa: E402
 UP.UPDATE_EVERY = UP.UPDATE_JITTER = 0          # ритм «раз в 2–3 дня» (1.0.53) проверяет update_cadence1120_test
+UP.Updater.fresh_install = lambda self: False   # «первая версия — сразу» (1.0.71) проверяет update_cadence1120_test; здесь — обычные обновления
 fails = []
 
 

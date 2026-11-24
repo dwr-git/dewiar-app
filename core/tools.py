@@ -107,7 +107,7 @@ def S(props, req=()):
 # 8 846 ток. на ход в среднем, у людей с подключёнными MCP — до 78 действий и 11 тыс. ток., первые слова своей модели через
 # 40–60 с): в каждом вопросе — 13 частых действий; остальное ядро — двумя группами («Мой день», «Программа»), действия
 # MCP-серверов — группой на сервер: приходят по словам вопроса, недавнему делу или просьбе модели (more_tools).
-# Предложенная, но не тронутая группа уходит через 20 минут (а не через 6 часов): набор не копится весь разговор.
+# Группа уходит через 20 минут после того, как её предложили или ею пользовались (а не через 6 часов): набор не копится.
 SHORT_CORE = frozenset({"set_reminder", "list_reminders", "cancel_reminder", "save_note", "find_notes", "remember", "web_search",
                         "read_webpage", "weather", "calc", "world_time", "open_url", "open_app"})
 SHORT_GROUPS = {
@@ -775,8 +775,10 @@ class Toolbox:
             now = time.time()
             used, offered = self.__dict__.setdefault("_used", {}), self.__dict__.setdefault("_offered", {})
             short = self._short()
-            fresh = {g for g, t in used.items() if now - t < modules.SLIM_RECENT} | \
-                    {g for g, t in offered.items() if now - t < (SHORT_RECENT if short else modules.SLIM_RECENT)}
+            # «Короткая подсказка»: и группа, которой пользовались, уходит через 20 минут (стенд 25.11: с 6 часами за сессию набор
+            # копился почти целиком — подсказка короче всего на 1,5 %)
+            keep_s = SHORT_RECENT if short else modules.SLIM_RECENT
+            fresh = {g for g, t in list(used.items()) + list(offered.items()) if now - t < keep_s}
             all_groups = {g: g_t for g, g_t in modules.slim(out, "", {x["id"] for x in modules.groups()})[1].items()}
             core, extra, _left = modules.slim(out, text, set(keep) | fresh)
             if short:

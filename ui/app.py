@@ -89,7 +89,7 @@ TRANSPARENT = [False]                   # Linux с композитором: о�
 
 
 ABOVE_TITLES = None          # заголовки окон, которые должны быть «поверх всех» (виджет, значок, блокнот) — см. keep_above_guard
-ON_TOP = [True]              # виджет поверх всех окон (ui.on_top; идея №48 — можно выключить в «Оформлении»)
+ON_TOP = [False]             # виджет поверх всех окон (ui.on_top; идея №48 — «Оформление»; с 1.0.71 по умолчанию выключено)
 STUDIO_FRONT = [False]       # студия в фокусе и сама «поверх» (_studio_focus_hook) — сторож окна Лиры не переподнимает
 
 
@@ -4448,7 +4448,7 @@ def main():
         extra = ("&address=" + quote(t, safe="")) if t.startswith("dewiar:") else ("&import=" + quote(str(Path(t).resolve()), safe=""))
         args.settings = True
 
-    ON_TOP[0] = ui_settings().get("on_top", True) is not False
+    ON_TOP[0] = ui_settings().get("on_top", False) is True        # 1.0.71: нет в настройках (новая установка) — не поверх
     if WIN:
         return main_win(args, extra)
     if MAC:

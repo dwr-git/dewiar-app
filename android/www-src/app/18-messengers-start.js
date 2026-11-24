@@ -251,8 +251,11 @@ async function updateSay(install) {
    2–3 дня, вручную — сразу»): сама предлагаю не раньше чем через 2 дня после того, как встала нынешняя версия, плюс своя
    случайная добавка телефона до суток. «Важное исправление» (urgent в latest.json) и «Проверить» в «О приложении» — сразу. */
 const UPD_EVERY = 2 * 86400000, UPD_JIT = 86400000;
+/* 1.0.71 («Первая минута», пакет 25.11: из новых телефонов только 3 % начали со свежей версии — старые APK ходят по рукам):
+   самая первая версия на этом телефоне (first) — новая сразу, без ритма; после первого обновления — обычный ритм. */
 function updDue(cur) {
-  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now() }; saveS(); }
+  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now(), first: !S.updSince }; saveS(); }
+  if (S.updSince.first) return 0;
   if (typeof S.updJit !== "number") { S.updJit = Math.random() * UPD_JIT; saveS(); }
   return S.updSince.at + UPD_EVERY + S.updJit;
 }

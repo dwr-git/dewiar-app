@@ -416,7 +416,10 @@ class Updater:
             self.emit("update", update=self.public())
             return info
         ready = self._ready(info)
-        if ready is None and not manual and not info.get("urgent"):
+        fresh = not manual and self.fresh_install()
+        if fresh and ready is None:
+            log.info("Новая версия %s — программа только что поставлена со старой версией: беру сразу", ver)
+        if ready is None and not manual and not info.get("urgent") and not fresh:
             due = self.cadence_due()
             if time.time() < due:
                 self.last["next"] = due
@@ -424,7 +427,7 @@ class Updater:
                 log.info("Новая версия %s — предложу через %d ч (обновления раз в 2–3 дня; «Проверить сейчас» — сразу)",
                          ver, max(1, int((due - time.time()) / 3600)))
                 return None
-        if ready is None and not manual:
+        if ready is None and not manual and not fresh:
             at = self._spread_at(ver)
             nxt = max(at, float(self.last.get("defer") or 0))
             if time.time() < nxt:
@@ -484,7 +487,12 @@ class Updater:
             d = {}
         changed = False
         if d.get("version") != self.version:
-            d.update(version=self.version, at=now)
+            # 1.0.71 («Первая минута», пакет 25.11: из 300 новых компьютеров за неделю только 5 % начали со свежей версии — старые
+            # установщики ходят по рукам, а ритм «раз в 2–3 дня» держал новичка на старой): самый первый запуск программы на
+            # этом компьютере — first; пока стоит та же версия, ритм и разнос по времени не действуют (fresh_install)
+            first = not d
+            d = {k: v for k, v in d.items() if k != "first"}
+            d.update(version=self.version, at=now, **({"first": True} if first else {}))
             changed = True
         if not isinstance(d.get("jit"), (int, float)):
             d["jit"] = random.uniform(0, UPDATE_JITTER)
@@ -496,6 +504,15 @@ class Updater:
             except OSError:
                 pass
         return float(d.get("at") or now) + UPDATE_EVERY + float(d["jit"])
+
+    def fresh_install(self):
+        """Программа только что поставлена и ещё ни разу не обновлялась (первая версия на этом компьютере) — новая версия
+        сразу, без ритма 2–3 дня и без разноса по времени: первое впечатление — от свежей версии."""
+        try:
+            d = json.loads((self.dir / "installed.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return bool(d.get("first")) and d.get("version") == self.version
 
     def _spread_at(self, ver):
         """Когда фоновой проверке можно качать версию ver: случайно в ближайшие SPREAD секунд, своё время у каждого
