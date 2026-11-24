@@ -29,8 +29,14 @@ public final class Net {
         new Thread(new Runnable() {
             @Override public void run() {
                 HttpURLConnection c = null;
+                boolean got = false;                                  // ответ уже начал приходить — повторять нельзя
+                for (int attempt = 0; ; attempt++) {
                 try {
                     c = (HttpURLConnection) NetProxy.open(new URL(url));
+                    // №994 (24.11): «Не проверилось: unexpected end of stream on null» — обновление и отчёт с телефона. Сервер
+                    // закрыл соединение, не ответив (старое «живое» соединение или обрыв сети по пути). Второй раз —
+                    // новым соединением, без повторного использования
+                    if (attempt > 0) c.setRequestProperty("Connection", "close");
                     RUNNING.put(id, c);
                     c.setRequestMethod(method == null || method.isEmpty() ? "GET" : method);
                     c.setConnectTimeout(15000);
@@ -50,6 +56,7 @@ public final class Net {
                         os.close();
                     }
                     int code = c.getResponseCode();
+                    got = true;
                     InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
                     if (stream && code < 400 && in != null) {
                         BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
@@ -72,13 +79,24 @@ public final class Net {
                         // url — куда привели переадресации (короткая ссылка на карту → полный адрес с координатами)
                         sink.event("http_done", new JSONObject().put("id", id).put("status", code).put("body", text).put("url", c.getURL().toString()));
                     }
+                    break;
                 } catch (Throwable e) {
+                    String m = String.valueOf(e.getMessage());
+                    boolean again = attempt == 0 && !got && RUNNING.containsKey(id) && (e instanceof java.io.IOException)
+                            && (m.contains("unexpected end of stream") || m.contains("Connection reset") || m.contains("closed"));
+                    if (again) {
+                        try { c.disconnect(); } catch (Throwable ignored) { }
+                        try { Thread.sleep(700); } catch (InterruptedException ignored) { }
+                        continue;
+                    }
                     try { sink.event("http_error", new JSONObject().put("id", id).put("error", String.valueOf(e.getMessage() == null ? e : e.getMessage()))); }
                     catch (Throwable ignored) { }
+                    break;
                 } finally {
-                    RUNNING.remove(id);
                     if (c != null) c.disconnect();
                 }
+                }
+                RUNNING.remove(id);
             }
         }, "http-" + id).start();
     }

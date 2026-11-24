@@ -169,7 +169,14 @@
     // точки одного часа не ложатся друг на друга: лёгкий разброс по стабильному хешу
     const jit = (id, k) => { let h = 0; for (const c of id + k) h = (h * 31 + c.charCodeAt(0)) | 0; return ((h % 1000) / 1000 - .5); };
     const P = pts.map(p => ({ ...p, px: Math.max(L + 6, Math.min(W - R - 6, X(p.x) + jit(p.id, "x") * 18)), py: Y(p.s) + jit(p.id, "y") * 10, r: 3 + p.s * .55 }));
-    const top = [...P].sort((a, b) => b.s - a.s).slice(0, 3);
+    // №997 (24.11): «сильнейшее за неделю — новость от 17 ноября, прошлая неделя, и не самая сильная». Сила — целое 0–10, у
+    // десятков набирается много, и при равной силе брались самые старые. Теперь при равной силе — свежее, и без повторов
+    // одного события (заголовки, совпадающие больше чем наполовину)
+    const words = (t) => new Set(String(t || "").toLowerCase().split(/[^a-zа-яё0-9]+/).filter(w => w.length > 3));
+    const same = (a, b) => { const A = words(a.title), B = words(b.title); let n = 0; A.forEach(w => { if (B.has(w)) n++; });
+      return n > 0 && n >= Math.min(A.size, B.size) * 0.5; };
+    const top = [];
+    for (const p of [...P].sort((a, b) => b.s - a.s || b.x - a.x)) { if (top.length >= 3) break; if (!top.some(t => same(t, p))) top.push(p); }
     let t0 = performance.now(), hover = null;
     function frame(now) {
       g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
