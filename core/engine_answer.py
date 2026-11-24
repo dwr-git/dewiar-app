@@ -825,7 +825,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             # ответа и первая строка потока (сеть и посредники) отдельно от первого события (модель)
                             from llm_hints import wait_info
                             wi = wait_info(turn.cancel) or {}
-                            for k_ in ("t_hdr", "t_line"):
+                            for k_ in ("t_conn", "t_tls", "t_sent", "t_hdr", "t_line"):   # 1.0.70: и дорога по шагам
                                 if wi.get(k_):
                                     self.lat.mark(k_[2:], wi[k_])
                     if turn.cancel.is_set():

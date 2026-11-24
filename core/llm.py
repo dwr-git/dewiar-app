@@ -669,6 +669,14 @@ def _lmstudio_wake(url):
 
 
 @contextlib.contextmanager
+def _httpx_stream(method, url, extensions=None, cookies=None, proxy=None, verify=True, timeout=5.0, trust_env=True, **kw):
+    """httpx.stream, но с extensions (шаги дороги — «Рентген дороги», 1.0.70): у httpx.stream этого параметра нет."""
+    with httpx.Client(cookies=cookies, proxy=proxy, verify=verify, timeout=timeout, trust_env=trust_env) as client:
+        with client.stream(method, url, extensions=extensions, **kw) as response:
+            yield response
+
+
+@contextlib.contextmanager
 def _stream_retry(method, url, tries=2, **kw):
     """httpx.stream, но соединение не установилось (сеть моргнула, сервер не принял подключение) — ещё раз: запрос
     ещё не ушёл, повторять безопасно. Отчёт №69: «сервер модели не ответил вовремя» через 5 с, а следующий вопрос —
@@ -681,7 +689,7 @@ def _stream_retry(method, url, tries=2, **kw):
     waits = [1.0, 2.5, 5.0] if cloud else [0.8] * (tries - 1)
     dropped = False
     for i in range(len(waits) + 1):
-        cm = httpx.stream(method, url, **kw)
+        cm = _httpx_stream(method, url, **kw) if "extensions" in kw else httpx.stream(method, url, **kw)
         try:
             r = cm.__enter__()
         except httpx.RemoteProtocolError as e:
@@ -710,6 +718,21 @@ def _stream_retry(method, url, tries=2, **kw):
         finally:
             cm.__exit__(*exc)
         return
+
+
+# «Рентген дороги» (1.0.70, план 24.11): где теряются секунды между «сайт: первое слово за 1 с» и «у людей заголовки через
+# 8,7 с». Шаги httpcore: соединение (TCP), шифрование (TLS), запрос целиком отправлен (тело ушло — его сайт видит только
+# после этого: nginx принимает тело до PHP), заголовки ответа (сайт и модель). Только время, без содержимого.
+_ROAD = {"connection.connect_tcp.complete": "t_conn", "connection.start_tls.complete": "t_tls",
+         "http11.send_request_body.complete": "t_sent", "http2.send_request_body.complete": "t_sent"}
+
+
+def _road_trace(st):
+    def trace(name, info):
+        k = _ROAD.get(name)
+        if k:
+            st.setdefault(k, time.monotonic())
+    return trace
 
 
 def _skip_echo(events, told):
@@ -880,6 +903,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         bare = BareCallCatcher(known_names if prompt_tools_mode(p) or native else [])
         got_text = False
         send, hdrs, gz = _gz_send(p, url, body)
+        if st is not None:
+            send = dict(send, extensions={"trace": _road_trace(st)})
         with _stream_retry("POST", url, **send, headers=hdrs, timeout=timeout) as r:
             if r.status_code >= 400:
                 r.read()

@@ -16,6 +16,8 @@ import threading
 import time
 
 ORDER = ("end", "stt", "req", "tok", "say", "audio")
+# «Рентген дороги» (1.0.70): от «вопрос ушёл» — соединение, шифрование, запрос отправлен, заголовки ответа, первая строка
+ROAD = ("conn", "tls", "sent", "hdr", "line")
 STAGES = (("stt", "end", "stt"), ("prep", "stt", "req"), ("model", "req", "tok"), ("text", "tok", "say"), ("voice", "say", "audio"))
 
 
@@ -69,7 +71,7 @@ class Latency:
                     rec[name] = round(c[b] - c[a], 2)
             if "req" in c and "ev" in c and c["ev"] >= c["req"]:
                 rec["srv"] = round(c["ev"] - c["req"], 2)
-            for k in ("hdr", "line"):                    # 21.11: заголовки ответа и первая строка потока — от запроса
+            for k in ROAD:                               # 21.11: заголовки ответа и первая строка потока — от запроса; 1.0.70: и шаги до них
                 if "req" in c and k in c and c[k] >= c["req"]:
                     rec[k] = round(c[k] - c["req"], 2)
             if "model" in rec:
@@ -108,7 +110,7 @@ class Latency:
         srv = [x["srv"] for x in xs if "srv" in x]
         if srv:
             out["srv"] = _pct(srv, .5)
-        for k in ("hdr", "line"):
+        for k in ROAD:
             v = [x[k] for x in xs if k in x]
             if v:
                 out[k] = _pct(v, .5)

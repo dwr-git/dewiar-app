@@ -103,6 +103,27 @@ def S(props, req=()):
     return {"type": "object", "properties": props, "required": list(req)}
 
 
+# «Короткая подсказка» (1.0.70, план 24.11, за переключателем tools.short — стенд до/после; пакет 24.11: описания действий —
+# 8 846 ток. на ход в среднем, у людей с подключёнными MCP — до 78 действий и 11 тыс. ток., первые слова своей модели через
+# 40–60 с): в каждом вопросе — 13 частых действий; остальное ядро — двумя группами («Мой день», «Программа»), действия
+# MCP-серверов — группой на сервер: приходят по словам вопроса, недавнему делу или просьбе модели (more_tools).
+# Предложенная, но не тронутая группа уходит через 20 минут (а не через 6 часов): набор не копится весь разговор.
+SHORT_CORE = frozenset({"set_reminder", "list_reminders", "cancel_reminder", "save_note", "find_notes", "remember", "web_search",
+                        "read_webpage", "weather", "calc", "world_time", "open_url", "open_app"})
+SHORT_GROUPS = {
+    "day": ("Мой день: дела и отметки «сделано», календарь, дневник, итоги, дела по расписанию, правка заметок и напоминаний",
+            re.compile(r"\bдел[аоу]?\b|дела\b|задач|календар|дневник|итог|расписан|кажд\w*\s+(день|утр|вечер|час|недел|понедел|втор|сред|четв|пятн|суб|воскр)"
+                       r"|по\s+(будням|утрам|вечерам)|будн|отмет|выполн|сделал|измени|исправ|перенес|передвин|заметк|встреч|событи|план", re.I),
+            ("schedule_job", "change_reminder", "update_note", "mark_done", "calendar_list", "write_diary", "done_report")),
+    "app": ("Программа: громкость, обновление, справка о Dewiar и что ты умеешь, виджет",
+            re.compile(r"громк|тише|громче|звук|обнов|верси|dewiar|девиар|настро|умеешь|умеет|виджет|справк|как\s+(тобой|тебя)\s+пользов", re.I),
+            ("app_help", "app_update", "set_volume", "widget")),
+}
+SHORT_OF = {n: g for g, (_t, _rx, names) in SHORT_GROUPS.items() for n in names}
+SHORT_RECENT = 20 * 60
+EXTRA_GROUPS = {}            # id -> название: группы «Короткой подсказки» и MCP-серверов — для more_tools
+
+
 # имя: (описание для модели, схема, риск, обработчик, название в студии)
 def t_more_tools(args, ctx):
     """Модель попросила действия, которых в этом вопросе не было (харнесс, шаг 1): сами действия добавит разговор
@@ -110,6 +131,7 @@ def t_more_tools(args, ctx):
     ids = [str(x) for x in (args.get("packs") or []) if str(x)]
     known = {g["id"]: g["title"] for g in modules.groups()}
     known["core"] = "главные действия"           # «Чистый разговор» (talk_lean): из беседы — к делу
+    known.update(EXTRA_GROUPS)                  # «Короткая подсказка» (1.0.70): «Мой день», «Программа», MCP-серверы
     got = [known[i] for i in ids if i in known]
     if not got:
         raise ToolError("таких групп нет — смотри список в описании more_tools")
@@ -752,9 +774,21 @@ class Toolbox:
             # группа остаётся 6 часов — набор в разговоре только растёт, и сервер не перечитывает разговор заново
             now = time.time()
             used, offered = self.__dict__.setdefault("_used", {}), self.__dict__.setdefault("_offered", {})
-            fresh = {g for g, t in list(used.items()) + list(offered.items()) if now - t < modules.SLIM_RECENT}
+            short = self._short()
+            fresh = {g for g, t in used.items() if now - t < modules.SLIM_RECENT} | \
+                    {g for g, t in offered.items() if now - t < (SHORT_RECENT if short else modules.SLIM_RECENT)}
             all_groups = {g: g_t for g, g_t in modules.slim(out, "", {x["id"] for x in modules.groups()})[1].items()}
             core, extra, _left = modules.slim(out, text, set(keep) | fresh)
+            if short:
+                core, more = self._short_split(core, text, set(keep) | fresh)
+                for g, xs in more.items():
+                    extra.setdefault(g, []).extend(xs)
+                all_groups.update({g: 1 for g in SHORT_GROUPS})
+            if short and self.mcp:                       # MCP — группой на сервер, тоже в more_tools
+                for g, xs in self._mcp_groups().items():
+                    all_groups[g] = 1
+                    if g in set(keep) | fresh or self._mcp_wanted(g, text):
+                        extra.setdefault(g, []).extend(xs)
             first = self.__dict__.setdefault("_first", {})
             for g in extra:
                 if now - offered.get(g, 0) >= modules.SLIM_RECENT:
@@ -763,21 +797,58 @@ class Toolbox:
             out = core
             if all_groups:
                 titles = {x["id"]: x["title"] for x in modules.groups()}
+                titles.update(EXTRA_GROUPS)
                 p = TOOLS["more_tools"][1]
                 out = out + [{"name": "more_tools", "parameters": p, "description": (
                     "Здесь главные действия, остальные — группами. Для просьбы нужна группа, которой нет среди действий, — сначала "
                     "попроси её (packs — id), следующим шагом её действия появятся; не говори «не умею», не попросив: "
                     + "; ".join(f"{g} — {titles[g]}" for g in sorted(all_groups)) + ".")}]
             tail = [x for g in sorted(extra, key=lambda g: (first.get(g, now), g)) for x in extra[g]]
+            mcp_grouped = short
         else:
-            tail = []
+            tail, mcp_grouped = [], False
         if kid_on:
             return out + tail                   # детский режим: ни навыков, ни подключённых MCP — только KIDS_TOOLS
         if self.skills and self.skills.enabled():
             out += [{"name": n, "description": d, "parameters": p} for n, (d, p) in SKILL_TOOLS.items()]
-        if self.mcp:
+        if self.mcp and not mcp_grouped:                # «Короткая подсказка»: MCP уже в группах (в хвосте — нужные)
             out += self.mcp.specs()
         return out + tail                       # подобранное к вопросу — в самом конце (кэш начала запроса)
+
+    def _short(self):
+        """«Короткая подсказка» включена? (tools.short, 1.0.70 — проба за переключателем, стенд: --set tools.short=true)"""
+        return (self.s.get("tools") or {}).get("short") is True
+
+    def _short_split(self, core, text, want):
+        """Ядро -> (13 частых, {группа «Короткой подсказки»: действия, которые нужны этому вопросу})."""
+        for g, (title, _rx, _n) in SHORT_GROUPS.items():
+            EXTRA_GROUPS[g] = title
+        keep, more = [], {}
+        text = re.sub(r"как\s+(?:у\s+\w+\s+)?(?:твои\s+)?дела", " ", text or "", flags=re.I)   # «как дела?» — беседа, не дела
+        for x in core:
+            g = SHORT_OF.get(x.get("name"))
+            if g is None or x.get("name") in SHORT_CORE:
+                keep.append(x)
+            elif g in want or SHORT_GROUPS[g][1].search(text or ""):
+                more.setdefault(g, []).append(x)
+        return keep, more
+
+    def _mcp_groups(self):
+        """Действия MCP по серверам: {"mcp:<сервер>": [действия]}; названия — в EXTRA_GROUPS."""
+        out = {}
+        for x in self.mcp.specs():
+            srv = self.mcp.server_of(x["name"]) or "?"
+            out.setdefault("mcp:" + srv, []).append(x)
+        for g, xs in out.items():
+            EXTRA_GROUPS[g] = f"подключённая программа «{g[4:]}» ({len(xs)} действий)"
+        return out
+
+    @staticmethod
+    def _mcp_wanted(g, text):
+        """Вопрос называет сервер (слово из его имени длиной от 4 букв)."""
+        words = [w for w in re.split(r"[^\wа-яё]+", g[4:].lower()) if len(w) >= 4]
+        t = (text or "").lower()
+        return any(w in t for w in words)
 
     def off_note(self):
         """Что человек сам выключил в студии («Руки» → «Умения») — чтобы модель не говорила «не умею» (№144, 20.10:
@@ -1039,6 +1110,7 @@ class Toolbox:
         if name == "read_skill_file":
             return self.skills.read_file(str(args.get("name", "")), str(args.get("path", "")))
         if self.mcp and self.mcp.has(name):
+            self.__dict__.setdefault("_used", {})["mcp:" + self.mcp.server_of(name)] = time.time()   # «Короткая подсказка»
             return self._fused("mcp:" + self.mcp.server_of(name), lambda: self.mcp.call(name, args or {}))
         # _truncated — служебная пометка llm.py об оборванном ответе, обработчикам не нужна
         args = {k: v for k, v in coerce_args(TOOLS[name][1], args).items() if not k.startswith("_trunc")}
@@ -1046,6 +1118,8 @@ class Toolbox:
         g = modules.pack_of(name)
         if g is not None:                               # пользовались — группа остаётся у модели ещё 6 часов (specs)
             self.__dict__.setdefault("_used", {})[g["id"]] = time.time()
+        if name in SHORT_OF:                            # «Короткая подсказка»: и группа «Мой день» / «Программа»
+            self.__dict__.setdefault("_used", {})[SHORT_OF[name]] = time.time()
         m = modules.of(name)
         return call() if m is None else self._fused(m["id"], call)
 
