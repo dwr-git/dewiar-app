@@ -2547,31 +2547,46 @@ class Api:
 
     def _studio_focus_win(self, win):
         """Windows — как _studio_focus_hook: пока студия активна, она сама TopMost и выше окон Лиры; ушли из неё — обычное
-        окно. Окна Лиры не трогаем. TopMost — через _topmost_ui в отдельном потоке (Invoke в поток формы)."""
-        import threading
+        окно. Окна Лиры не трогаем.
+        №1059 (25.11, Windows 11, «поверх всех» включено: «после 1.0.68–69 зависают главный экран и плавающее окно, лечится
+        только перезапуском»): на каждое Activated/Deactivate запускался поток с синхронным Invoke в окно, и TopMost
+        ставился, даже если уже такой. Смена TopMost сама двигает активацию окон — события шли лавиной, окна вставали. Теперь
+        события уже в потоке окна: только если состояние правда меняется, и BeginInvoke (без ожидания и без потоков)."""
         try:
             from webview.platforms.winforms import BrowserView
+            from System import Action                 # noqa: PLC0415 — pythonnet есть только в Windows
             f = BrowserView.instances.get(getattr(win, "uid", None))
         except Exception:  # noqa: BLE001
             return
         if f is None or getattr(self, "_studio_focus_form", None) is f:
             return
         self._studio_focus_form = f
+        last = [None]                                  # что ставили этой форме (у новой студии — с начала)
 
         def put(front):
-            if ON_TOP[0]:
-                STUDIO_FRONT[0] = front
-                _topmost_ui(win, front)
+            if not ON_TOP[0] or last[0] == front:
+                return
+            last[0] = STUDIO_FRONT[0] = front
 
-        def on(front):
-            return lambda *_: threading.Thread(target=put, args=(front,), daemon=True).start()
+            def _set():
+                try:
+                    if bool(f.TopMost) != front:
+                        f.TopMost = front
+                    win._Window__on_top = front        # pywebview помнит значение у себя — держим в согласии
+                except Exception as e:  # noqa: BLE001
+                    _ui_log(f"студия впереди: {e}")
+            try:
+                f.BeginInvoke(Action(_set))
+            except Exception as e:  # noqa: BLE001
+                _ui_log(f"студия впереди: {e}")
+
         try:
-            f.Activated += on(True)
-            f.Deactivate += on(False)
+            f.Activated += lambda *_: put(True)
+            f.Deactivate += lambda *_: put(False)
         except Exception as e:  # noqa: BLE001
             _ui_log(f"студия впереди: {e}")
             return
-        on(True)()
+        put(True)
 
     def _studio_focus_hook(self):
         """Владелец 24.11 (Ubuntu): «виджет всегда выше всех — открываю студию, она под виджетом… на чём фокус, то и

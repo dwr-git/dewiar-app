@@ -77,37 +77,54 @@ class Ev:
             fn(None, None)
 
 
-form = types.SimpleNamespace(Activated=Ev(), Deactivate=Ev())
+class Form:
+    def __init__(self):
+        self.Activated, self.Deactivate = Ev(), Ev()
+        self._top, self.sets, self.posted = False, 0, 0
+
+    @property
+    def TopMost(self):
+        return self._top
+
+    @TopMost.setter
+    def TopMost(self, v):
+        self._top = v; self.sets += 1
+        # как в Windows: смена TopMost двигает активацию окна — событие приходит снова (№1059: лавина событий)
+        if self.sets < 50:
+            (self.Activated if v else self.Deactivate).fire()
+
+    def BeginInvoke(self, act):
+        self.posted += 1; act()
+
+
+form = Form()
 wfmod = types.ModuleType("webview.platforms.winforms")
 wfmod.BrowserView = type("BV", (), {"instances": {"st": form}})
 sys.modules["webview.platforms.winforms"] = wfmod
-top = {}
-
-
-class T:
-    def __init__(self, target, args, daemon):
-        self.f, self.a = target, args
-
-    def start(self):
-        self.f(*self.a)
-
-
+sysm = types.ModuleType("System"); sysm.Action = lambda f: f; sys.modules["System"] = sysm
 import threading  # noqa: E402
-threading.Thread = T
+spawned = []
+_RealThread = threading.Thread
+threading.Thread = lambda *a, **k: spawned.append(1) or _RealThread(*a, **k)
 ON_TOP[0] = True
-ns2 = {"ON_TOP": ON_TOP, "STUDIO_FRONT": FRONT, "_ui_log": print, "_topmost_ui": lambda w, on: top.__setitem__(w.uid, on)}
+ns2 = {"ON_TOP": ON_TOP, "STUDIO_FRONT": FRONT, "_ui_log": print}
 exec("class B:\n" + src[i:j] + "\n", ns2)
 b = ns2["B"](); st = types.SimpleNamespace(uid="st")
 b.wins = {"mini": types.SimpleNamespace(uid="a")}
+FRONT[0] = False
 b._studio_focus_win(st)
-ok(top == {"st": True}, f"Windows: студия открылась — сама TopMost, виджет не трогаем: {top}")
+ok(form.TopMost is True and form.sets == 1, f"Windows: студия открылась — сама TopMost один раз (установок: {form.sets})")
 form.Deactivate.fire()
-ok(top == {"st": False}, "Windows: ушли из студии — обычное окно")
-form.Activated.fire()
-ok(top["st"] is True, "Windows: вернулись в студию — она впереди")
+ok(form.TopMost is False and form.sets == 2, f"Windows: ушли из студии — обычное окно (установок: {form.sets})")
+form.Activated.fire(); form.Activated.fire(); form.Activated.fire()
+ok(form.TopMost is True and form.sets == 3, f"№1059: повторные «активна» — без новых установок, без лавины (установок: {form.sets})")
+ok(not spawned, "№1059: ни одного потока на события окна — BeginInvoke из потока окна")
 b._studio_focus_win(st)
 ok(len(form.Activated.fns) == 1, "Windows: к одной форме подключаемся один раз")
-ON_TOP[0] = False; top.clear(); form.Activated.fire()
-ok(top == {}, "Windows: «поверх всех» выключено — не трогаем")
+form2 = Form(); wfmod.BrowserView.instances["st2"] = form2; FRONT[0] = True
+b._studio_focus_win(types.SimpleNamespace(uid="st2"))
+ok(form2.TopMost is True, "закрыли и открыли студию заново — новая снова впереди")
+ON_TOP[0] = False; n = form.sets; form.Deactivate.fire()
+ok(form.sets == n, "Windows: «поверх всех» выключено — не трогаем")
 print("ИТОГ: " + ("всё прошло" if not fails else f"провалов {len(fails)}"))
 sys.exit(1 if fails else 0)
