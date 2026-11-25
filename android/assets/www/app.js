@@ -3930,7 +3930,6 @@ function tmrDraw() {
     $(".fg", r).style.strokeDashoffset = String(Math.min(100, Math.max(0, 100 - left / all * 100))); });
   if (TMRS.every(x => +x.at < now - 1500)) tmrShow();
 }
-
 /* ---------- быстрые команды без модели (работают и без интернета) ---------- */
 /* -> {say, card?, silent? (не озвучивать), switchTo?/question? (передать другому персонажу)} или null — тогда решает модель.
    Фразы — только целиком (^…$): похожая, но длиннее просьба уходит модели, а не исполняется наполовину. */
@@ -9025,7 +9024,7 @@ function mindPrompt() {
 function syncSnapshot(st) {
   const out = {};
   JSON.parse(D.alarms() || "[]").forEach(x => { out["reminder:" + x.id] = Object.assign({ text: x.title || "", at: +x.at, kind: x.kind || "reminder", repeat: repToDict(x.repeat, x.at), paused: false },
-    x.note ? { note: x.note } : {}); });                // note — id заметки с фото и файлами (то же, что note:<id>)
+    x.note ? { note: x.note } : {}, x.who ? { who: x.who } : {}); });   // note — id заметки с фото и файлами; who — кто ставил
   notes().forEach(x => { out["note:" + x.id] = { title: x.title || "", text: x.text || "", folder: x.folder || "" };
     if (+x.time) Object.defineProperty(out["note:" + x.id], "t", { value: +x.time, enumerable: false }); });   // когда написана: старая копия не перебьёт новую
   money().forEach(x => { out["money:" + x.id] = { date: x.date, kind: x.kind, amount: +x.amount, currency: x.currency, category: x.category || "", note: x.note || "" }; });
@@ -9073,7 +9072,10 @@ function syncApply(it) {
     if (!d.repeat && +d.at < Date.now() - 300000 && !exists) return false;
     if (d.paused) { if (exists) D.alarmCancel(it.id); return true; }
     const was = exists ? JSON.parse(D.alarms() || "[]").find(x => x.id === it.id) : null, note = "note" in d ? d.note : was && was.note;
-    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) }, was && was.who ? { who: was.who } : {},   // №980: кто ставил — не теряем при правке с компьютера
+    // №980 (третий раз, 25.11): кто ставил — приходит с компьютера (d.who); нет — прежний; нет и его — тот, кто главный сейчас
+    // (S.persona), а не «текущий облик» уведомлений, который мог остаться от Патрика
+    const who = [d.who, was && was.who, S.persona].find(w => w && PERSONAS.some(p => p.id === w)) || "";
+    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) }, who ? { who } : {},
       note ? { note } : {})));
     if (d.kind === "timer") setTimeout(tmrShow, 0);
   } else if (it.kind === "note") {
@@ -10631,7 +10633,13 @@ function updInstall() {
 }
 N.on("upd_progress", e => { const p = $("#upd-pct"); if (p) p.textContent = e.pct >= 0 ? e.pct + "%" : ""; });
 N.on("upd_ready", () => { plog("info", "⬇️ обновление скачано — открываю установку"); updInstall(); });
-N.on("upd_error", e => updRender(`Не скачалось: ${esc(e.error || "ошибка связи")}.<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"));
+// №1057: попытки и причина — в журнал (раньше отказ не оставлял следа в отчёте); три попытки не помогли — дорога портит
+// файл: путь в обход — скачать со страницы сайта в браузере
+N.on("upd_retry", e => plog("warn", `⬇️ обновление: попытка ${e.try} — ${e.error}`));
+N.on("upd_error", e => { plog("warn", `⬇️ обновление не скачалось: ${e.error}`);
+  updRender(`Не скачалось три раза: ${esc(e.error || "ошибка связи")}. Похоже, файл портит сеть — VPN, прокси или экономия трафика. `
+    + `Выключите их и попробуйте ещё раз — или скачайте Dewiar со страницы <b>dewiar.pro</b> в браузере и установите поверх: всё сохранится.`
+    + `<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && updWantInstall && D.updateCanInstall && D.updateCanInstall()) { updWantInstall = false; updInstall(); } });
 const UPD_OLD = `<p class="hint" style="margin:8px 2px 0">Раньше обновления скачивал браузер — в «Загрузках» могли остаться старые Dewiar-….apk, их можно удалить.</p><button class="btn w" id="upd-dl" style="margin-top:6px">Открыть Загрузки</button>`;
 /* «обновись» голосом: есть новее — открываем «О приложении» и запускаем обновление; нет — говорим, какая стоит.
@@ -11095,6 +11103,11 @@ function handleIntent(e) {
   }
   else if (e.action === "link") { const m = /server=([^&]+)/.exec(e.url || ""); if (m) { openSettings("brain"); setTimeout(() => { const d = $(".brainalt"); if (d) d.open = true; $('.tile[data-w="pc"]').click(); $("#w-addr").value = decodeURIComponent(m[1]); }, 300); } }
 }
+/* №980, третий раз (владелец 25.11: «активная Лира — в уведомлении Патрик»): напоминания, пришедшие с компьютера до 0.9.92,
+   лежат без «кто ставил», и уведомление подписывалось «текущим обликом», оставшимся от Патрика. Один раз при запуске
+   подписываем такие главным персонажем сейчас; новые приходят с who (sync). */
+setTimeout(() => { try { const pid = S.persona; if (!pid || !PERSONAS.some(p => p.id === pid)) return;
+  JSON.parse(D.alarms() || "[]").filter(a => a && a.id && !a.who).forEach(a => D.alarmSet(JSON.stringify(Object.assign({}, a, { who: pid })))); } catch (e) { } }, 4000);
 /* ---------- «Близкие»: переписка между помощниками разных людей (как core/close.py; сервер — cloud.php ?p=/close/…) ----------
    Ключи устройства X25519 — в настройках приложения (prefs close_key); сообщения и файлы шифруются здесь же
    (closecrypto.js — тот же формат, что у компьютера); сервер видит только, кому и когда. Состояние и переписка — файл
@@ -13174,9 +13187,12 @@ function welcomePlan(now, seen, lastGreet, tasks, alarms, dstat, eveSaid) {
   return facts.length ? { kind: "back", facts, gone: goneTxt } : null;
 }
 function welcomePrompt(p) {
-  const d = new Date(), wd = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"][d.getDay()];
+  const W = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"], d = new Date();
+  // №1056 (25.11): «Среда началась. Сегодня четверг — значит, завтра викторина» — в памяти «викторины по четвергам», и
+  // модель сама считала, какой день завтра. Завтрашний день недели теперь называем прямо
+  const wd = W[d.getDay()], wd2 = W[(d.getDay() + 1) % 7];
   if (p.kind === "eve") return p.facts.join("\n") + `\n\n[Вечер, пользователь вернулся в приложение, не было ${p.gone}] Подведи итог дня: скажи, сколько дел он сегодня сделал, похвали тепло и конкретно (назови одно-два дела своими словами); если есть другие новости отсюда — одной фразой. 2–3 коротких предложения, без списков, без вопросов в конце, без инструментов.`;
-  if (p.kind === "day") return `Сегодня ${d.toLocaleDateString("ru-RU")}, ${wd}, сейчас ${pad(d.getHours())}:${pad(d.getMinutes())}.\n` + p.facts.join("\n")
+  if (p.kind === "day") return `Сегодня ${d.toLocaleDateString("ru-RU")}, ${wd} (завтра — ${wd2}), сейчас ${pad(d.getHours())}:${pad(d.getMinutes())}.\n` + p.facts.join("\n")
     + `\n\n[Пользователь открыл приложение — первый раз за день, не было ${p.gone}] Поздоровайся первым (в своём роде), по имени, если знаешь, и коротко скажи главное на сегодня из этих данных: погода (если есть), напоминания, что ждёт от сотрудников и клиентов, важные письма от людей, одна интересная новость из Радара (если есть). Не всё подряд — самое нужное; дела, которые он и так видит, не пересказывай целиком. 2–4 коротких предложения, живо и тепло, без списков, без вопросов в конце, без инструментов.`;
   return p.facts.join("\n") + `\n\n[Пользователь вернулся в приложение, не было ${p.gone}] Коротко поприветствуй и скажи главное из этого — 1–2 коротких предложения, живо, без списков и без вопросов в конце, без инструментов.`;
 }

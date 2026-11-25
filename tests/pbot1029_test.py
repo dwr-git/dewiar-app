@@ -168,6 +168,7 @@ try:
             time.sleep(0.7)
         last = pg.inner_text("#bp-chat .bp-b.bot:last-child")
         ok("450 рублей" in last and "**" not in last, f"«Проверить ответ»: отвечает по знаниям, без разметки: {last!r}")
+        ok("Нашлось в «Прайс чая»" in last, f"25.11: под ответом — что нашлось в знаниях: {last[-80:]!r}")
         s0 = LLM[-1]["system"] if LLM else ""
         ok(LLM and LLM[-1]["model"] == "claude-mock" and "Ты — Патрик" in s0 and "Чайный двор" in s0, "думает мозгом Патрика, с «О чём бот»")
         ok("НЕТ доступа" in s0 and "Секретов" not in s0 and "Иннокентий" not in s0, "в подсказке — что доступа к личному нет; имени владельца нет")

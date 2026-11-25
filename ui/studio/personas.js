@@ -317,15 +317,16 @@ $("#e-nophoto").onclick = () => { ed.avatar_data = null; ed.avatar = ""; ed.avat
    Папки пользователя и публичная библиотека на dewiar.pro (нужен вход в аккаунт); ed.knowledge — [{kind, id, label, lib?}],
    не больше шести — столько же оставляет ядро (core/personas.py). Список баз запрашивается один раз за сеанс (kbBases). */
 let kbBases = null;
-function kbKey(b) { return b.kind === "folder" ? `folder:${b.path}` : `${b.kind}:${b.id}`; }
+// папка на компьютере — kind "folder" с путём; «Мои папки» сайта — тоже "folder", но с id (25.11: ключ был один на все)
+function kbKey(b) { return b.kind === "folder" && b.path ? `folder:${b.path}` : `${b.kind}:${b.id}`; }
 function renderKb(open) {
   const box = $("#e-kb"); if (!box || !ed) return;
   const sel = ed.knowledge || [];
   box.innerHTML = `<div class="kbsel"></div><div class="actions" style="margin:0"><button class="btn small" id="kb-cloud" title="Файлы «Облака Лиры» — те же на всех ваших устройствах">☁️ Облако Лиры</button><button class="btn small" id="kb-folder">Папка на компьютере…</button>`
-    + `<button class="btn small" id="kb-pick">${open ? "Свернуть" : sel.some(b => b.kind !== "folder") ? "Изменить базы сайта" : "Базы с сайта…"}</button></div>`;
+    + `<button class="btn small" id="kb-pick">${open ? "Свернуть" : sel.some(b => !b.path) ? "Изменить базы сайта" : "Базы с сайта…"}</button></div>`;
   const chips = $(".kbsel", box);
   if (!sel.length) chips.innerHTML = '<span class="hint" style="background:none;padding:0">Не подключено — персонаж отвечает по своим знаниям.</span>';
-  sel.forEach((b, i) => { const c = document.createElement("span"); c.textContent = (b.kind === "folder" ? (b.label === "Облако Лиры" ? "☁️ " : "📁 ") : "") + b.label; if (b.path) c.title = b.path;
+  sel.forEach((b, i) => { const c = document.createElement("span"); c.textContent = (b.path ? (b.label === "Облако Лиры" ? "☁️ " : "📁 ") : "") + b.label; if (b.path) c.title = b.path;
     const x = document.createElement("button"); x.textContent = "×"; x.title = "Отключить";
     x.onclick = () => { ed.knowledge.splice(i, 1); renderKb(open); }; c.appendChild(x); chips.appendChild(c); });
   $("#kb-pick").onclick = () => renderKb(!open);

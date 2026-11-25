@@ -447,4 +447,3 @@ function tmrDraw() {
     $(".fg", r).style.strokeDashoffset = String(Math.min(100, Math.max(0, 100 - left / all * 100))); });
   if (TMRS.every(x => +x.at < now - 1500)) tmrShow();
 }
-

@@ -420,7 +420,7 @@ class ServicesCommands:
                     if len(q) < 2:
                         raise ValueError("напишите вопрос, как его задал бы посетитель")
                     try:
-                        r = {"answer": pb.test_answer(q)}
+                        r = pb.test(q)
                         self._course_did("pbot_try")
                     except Exception as e:  # noqa: BLE001
                         raise ValueError(f"модель не ответила: {e}") from e

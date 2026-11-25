@@ -153,6 +153,15 @@ function pbBubble(cls, html) {
   ch.scrollTop = ch.scrollHeight;
   return ch.lastElementChild;
 }
+/* Что нашлось в знаниях — строкой под ответом (письмо 25.11: «в „Проверить ответ“ не видит Библию»: на «Что ты знаешь?»
+   в базе нечего найти, и было непонятно, искал ли бот вообще). Баз нет — строки нет. */
+function pbKbNote(a, kb) {
+  kb = kb || {}; const j = (a) => (a || []).join(", ");
+  const [cls, t] = (kb.found || []).length ? ["ok", `Нашлось в ${j(kb.found)}`]
+    : (kb.errs || []).length ? ["bad", `Знания не ответили — ${j(kb.errs)}`]
+    : (kb.empty || []).length ? ["", `В ${j(kb.empty)} по этим словам ничего не нашлось — спросите о конкретном`] : [];
+  if (t) a.insertAdjacentHTML("beforeend", `<em class="bp-kbn ${cls}">${pbEsc(t)}</em>`);   // внутри ответа: он остаётся последним в ленте
+}
 async function pbTry() {
   const q = $("#bp-q").value.trim(); if (q.length < 2) { $("#bp-q").focus(); return; }
   const p = pbPersona();
@@ -162,6 +171,7 @@ async function pbTry() {
   try {
     const r = await core.call("pbot_try", { text: q });
     a.innerHTML = `<small>${pbEsc(p.name)}</small>` + pbEsc(r.answer).replace(/\n/g, "<br>");
+    pbKbNote(a, r.kb);
     pbPulse();
   } catch (e) { a.classList.add("err"); a.innerHTML = `<small>${pbEsc(p.name)}</small>${pbEsc(e.message)}`; }
   $("#bp-send").disabled = false; $("#bp-chat").scrollTop = 1e6;

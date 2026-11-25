@@ -1028,12 +1028,13 @@ class BrainMixin:
             return False
         return bool(p.get("knowledge")) and not KB_NOTES_RX.search((text or "").split("\n\nВложения:")[0])
 
-    def _persona_knowledge(self, text, turn, p=None, quiet=False, hist=None):
+    def _persona_knowledge(self, text, turn, p=None, quiet=False, hist=None, info=None):
         """У персонажа подключены базы сайта Dewiar (например, «Библия» из публичной библиотеки): перед ответом
         ищем во всех параллельно по вопросу и даём модели найденное — персонаж отвечает по источнику, своим голосом.
         Нужен вход аккаунтом. -> добавка к системной подсказке ("" — баз нет или ход отменён); картинки к найденному
         показываются в фоне. p, quiet, hist — для «Бота персонажа» (pbot.py): чужой персонаж, без событий в окна и
-        без картинок, своя переписка вместо истории разговора."""
+        без картинок, своя переписка вместо истории разговора. info (dict) — что нашлось, для «Проверить ответ»:
+        {"found": [...], "empty": [...], "errs": [...]} — подписи баз."""
         if p is None:
             try:
                 p = self.personas.get(self.s.get("persona")) or {}
@@ -1044,9 +1045,16 @@ class BrainMixin:
         q = (text or "").split("\n\nВложения:")[0].strip()
         if not allb or len(q) < 3:
             return ""
-        local = self._persona_local_knowledge(q, [b for b in allb if b.get("kind") == "folder"], quiet=quiet)
-        bases = [b for b in allb if b.get("kind") != "folder"]
-        if not bases or not self.account.logged_in():
+        # папка на компьютере — kind "folder" С путём; «Мои папки» на сайте — тоже kind "folder", но с id и без пути
+        # (письмо 25.11: «не видит RAG с сайта» — папка сайта уходила в поиск по компьютеру и роняла все знания)
+        local = self._persona_local_knowledge(q, [b for b in allb if b.get("kind") == "folder" and b.get("path")], quiet=quiet,
+                                              info=info)
+        bases = [b for b in allb if not (b.get("kind") == "folder" and b.get("path"))]
+        if bases and not self.account.logged_in():
+            if info is not None:
+                info.setdefault("errs", []).append("базы сайта: не выполнен вход в аккаунт Dewiar")
+            return local
+        if not bases:
             return local
         from concurrent.futures import ThreadPoolExecutor
         from account import AccountError
@@ -1081,6 +1089,10 @@ class BrainMixin:
                  time.monotonic() - t0, ("; ошибки: " + "; ".join(errs)) if errs else "")
         emit("tool", name="knowledge", title=f"Ищу в {labels}", status="error" if errs and not parts else "done",
                   **({"error": errs[0]} if errs and not parts else {}))
+        if info is not None:
+            for b, r, err in got:
+                info.setdefault("errs" if err else "found" if r and r["found"] else "empty", []).append(
+                    f"«{b.get('label')}»" + (f": {err}" if err else ""))
         if images and not quiet:
             threading.Thread(target=self._show_rag_images, args=(images,), daemon=True).start()
         out = ""
@@ -1092,13 +1104,20 @@ class BrainMixin:
             if srcs:
                 out += "\n\nИсточники: " + "; ".join(dict.fromkeys(srcs))
         elif empty:
-            out = (f"\n\nВ твоей базе знаний ({', '.join(empty)}) по этому вопросу ничего не нашлось. Если отвечаешь "
-                   "от себя — так и скажи одной фразой.")
+            # «Что ты знаешь?», «о чём ты?» — по таким словам в базе ничего не найти, и персонаж отвечал «в моей базе
+            # ничего не нашлось», будто баз нет (письмо 25.11, №985). Теперь он знает, какие базы у него есть
+            names = ", ".join(empty)
+            one = len(empty) == 1
+            out = (f"\n\nТВОИ ЗНАНИЯ — {names} ({'база' if one else 'базы'} на сайте Dewiar). По словам этого вопроса "
+                   f"в {'ней' if one else 'них'} ничего не нашлось. "
+                   f"Спрашивают, что ты знаешь, о чём можешь рассказать или чем поможешь, — скажи, что отвечаешь по {names}, "
+                   "и предложи спросить о конкретном. Вопрос о другом — ответь от себя и одной фразой скажи, что в "
+                   f"{names} об этом нет.")
         if errs and not parts:
             out += f"\n\nБаза знаний сейчас недоступна ({errs[0]}). Ответь от себя и коротко скажи, что база не ответила."
         return local + out
 
-    def _persona_local_knowledge(self, q, folders, quiet=False):
+    def _persona_local_knowledge(self, q, folders, quiet=False, info=None):
         """Знания персонажа из папок на этом компьютере (YouTube 27.10: «при создании персонажа нет возможности добавить
         знания из локальной папки, только с сервера»): поиск по отрывкам (knowledge.py, BM25) только в его папках, без
         интернета и входа. -> добавка к подсказке ("" — папок нет)."""
@@ -1131,13 +1150,18 @@ class BrainMixin:
                 "и from (номер отрывка), порцию за порцией, сколько нужно для ответа; оглавление книги с номерами глав — "
                 "search_documents с одним file. Заметки человека (find_notes) не "
                 "трогай, если он сам о них не просит.")
+        if quiet:                                     # «Бот персонажа»: действий у него нет — искать дальше нечем
+            rule = " Это всё, что нашлось к вопросу, — других поисков не будет."
+        if info is not None:
+            info.setdefault("found" if res else "empty", []).append(labels)
         if not res:
             busy = any(st.get("busy") for st in getattr(kn, "fstate", {}).values())
             if busy:
                 return (f"\n\nТвои папки со знаниями ({labels}) ещё читаются — новые файлы проиндексируются за несколько "
                         f"минут.{have} Скажи об этом честно и предложи спросить чуть позже; не выдумывай.")
             return (f"\n\nТВОИ ПАПКИ СО ЗНАНИЯМИ ({labels}).{have} По словам этого вопроса ничего не нашлось.{rule} "
-                    "Не нашла и так — скажи честно, что в этих файлах ответа не нашла; от себя — только с этой оговоркой.")
+                    "Не нашла и так — скажи честно, что в этих файлах ответа не нашла; от себя — только с этой оговоркой. "
+                    "Спрашивают, что ты знаешь или о чём можешь рассказать, — назови эти папки и файлы.")
         if not quiet:
             self.emit("tool", name="knowledge", title=f"Найдено в {labels}", status="done")
         return (f"\n\nТВОЯ БАЗА ЗНАНИЙ (папки на компьютере пользователя: {labels}).{have} Найдено по вопросу — отвечай, "

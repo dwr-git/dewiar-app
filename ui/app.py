@@ -1825,12 +1825,38 @@ class Api:
                 _ui_log(f"поверх окон: {e}")
         return ON_TOP[0]
 
+    def _file_dialog(self, kind, **kw):
+        """Окно выбора файла или папки. Письмо 25.11 (Windows): «окно выбора папки зависает, ничего не сделать — только
+        закрыть программу в трее; и после перезапуска не работает». pywebview в Windows открывает диалог прямо из потока
+        вызова со страницы, а владелец диалога — окно студии в своём потоке; так же висло окно с «поверх всех» (№438).
+        Теперь в Windows диалог открывается в потоке окна (Invoke) — он принадлежит студии и всегда поверх неё.
+        -> путь(и) или None (отказались, не открылся)."""
+        w = self._studio or self._hud
+        if WIN:
+            try:
+                from webview.platforms.winforms import BrowserView
+                from System import Action                 # noqa: PLC0415 — pythonnet есть только в Windows
+                f = BrowserView.instances.get(getattr(w, "uid", None))
+                if f is not None and f.InvokeRequired:
+                    out = []
+
+                    def run():
+                        if f.TopMost:                     # студия «впереди» (_studio_focus_win) — не заслонять диалог
+                            f.TopMost = False
+                        out.append(w.create_file_dialog(kind, **kw))
+                    f.Invoke(Action(run))
+                    return out[0] if out else None
+            except Exception as e:  # noqa: BLE001
+                _ui_log(f"окно выбора файла: {e}")
+                return None
+        return w.create_file_dialog(kind, **kw)
+
     def pick_folder(self):
         """Выбор папки проекта (для задач по коду). -> путь или "" (отказались)."""
         import webview
         # новые pywebview — webview.FileDialog.*, старые — webview.*_DIALOG (так же в pick_file и save_file*)
         kind = getattr(getattr(webview, "FileDialog", None), "FOLDER", None) or webview.FOLDER_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()))
+        res = self._file_dialog(kind, directory=str(Path.home()))
         if not res:
             return ""
         return res if isinstance(res, str) else res[0]
@@ -1845,7 +1871,7 @@ class Api:
             start = str(default_dir()) if default_dir().is_dir() else str(Path.home())
         except Exception:  # noqa: BLE001
             start = str(Path.home())
-        res = (self._studio or self._hud).create_file_dialog(k, directory=start, file_types=types)
+        res = self._file_dialog(k, directory=start, file_types=types)
         if not res:
             return ""
         return res if isinstance(res, str) else res[0]
@@ -2120,7 +2146,7 @@ class Api:
         """Сохранение через системный диалог (в окне pywebview обычные загрузки не работают)."""
         import webview
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()), save_filename=filename,
+        res = self._file_dialog(kind, directory=str(Path.home()), save_filename=filename,
                                                             file_types=("Настройки Dewiar (*.dewiar)", "Все файлы (*.*)"))
         if not res:
             return ""
@@ -2134,7 +2160,7 @@ class Api:
         import base64
         import webview
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()), save_filename=filename)
+        res = self._file_dialog(kind, directory=str(Path.home()), save_filename=filename)
         if not res:
             return ""
         path = res if isinstance(res, str) else res[0]
@@ -2154,7 +2180,7 @@ class Api:
             raise ValueError("скачать можно только файл из облака Лиры")      # мост окна — не копировщик любых файлов
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
         start = Path.home() / "Downloads" if (Path.home() / "Downloads").is_dir() else Path.home()
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(start), save_filename=filename or p.name)
+        res = self._file_dialog(kind, directory=str(start), save_filename=filename or p.name)
         if not res:
             return ""
         path = res if isinstance(res, str) else res[0]

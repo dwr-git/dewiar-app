@@ -210,7 +210,9 @@ function renderSide() {
   $("#cs-open").onclick = () => openDay(d);
   bindAdd("cs", d); bindGrip();
 }
-/* «Добавить на этот день»: напоминание и деньги — в столбце справа (cs) и в окне дня (dd) */
+/* «Добавить на этот день»: напоминание и деньги — в столбце справа (cs) и в окне дня (dd). №1052 (25.11: «кнопка
+   „Записать расход“ — не понятен функционал, расход в другом разделе»): в столбце деньги свёрнуты под понятной строкой,
+   кнопка говорит, куда запишет */
 function addForm(p, wide) {
   if (wide) return `<div class="qadd wide">
       <div class="row2"><input type="time" id="${p}-time" value="10:00"><input type="text" id="${p}-text" placeholder="напомнить: позвонить Лёше" class="grow"><button class="btn small" id="${p}-rem">Напомнить</button></div>
@@ -219,9 +221,10 @@ function addForm(p, wide) {
   return `<div class="qadd">
       <div class="row2"><input type="time" id="${p}-time" value="10:00"><input type="text" id="${p}-text" placeholder="напомнить: позвонить Лёше"></div>
       <button class="btn small" id="${p}-rem">Напомнить</button>
+      <details class="qmoney"><summary>Расход или доход за этот день</summary>
       <div class="row2"><select id="${p}-kind"><option value="expense">Расход</option><option value="income">Доход</option></select><input type="number" id="${p}-amount" placeholder="сумма" min="0" step="0.01"></div>
       <input type="text" id="${p}-note" placeholder="на что (кофе, такси, зарплата…)">
-      <button class="btn small" id="${p}-money">Записать деньги</button>
+      <button class="btn small" id="${p}-money">Записать в «Деньги»</button></details>
     </div>`;
 }
 function bindAdd(p, d) {

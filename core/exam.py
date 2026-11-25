@@ -551,7 +551,8 @@ def judge(profile, sc, transcript, state_text, at=None, memory=""):
         px = net.profile_proxy(profile)
     try:
         with px:
-            out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=300, timeout=min(float(profile.get("timeout") or 90), 90)),
+            # max_tokens 1500 (25.11): внешний судья бывает думающей моделью (Gemini) — 300 уходили на размышления, JSON не успевал
+            out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=1500, timeout=min(float(profile.get("timeout") or 90), 90)),
                                       JUDGE_SYSTEM, [{"role": "user", "content": content}]))
     except Exception as e:  # noqa: BLE001
         return {"score": None, "why": f"судья не ответил: {e}"}

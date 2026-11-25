@@ -942,6 +942,11 @@ dialog.daydlg { width: min(760px, calc(100% - 32px)); padding: 22px 26px 24px; }
 .cit .amt { font-weight: 700; white-space: nowrap; } .amt.inc { color: var(--good); } .amt.exp { color: #FFB3C3; }
 .calside .qadd { display: grid; gap: 6px; margin-top: 12px; }
 .calside .qadd .row2 { display: flex; gap: 6px; } .calside .qadd .row2 > * { flex: 1; min-width: 0; }
+.calside .qmoney { display: grid; gap: 6px; } .calside .qmoney[open] { margin-top: 4px; }
+.calside .qmoney > summary { cursor: pointer; list-style: none; font-size: 12.5px; color: var(--muted); padding: 6px 2px; }
+.calside .qmoney > summary::-webkit-details-marker { display: none; }
+.calside .qmoney > summary::before { content: "+ "; color: var(--accent); font-weight: 700; } .calside .qmoney[open] > summary::before { content: "− "; }
+.calside .qmoney > summary:hover { color: var(--ink); }
 .mocards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
 .mocard { background: var(--frost); border-radius: 18px; padding: 14px 16px; }
 .mocard b { display: block; font: 700 24px/1.2 "Unbounded", "Manrope", sans-serif; } .mocard span { color: var(--muted); font-size: 13px; }
@@ -3949,6 +3954,9 @@ html.st-light .co-stop { background: color-mix(in srgb, var(--ink) 8%, transpare
 .bp-b.bot { align-self: flex-start; background: var(--panel2); border-bottom-left-radius: 6px; }
 .bp-b.bot small { display: block; font-size: 11.5px; font-weight: 700; color: var(--accent); margin-bottom: 2px; }
 .bp-b.err { opacity: .75; }
+.bp-kbn { display: block; margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(127,127,127,.16); font-style: normal; font-size: 12px; color: var(--muted); }
+.bp-kbn::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--dim); }
+.bp-kbn.ok::before { background: #2fb36b; } .bp-kbn.bad::before { background: #e0703a; }
 .bp-ask { display: flex; gap: 8px; } .bp-ask input { flex: 1; min-width: 0; }
 .bp-lh { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; } .bp-stat { font-size: 12px; color: var(--muted); }
 .bp-chats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); } .bp-chats:empty { display: none; }
