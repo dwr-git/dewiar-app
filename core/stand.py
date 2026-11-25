@@ -202,18 +202,48 @@ def markdown(meta, sc, gr):
     return "\n".join(L) + "\n"
 
 
-async def run_stand(prof, jp, groups, A, B, repeat, log=print):
+async def run_stand(prof, jp, groups, A, B, repeat, log=print, partial=None, resume=False):
     """До (A) и после (B) по очереди, repeat раз -> отчёт в виде отчёта экзамена (кабинет его принимает как есть):
-    сценарии и итог — последнего прогона «после» (или «до»), а таблица стенда — в stand и stand_md."""
+    сценарии и итог — последнего прогона «после» (или «до»), а таблица стенда — в stand и stand_md.
+    partial / resume (владелец 25.11: «экзамен почти закончился — и запустился заново… я оплачиваю токены большой модели»):
+    исполнитель перезапускался (опубликовали архив сервера) — обычный экзамен продолжал с места, а стенд начинал с нуля.
+    Теперь после каждого прогона он записан в partial (и внутри прогона — каждый сценарий, в своём файле), а с resume
+    сделанное не повторяется."""
     from exam import run_exam, summary
     started = dt.datetime.now()
     runs = {"A": [], "B": []}
+    pf = Path(partial) if partial else None
+    done = {}
+    if pf and resume and pf.is_file():
+        try:
+            st = json.loads(pf.read_text(encoding="utf-8"))
+            started = dt.datetime.fromisoformat(st.get("started") or started.isoformat())
+            done = {f"{x['i']}{x['side']}": x["rep"] for x in st.get("done") or []}
+        except (ValueError, KeyError, TypeError):
+            done = {}
+
+    def keep():
+        if pf:
+            pf.write_text(json.dumps({"started": started.isoformat(timespec="seconds"),
+                                      "done": [{"i": int(k[:-1]), "side": k[-1], "rep": v} for k, v in done.items()]},
+                                     ensure_ascii=False), encoding="utf-8")
+    if done:
+        log(f"Продолжаю стенд: готово прогонов — {len(done)}")
     for i in range(repeat):                         # до и после — по очереди: время суток и нагрузка сервера поровну
         for side, ov in (("A", A), ("B", B)) if B else (("A", A),):
+            k = f"{i}{side}"
             log(f"=== Прогон {i + 1}/{repeat} · {'после' if side == 'B' else 'до'} ===")
+            if k in done:
+                runs[side].append(done[k])
+                continue
+            one = (str(pf) + f".{k}") if pf else None              # сценарии этого прогона — по одному, тоже с продолжением
             rep = await run_exam(prof, jp, None, False, log=log, groups=groups, overrides=ov,
-                                 label=("после" if side == "B" else "до"))
+                                 label=("после" if side == "B" else "до"), partial=one, resume=bool(resume and one))
             runs[side].append(rep)
+            done[k] = rep
+            keep()
+            if one:
+                Path(one).unlink(missing_ok=True)
     sc, gr = aggregate(runs)
     meta = {"started": started.isoformat(timespec="seconds"), "model": prof.get("title") or prof.get("model"), "repeat": repeat,
             "groups": list(groups), "A": A, "B": B,

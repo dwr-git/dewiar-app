@@ -1341,7 +1341,7 @@ def main():
         import stand
         groups = [g.strip() for g in (a.group or "").split(",") if g.strip()] or sorted(stand.groups_list())
         rep = asyncio.run(stand.run_stand(prof, jp, groups, {}, stand.parse_sets(a.set), max(1, min(5, a.repeat)),
-                                          log=lambda t: print(t, flush=True)))
+                                          log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume))
     else:
         rep = asyncio.run(run_exam(prof, jp, set(a.only.split(",")) if a.only else None, a.long, keep=a.keep, lean=a.lean, scene=a.scene,
                                    log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume, big=a.big))
