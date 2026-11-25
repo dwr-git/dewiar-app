@@ -36,7 +36,8 @@ function plgField(p, s) {
   // №461: «нужно вставить адрес папки — не каждый догадается»: путь к папке — кнопкой «Выбрать папку…» (диалог системы)
   if (s.type === "folder") return `<label class="f">${plgEsc(s.label)}<span class="pld-dir"><input type="text" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}">`
     + `<button class="btn small" type="button" data-pick="${plgEsc(s.key)}">Выбрать папку…</button></span></label>`;
-  return `<label class="f">${plgEsc(s.label)}<input type="${s.type === "number" ? "number" : "text"}" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}"></label>`;
+  if (s.type === "secret") return `<label class="f">${plgEsc(s.label)}<input type="password" autocomplete="off" spellcheck="false" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}">${s.hint ? `<span class="hint">${plgEsc(s.hint)}</span>` : ""}</label>`;
+  return `<label class="f">${plgEsc(s.label)}<input type="${s.type === "number" ? "number" : "text"}" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}">${s.hint ? `<span class="hint">${plgEsc(s.hint)}</span>` : ""}</label>`;
 }
 function plgValues() {
   const out = {}; $$("#pld [data-k]").forEach(el => { out[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value; }); return out;

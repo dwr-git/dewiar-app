@@ -536,6 +536,27 @@ async def wait_task(core, since_ts, timeout, tid=None):
     return t
 
 
+class JudgeDown(RuntimeError):
+    pass
+
+
+_judge_ok = set()
+
+
+def judge_preflight(profile, log=print):
+    """Внешний судья — одна пробная оценка до первого сценария (25.11, стенд 3: 79 минут и платные токены, а судья не оценил
+    ничего — сценарии «сдавались» одними проверками). Не оценил — экзамен не начинается, причина — сразу. -> None или JudgeDown."""
+    key = (profile.get("base_url"), profile.get("model"), profile.get("proxy"))
+    if key in _judge_ok:
+        return
+    r = judge(profile, {"title": "Проверка судьи", "judge": "Помощник вежливо поздоровался."}, "Пользователь: привет\nПомощник: Привет! Чем помочь?", "—")
+    if not r or r.get("score") is None:
+        raise JudgeDown("внешний судья не оценил пробный ответ — экзамен не начат, чтобы не тратить время и токены впустую. "
+                        f"Причина: {(r or {}).get('why') or 'нет ответа'}")
+    _judge_ok.add(key)
+    log(f"Судья на связи: пробная оценка {r['score']:g}/10")
+
+
 def judge(profile, sc, transcript, state_text, at=None, memory=""):
     """Оценка судьи: {score, why} или None (судья не ответил)."""
     from llm import stream_chat
@@ -551,11 +572,13 @@ def judge(profile, sc, transcript, state_text, at=None, memory=""):
         px = net.profile_proxy(profile)
     try:
         with px:
-            # max_tokens 1500 (25.11): внешний судья бывает думающей моделью (Gemini) — 300 уходили на размышления, JSON не успевал
-            out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=1500, timeout=min(float(profile.get("timeout") or 90), 90)),
+            # max_tokens 4096 (25.11): внешний судья бывает думающей моделью (Gemini) — размышления съедают место до JSON
+            out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=4096, timeout=min(float(profile.get("timeout") or 90), 90)),
                                       JUDGE_SYSTEM, [{"role": "user", "content": content}]))
     except Exception as e:  # noqa: BLE001
-        return {"score": None, "why": f"судья не ответил: {e}"}
+        return {"score": None, "why": "судья не ответил: " + re.sub(r"(\w+://[^:/@\s]+:)[^@\s]+@", r"\1•••@", str(e))[:300]}   # пароль прокси — не в отчёт
+    if not out.strip():
+        return {"score": None, "why": "судья ответил пусто — думающая модель не успела ответить; выберите модель без долгих размышлений"}
     m = re.search(r"\{.*\}", out, re.S)
     try:
         d = json.loads(m.group(0)) if m else {}
@@ -1039,7 +1062,10 @@ def big_metrics(t, sec):
 
 def finish_result(core, res):
     j = (res.get("judge") or {}).get("score")
-    res["passed"] = (not res.get("error") and not res.get("skipped") and all(c["ok"] for c in res["checks"])
+    # судью звали, а оценки нет (не ответил, не JSON, нет связи) — это не «сдано»: стенд 3 (25.11) показал 100% «до» и «после»,
+    # а судья не поставил ни одной оценки. Такой прогон — «не оценён»: ни в сданные, ни в проваленные
+    res["unjudged"] = bool(res.get("judge") is not None and j is None and not res.get("error") and not res.get("skipped"))
+    res["passed"] = (not res.get("error") and not res.get("skipped") and not res["unjudged"] and all(c["ok"] for c in res["checks"])
                      and (j is None or j >= PASS_SCORE))
     # «не проверено» (нет браузера для Б5): не «сдано» и не «провал» — отдельный статус: всё, что проверено, прошло
     unch = [c["name"] for c in res["checks"] if c.get("unchecked")]
@@ -1058,18 +1084,20 @@ def finish_result(core, res):
 def summary(results):
     by = {}
     for r in results:
-        if r.get("skipped"):
+        if r.get("skipped") or r.get("unjudged"):
             continue
         g = by.setdefault(r["group"], {"passed": 0, "total": 0})
         g["total"] += 1
         g["passed"] += 1 if r["passed"] else 0
         if r.get("partial"):
             g["partial"] = g.get("partial", 0) + 1
-    done = [r for r in results if not r.get("skipped")]
+    unj = [r for r in results if r.get("unjudged") and not r.get("skipped")]
+    done = [r for r in results if not r.get("skipped") and not r.get("unjudged")]
     scores = [r["score"] for r in done if r.get("score") is not None]
     out = {"passed": sum(1 for r in done if r["passed"]), "total": len(done), "by_group": by,
            "partial": sum(1 for r in done if r.get("partial")),        # сдано не полностью: часть не проверить (нет браузера)
-           "avg_score": round(sum(scores) / len(scores), 1) if scores else None}
+           "avg_score": round(sum(scores) / len(scores), 1) if scores else None,
+           "unjudged": len(unj), "unjudged_why": str(((unj[0].get("judge") or {}).get("why")) or "")[:300] if unj else ""}
     big = [r["metrics"] for r in done if r.get("metrics")]
 
     def mean(xs):
@@ -1088,6 +1116,8 @@ def markdown(rep):
              f"Модель: **{rep['model']}**. Сдано **{s['passed']} из {s['total']}**"
              + (f" (и ещё {s['partial']} — не проверено до конца: нет браузера)" if s.get("partial") else "")
              + (f", средняя оценка судьи {s['avg_score']}" if s.get("avg_score") is not None else "") + f", {round(rep['duration_s'] / 60)} мин.", ""]
+    if s.get("unjudged"):
+        lines[-1:-1] = [f"⚠ Судья не оценил {s['unjudged']} сценариев — они не в счёте. Причина: {s.get('unjudged_why') or '—'}"]
     for g, v in s["by_group"].items():
         lines.append(f"- {g}: {v['passed']} из {v['total']}" + (f", не проверено до конца — {v['partial']}" if v.get("partial") else ""))
     if s.get("big"):
@@ -1186,6 +1216,8 @@ async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, k
         only = {s["id"] for s in data["scenarios"] if s["id"] in only or any(o.endswith("_") and s["id"].startswith(o) for o in only)}
     scs = [s for s in data["scenarios"] if (not only or s["id"] in only) and (long or not s.get("long") or (only and s["id"] in only))
            and (big or not s.get("big") or (only and s["id"] in only))]   # большие задачи — только с --big (галочка)
+    if judge_prof and judge_prof is not profile:
+        judge_preflight(judge_prof, log)
     tmp = Path(keep) if keep else Path(tempfile.mkdtemp(prefix="dewiar-exam-"))
     core = Core(profile, tmp / "core", log, lean=lean, scene=scene, overrides=overrides)
     started = dt.datetime.now()
@@ -1337,6 +1369,12 @@ def main():
         ap.error("нужен --key или --llm")
     env_judge = os.environ.get("DEWIAR_EXAM_JUDGE")       # исполнитель: судья — другая модель облака (доступ — не в командной строке)
     jp = json.loads(env_judge) if env_judge else (json.loads(a.judge) if a.judge else None)
+    if jp and jp is not prof:                         # внешний судья не оценивает — не начинаем (не тратим час и токены впустую)
+        try:
+            judge_preflight(jp, log=lambda t: print(t, flush=True))
+        except JudgeDown as e:
+            print(f"⚠ {e}", flush=True)
+            sys.exit(2)
     if a.group or a.set or a.repeat > 1:              # стенд гипотез (core/stand.py): группы, «до / после», повторы
         import stand
         groups = [g.strip() for g in (a.group or "").split(",") if g.strip()] or sorted(stand.groups_list())

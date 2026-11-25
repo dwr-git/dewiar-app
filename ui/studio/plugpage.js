@@ -470,7 +470,7 @@ h1,h2,h3{font-weight:650;letter-spacing:.01em;margin:0 0 8px}h1{font-size:22px}h
 button,input,select,textarea{font:inherit;color:inherit}
 .btn{border:0;background:var(--soft2,rgba(255,255,255,.1));padding:8px 16px;border-radius:12px;cursor:pointer;transition:background .2s,filter .2s}.btn:hover{filter:brightness(1.15)}
 .btn.primary{background:var(--brand);color:#fff;font-weight:700}.btn.small{padding:4px 10px;font-size:12.5px}.btn.ghost{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}.btn:disabled{opacity:.5;cursor:default}
-input[type=text],input[type=search],input[type=number],select,textarea{width:100%;padding:9px 12px;border-radius:12px;border:0;background:var(--field);color:var(--ink);outline:none;box-shadow:inset 0 0 0 1px var(--line)}
+input[type=text],input[type=password],input[type=search],input[type=number],select,textarea{width:100%;padding:9px 12px;border-radius:12px;border:0;background:var(--field);color:var(--ink);outline:none;box-shadow:inset 0 0 0 1px var(--line)}
 input:focus,select:focus,textarea:focus{box-shadow:inset 0 0 0 1.5px var(--accent)}
 textarea{resize:vertical;min-height:80px}select option{background:#1a1a2e;color:#F2F3FA}
 .card{background:var(--panel);border-radius:18px;padding:16px 18px}.hint{font-size:12.5px;color:var(--dim)}.muted{color:var(--muted)}

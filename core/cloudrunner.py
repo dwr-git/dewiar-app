@@ -110,8 +110,10 @@ def _cred(grant):
     return f"{grant}.{KEY}"
 
 
-EXAM_PKGS = ["httpx", "websockets", "numpy", "Pillow"]
-EXAM_PROBE = "import httpx, websockets, numpy, PIL"
+# socksio — внешний судья через SOCKS-прокси (25.11, стенд 3: судья был настроен и «Готов.» в кабинете, а в экзамене без
+# socksio httpx не ходит через socks5 — ни одной оценки, все сценарии «сданы» одними проверками)
+EXAM_PKGS = ["httpx", "socksio", "websockets", "numpy", "Pillow"]
+EXAM_PROBE = "import httpx, socksio, websockets, numpy, PIL"
 # только для «Больших задач» и «по возможности» (рецензия 0.83: обычный экзамен из-за них не должен ломаться):
 # openpyxl — таблицы Б4, Б6; playwright — сайт Б5 в браузере на ширине телефона (сам Chromium — ExamJob.browser)
 BIG_PKGS = ["openpyxl", "playwright"]

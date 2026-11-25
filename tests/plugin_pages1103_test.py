@@ -377,6 +377,8 @@ with sync_playwright() as pw:
     tfl.locator('.tabs [data-tab="board"]').click(); st.wait_for_timeout(500)
     ok("1" in tfl.locator('.col[data-col="watching"] h4').text_content() and tfl.locator('.col[data-col="watching"] .kc').count() == 1, "воронка: «Интересно» — отмеченный тендер")
     tfl.locator('.tabs [data-tab="q"]').click(); st.wait_for_timeout(800)
+    ok(tfl.locator("[data-preset]").count() >= 3, "«Мои запросы» → «Площадки»: готовые биржи одним нажатием (25.11)")
+    tfl.locator("#qgrid .qcard").last.screenshot(path="/tmp/claude-0/tenders_presets.png")
     tfl.locator('[data-add="plus"]').fill("монтаж"); tfl.locator('[data-addb="plus"]').click()
     for _ in range(80):                                   # сервер плагина перезапускается с новыми настройками
         st.wait_for_timeout(250)

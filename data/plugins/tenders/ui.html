@@ -111,6 +111,8 @@
   .msg { font-size: 13px; color: var(--muted); margin: 0 0 10px; } .msg:empty { display: none; } .msg.bad { color: var(--no); } .msg.ok { color: var(--ok); }
   @media (max-width: 900px) { .top { grid-template-columns: 1fr 1fr; } .scanbox { grid-column: 1 / -1; } .layout { grid-template-columns: 1fr; } .detail { position: static; }
     .rows { max-height: none; } .board { grid-template-columns: repeat(4, 240px); } .facts { grid-template-columns: 1fr; } }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+  .presets .btn small { margin-left: 4px; font-weight: 400; }
 </style>
 </head>
 <body>
@@ -289,6 +291,13 @@
     $$("#board .kc").forEach(c => { c.onclick = () => { setTab("feed"); st.f.mark = "all"; renderMarks(); renderRows(); open(c.dataset.id); }; c.onkeydown = (e) => { if (e.key === "Enter") c.click(); }; });
   }
 
+  /* Готовые площадки (владелец 25.11: «список всех популярных досок для разных стран»). Только те, что отдают заказы
+     без входа, — их ленты RSS: это честный машинный вход бирж, он не ломается от смены вёрстки. */
+  const PRESETS = [
+    { name: "Freelancer.com", where: "весь мир", url: "https://www.freelancer.com/rss.xml" },
+    { name: "Freelancehunt", where: "Украина, Казахстан", url: "https://freelancehunt.com/projects.rss" },
+    { name: "FL.ru", where: "Россия", url: "https://www.fl.ru/rss/all.xml" },
+  ];
   /* ---------- мои запросы (настройки плагина) ---------- */
   async function renderQ() {
     try { st.settings = await dewiar.settings(); } catch (e) { msg(e.message, "bad"); return; }
@@ -315,8 +324,9 @@
       + card("minus", "Минус-слова", "Если есть в названии — заказ в конце списка (балл не выше 1).", "minus", "например, продукты питания")
       + `<div class="card qcard"><h3>Площадки</h3><p>Где искать. Встроенная не нужна — снимите галочку. Свою — добавьте ниже.</p><div class="srcs">${(st.b.sources || []).filter(s => !s.own && !/^own/.test(s.id)).map(s => `<label><input type="checkbox" data-src="${esc(s.id)}" ${s.on ? "checked" : ""}>${esc(s.name)}</label>`).join("")}</div>
         <div class="chips" style="margin-top:8px">${ownList().map((u, i) => `<span class="qchip" title="${esc(u)}">${esc(hostOf(u))}${u.includes("{QUERY}") ? "" : " · лента"}<button data-owndel="${i}" title="Убрать" aria-label="Убрать площадку ${esc(hostOf(u))}">✕</button></span>`).join("")}</div>
-        <div class="qadd"><input type="url" id="own-add" placeholder="адрес страницы со списком заказов или поиска"><button class="btn small" id="own-addb">Добавить</button></div>
-        <p class="dim" style="font-size:12px;margin-top:6px">Подойдёт любая площадка: биржа фриланса, сайт заказчика, госзакупки. Вставьте адрес страницы, где виден список заказов (например, «Все проекты» на бирже), — Лира будет читать её и брать то, что про ваши запросы. Если на площадке есть поиск — найдите там слово из «Что искать» и вставьте адрес результатов: слово само заменится на {QUERY}, и поиск пойдёт по каждому запросу.</p>
+        <div class="presets"><span class="dim" style="font-size:12px">Готовые:</span>${PRESETS.map((x, i) => `<button class="btn small ghost" data-preset="${i}" title="${esc(x.url)}"${ownList().includes(x.url) ? " disabled" : ""}>${esc(x.name)} <small class="dim">${esc(x.where)}</small></button>`).join("")}</div>
+        <div class="qadd"><input type="url" id="own-add" placeholder="адрес страницы со списком заказов, поиска или ленты RSS"><button class="btn small" id="own-addb">Добавить</button></div>
+        <p class="dim" style="font-size:12px;margin-top:6px">Upwork, Kwork и Fiverr показывают заказы только после входа — их Лира не читает. Подойдёт любая площадка: биржа фриланса, сайт заказчика, госзакупки. Вставьте адрес страницы, где виден список заказов (например, «Все проекты» на бирже), — Лира будет читать её и брать то, что про ваши запросы. Если на площадке есть поиск — найдите там слово из «Что искать» и вставьте адрес результатов: слово само заменится на {QUERY}, и поиск пойдёт по каждому запросу.</p>
         <p style="margin-top:10px">Присылать от балла: <select id="q-min" style="width:auto;display:inline-block;margin-left:6px">${[0, 2, 3, 4, 5, 6, 8].map(n => `<option ${+v.min_score === n ? "selected" : ""}>${n}</option>`).join("")}</select></p></div>`;
     const save = async (patch, done) => { try { const nv = await dewiar.saveSettings(patch); st.settings.values = nv; msg(done + " — балл в ленте уже пересчитан.", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
     const add = (k) => { const i = $(`[data-add="${k}"]`); const x = i.value.trim().replace(/[;]/g, " "); if (x.length < 2) { i.focus(); return; }
@@ -333,6 +343,9 @@
       save({ own_url: cur.join("\n") }, u.includes("{QUERY}") ? `Площадка ${hostOf(u)} добавлена — поиск по каждому запросу`
         : `Площадка ${hostOf(u)} добавлена как лента — нажмите «Найти новые», и под кнопкой будет видно, сколько нашлось`); };
     $("#own-addb").onclick = ownAdd;
+    $$("[data-preset]").forEach(b => b.onclick = () => { const x = PRESETS[+b.dataset.preset], cur = ownList();
+      if (!cur.includes(x.url)) cur.push(x.url);
+      save({ own_url: cur.join("\n") }, `${x.name} добавлена — нажмите «Найти новые заказы»`); });
     $("#own-add").onkeydown = (e) => { if (e.key === "Enter") ownAdd(); };
     $$("[data-owndel]").forEach(b => b.onclick = () => { const cur = ownList(), x = cur.splice(+b.dataset.owndel, 1)[0]; save({ own_url: cur.join("\n") }, `Площадка ${hostOf(x)} убрана`); });
   }

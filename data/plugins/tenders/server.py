@@ -93,7 +93,7 @@ def phrase_hit(ps, textset):
 
 def feed_hit(q, t):
     """Заказ из ленты — про этот запрос: совпали хотя бы два слова запроса (или одно, если оно в запросе одно)."""
-    ps, ts = stems(q), set(stems(t.get("title", "")))
+    ps, ts = stems(q), set(stems(t.get("title", "") + " " + t.get("summary", "")))   # у ленты RSS — и описание заказа
     return bool(ps) and round(phrase_hit(ps, ts) * len(ps)) >= min(2, len(ps))
 
 
@@ -395,8 +395,45 @@ def is_tender(t, feed=False):
     return bool(t["number"]) or sig >= 2 or (bool(t["deadline"]) and len(t["title"]) >= 30)
 
 
+def parse_feed(text, base):
+    """RSS 2.0 или Atom -> заказы, или None — это не лента. Биржи отдают ленты для читалок (Freelancer.com, Freelancehunt,
+    fl.ru): это их честный машинный вход, он не меняется вместе с вёрсткой и не требует входа (владелец 25.11: «список всех
+    популярных досок»)."""
+    head = text.lstrip()[:2000].lower()
+    if not re.search(r"<rss[\s>]|<feed[\s>]|<rdf:rdf", head):
+        return None
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(text.lstrip().encode("utf-8"))
+    except ET.ParseError:
+        return []
+    tag = lambda e: e.tag.rsplit("}", 1)[-1].lower()           # noqa: E731
+    out = []
+    for it in root.iter():
+        if tag(it) not in ("item", "entry"):
+            continue
+        f = {}
+        for c in it:
+            f.setdefault(tag(c), c)
+        title = html.unescape((f["title"].text or "") if "title" in f else "").strip()
+        link = ""
+        if "link" in f:
+            link = (f["link"].text or "").strip() or f["link"].get("href", "")
+        d = f.get("description") if f.get("description") is not None else f.get("summary") if f.get("summary") is not None else f.get("content")
+        summary = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape((d.text or "") if d is not None else ""))).strip()[:400]
+        if len(title) < 6 or not link:
+            continue
+        m = PRICE_RE.search(title + " " + summary)
+        out.append({"number": "", "title": title[:600], "organization": "", "procedure_type": "", "status": "", "deadline": "",
+                    "price": fmt_price(m) if m else "", "summary": summary, "url": urljoin(base + "/", link)})
+    return out
+
+
 def parse_page(text, src, recipe=None):
-    """-> (тендеры, способ, новый рецепт или None). Способ: recipe | auto | empty | none."""
+    """-> (тендеры, способ, новый рецепт или None). Способ: rss | recipe | auto | empty | none."""
+    fd = parse_feed(text, src["base"])
+    if fd is not None:
+        return fd, "rss", None
     root = parse_html(text)
     if recipe:
         nodes = [e for e in root.els() if e.tag in ("tr", "li", "div", "article", "section", "dl")

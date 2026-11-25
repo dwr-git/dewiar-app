@@ -61,6 +61,8 @@ def net_fail(r):
     """Прогон оборвала сеть или не ответил судья — не модель ошиблась."""
     if r.get("passed"):
         return False
+    if r.get("unjudged"):                            # судью звали — оценки нет: не ошибка модели (exam.finish_result)
+        return True
     why = " ".join([str(r.get("error") or ""), str((r.get("judge") or {}).get("why") or "")])
     return bool(NET_RX.search(why)) and (r.get("judge") or {}).get("score") is None
 
@@ -101,6 +103,7 @@ def aggregate(runs):
                                             "net": {"A": 0, "B": 0}, "dispute": {"A": [], "B": []}})
                 if net_fail(r):
                     e["net"][side] += 1                  # не считается: ни в сданные, ни в проваленные
+                    e.setdefault("net_why", str((r.get("judge") or {}).get("why") or r.get("error") or "")[:200])
                     gr.setdefault(r["group"], {"A": [0, 0, []], "B": [0, 0, []]}).setdefault("net", {"A": 0, "B": 0})[side] += 1
                     continue
                 d = dispute(r)
@@ -176,6 +179,12 @@ def markdown(meta, sc, gr):
     L += ["", f"Непредсказуемых сценариев (то сдаёт, то нет): {len(unstable)} из {len(sc)}."]
     if nets:
         L.append(f"Не считаются (сбой сети или судьи — не ошибка модели): {nets} прогонов.")
+        why = next((e["net_why"] for e in sc.values() if e.get("net_why")), "")
+        total = nets + sum(len(e["A"]) + len(e["B"]) for e in sc.values())
+        if nets * 2 >= total:                        # стенд 3 (25.11): судья не оценил ничего — такой стенд ничего не измерил
+            L.append(f"⚠ Больше половины прогонов не в счёте — этот стенд ничего не измерил. Причина: {why or '—'}")
+        elif why:
+            L.append(f"Причина, например: {why}")
     if disp:
         L.append(f"Проверка и судья разошлись: {disp} прогонов — решает человек (строки «спор» ниже).")
     L += ["", "## Сценарии", ""]
