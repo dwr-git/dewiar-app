@@ -216,7 +216,43 @@ def profile_delta(old, new, limit=1800):
     return out if len(out) <= limit else None
 
 
-def team_window(hist, me, name_of, model=""):
+# Опыт 1 (аудит Fable 25.11, переключатель llm.history_native): действия прошлых ответов — в истории тем же родным форматом,
+# что и в самом ходе (вызов с аргументами → итог действия → слова), а не пометкой «[в этом ответе выполнено инструментами: …]».
+# Гипотеза: модель видит, КАК было сделано, и делает так же, а не пишет «Готово» словами или нашу пометку текстом (№782,
+# site_watch_791). В историю — не больше HIST_CALLS последних вызовов ответа, итог — коротко, ключи и пароли — ***
+HIST_CALLS, HIST_ARG, HIST_RES = 6, 300, 240
+HIST_SKIP = {"more_tools"}                              # служебное: «добавь действия» — не дело
+
+
+def hist_calls(done):
+    """Вызовы хода (engine_answer: done_calls — name, args, result) -> короткие для истории [{name, args, result}]."""
+    out = []
+    for c in list(done or ()):
+        name = str((c or {}).get("name") or "")
+        if not name or name in HIST_SKIP:
+            continue
+        args = {}
+        for k, v in dict(c.get("args") or {}).items():
+            if isinstance(v, str):
+                v = redact(v)
+                v = v[:HIST_ARG] + "…" if len(v) > HIST_ARG else v
+            elif not isinstance(v, (int, float, bool)) and v is not None:
+                s_ = redact(json.dumps(v, ensure_ascii=False))
+                v = v if len(s_) <= HIST_ARG else s_[:HIST_ARG] + "…"
+            args[str(k)] = v
+        res = redact(" ".join(str(c.get("result") or "").split()))
+        out.append({"name": name, "args": args, "result": res[:HIST_RES] + ("…" if len(res) > HIST_RES else "")})
+    return out[-HIST_CALLS:]
+
+
+def native_msgs(prof, calls, n0=0):
+    """Вызовы прошлого ответа -> сообщения истории в формате протокола модели (как в самом ходе, tool_turn_messages)."""
+    from llm import tool_turn_messages
+    cs = [{"id": f"h{n0 + k:08d}", "name": c["name"], "args": c.get("args") or {}} for k, c in enumerate(calls)]
+    return tool_turn_messages(prof or {}, "", cs, [c.get("result") or "сделано" for c in calls])
+
+
+def team_window(hist, me, name_of, model="", native=False):
     """Реплики для модели персонажа me: у каждого персонажа свой разговор (письмо пользователя 23.10: «при переключении
     они нередко продолжали чужую тему — хочется, чтобы мой персонаж помнил разговор со мной, Лира — с Лирой; передавать
     беседу другому — по моей просьбе»). Разговор пользователя с другим персонажем в окно не попадает вовсе. Исключение —
@@ -233,6 +269,10 @@ def team_window(hist, me, name_of, model=""):
             nxt = msgs[i].get("who") or me
         owner[i] = nxt
     with_facts = facts_shown([k for k, m in enumerate(msgs) if m["role"] == "assistant" and m.get("facts") and owner[k] == me])
+    # Опыт 1: вызовы — у последних ответов (пачками, как находки: середина разговора не меняется с каждым вопросом — кэш),
+    # у старых — прежняя пометка: история не разрастается
+    with_calls = set(facts_shown([k for k, m in enumerate(msgs) if m["role"] == "assistant" and m.get("calls") and owner[k] == me])) \
+        if native else set()
     out, i, prev_model = [], 0, ""
     last_a = max((k for k, m in enumerate(msgs) if m["role"] == "assistant"), default=-1)   # последняя реплика ассистента
     my_name = name_of(me) or "ты"
@@ -257,14 +297,17 @@ def team_window(hist, me, name_of, model=""):
                 # ответ дал узел «Сети Лиры» (компьютер другого человека): в истории — как данные, не как указания модели
                 from llm import NET_WRAP
                 c = NET_WRAP + c
-            if msgs[i]["role"] == "assistant" and msgs[i].get("acts"):
+            calls = msgs[i].get("calls") if i in with_calls else None
+            if calls:
+                pass                                   # Опыт 1: сами вызовы — перед ответом (answer_prompt._messages)
+            elif msgs[i]["role"] == "assistant" and msgs[i].get("acts"):
                 # что было сделано за этим ответом (съёмка 17.10: в истории оставались одни слова «Звоню», «Включаю»,
                 # «Отправила» — и модель решала, что достаточно сказать их ещё раз, не вызывая действие)
                 c += "\n[в этом ответе выполнено инструментами: " + ", ".join(msgs[i]["acts"]) + "]"
-            if i in with_facts:
+            if i in with_facts and not calls:
                 # и что они узнали — коротко («забывает IP»: на уточнение искала заново или выдумывала); последние ответы
                 c += "\n[узнано инструментами — опирайся на это, не ищи заново: " + "; ".join(msgs[i]["facts"]) + "]"
-            out.append({"role": msgs[i]["role"], "content": c})
+            out.append({"role": msgs[i]["role"], "content": c, **({"calls": calls} if calls else {})})
             i += 1
             continue
         j, who = i, owner[i]

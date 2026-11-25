@@ -49,7 +49,7 @@ from settings import LLM_PRESETS
 # история и кеш — llm_messages, поток ответа (SSE, сборка) — llm_sse, подсказки к вопросу — llm_hints, «Сеть Лиры» — llm_net, текст для голоса — llm_speech.
 # Здесь — соединение с моделями: поток, повторы, свои серверы. Все прежние имена — по-прежнему llm.<имя>
 from llm_base import (  # noqa: F401,E402 — прежние имена llm.* на месте
-    LLMError, _flat, _llamacpp, _local_base, _LOCAL_HOST, log, _no_kw, _no_tools, _no_usage, prompt_tools_mode, _REJECT,
+    LLMError, _flat, _llamacpp, _local_base, _LOCAL_HOST, log, _no_force, _no_kw, _no_tools, _no_usage, prompt_tools_mode, _REJECT,
     _usage)
 from llm_text import (  # noqa: F401,E402 — прежние имена llm.* на месте
     _arg_value, _ARGS_KEYS, _BARE_CALL, BareCallCatcher, _BR_CALL, BR_MAX, _BR_OPEN, _br_place_ok, _BR_POS,
@@ -852,6 +852,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 body["tools"] = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
                                  for t in tools]
                 body["tools"][-1] = dict(body["tools"][-1], cache_control={"type": "ephemeral"})
+                if p.get("_force_call") and base not in _no_force:
+                    body["tool_choice"] = {"type": "any"}          # Опыт 9: обещала и не сделала — этот шаг только действием
         elif native:
             url = _root(base) + "/api/chat"
             body = {"model": model, "stream": True, "messages": with_tail(p, _to_ollama([{"role": "system", "content": system}] + messages), p.get("_tail")),
@@ -881,7 +883,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 body["chat_template_kwargs"] = {"enable_thinking": False}
             if tools:
                 body["tools"] = [{"type": "function", "function": t} for t in tools]
-                body["tool_choice"] = "auto"
+                # Опыт 9 (аудит Fable 25.11, llm.force_call): после «пообещала и не сделала» повторный шаг — обязательно с действием
+                body["tool_choice"] = "required" if p.get("_force_call") and base not in _no_force else "auto"
             # «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — в журнал и в пульс
             if body["stream"] and _usage_ok(p, base):
                 body["stream_options"] = {"include_usage": True}
@@ -974,6 +977,11 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                     return
                 if "image" in err and any(isinstance(m.get("content"), list) for m in messages):
                     raise LLMError("эта модель не принимает изображения — выберите в «Мозге» модель со зрением")
+                if r.status_code in (400, 422) and p.get("_force_call") and "tool_choice" in err and base not in _no_force:
+                    log.info("Сервер %s не принял обязательное действие (tool_choice) — повторяю без него", base)
+                    _no_force.add(base)
+                    yield from stream_events(dict(p, _force_call=False), system, messages, cancel, tools, _retry)
+                    return
                 if r.status_code in (400, 422) and _has_tool_history(messages) and not p.get("_flat") \
                         and base not in _flat and p.get("kind") != "anthropic" and not native:
                     log.info("Сервер %s не принял историю вызовов (%s) — пишу её текстом", base, r.status_code)

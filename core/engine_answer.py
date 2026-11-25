@@ -12,7 +12,7 @@ from answer_rules import (
     JOB_ASK_RX, LAW_CODE_RX, LAW_REF_RX, law_unsourced, model_label, _MONTH_NOM, _MONTH_RX, month_year_wrong,
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
     PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, ack_again, REPEAT_RX, shown_q, SONGS_ASK_RX,
-    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT)  # noqa: F401 — прежние имена на месте
+    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT, hist_calls)  # noqa: F401 — прежние имена на месте
 from answer_prompt import PromptMixin, prompt_parts
 from xray import current as xray_current, turned as xray_turned
 from answer_models import ModelsMixin
@@ -683,6 +683,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         turn.full = turn.full[:-len(step_text)]
             seen_calls = {}                              # одинаковый вызов в одном ходе — не повторяем (результат уже есть)
             done_calls, checked = [], False                  # что вызвано с результатами — сверить числа ответа (number_mismatch)
+            turn.done_calls = done_calls                     # и в историю — родным форматом (Опыт 1, llm.history_native)
             drew = 0                                         # просили схему, а её нет — попросили нарисовать (до двух раз за ход)
             saved_checked = False                            # «записала» без единого действия — попросили записать (раз за ход)
             style_saved = False                              # №651: просьба о том, как говорить, — правило записано программой (раз за ход)
@@ -724,10 +725,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 try:
                     # с картинкой ответ сначала собираем целиком: если модель её не примет — повторим без неё;
                     # без картинки ждём только первое событие — ошибка сервера всплывёт здесь, до первого слова
+                    # Опыт 9 (llm.force_call): после просьбы «сделай, а не обещай» этот шаг — только действием (tool_choice)
+                    sprof = dict(prof, _force_call=True) if getattr(turn, "force_call", False) and specs else prof
+                    turn.force_call = False
                     try:
-                        events = list(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
+                        events = list(stream_events(sprof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
                             if _has_images(msgs) else _first_then_stream(
-                                stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
+                                stream_events(sprof, system, msgs, cancel=turn.cancel, tools=specs or None))
                     except LLMError as e0:
                         if econ_main is None or step or turn.full or turn.cancel.is_set():
                             raise
@@ -936,6 +940,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else
                                  f"написала вызов «{faked}» текстом" if faked else "только пообещала", " (ещё раз)" if nudged > 1 else "")
                         retract(drop=bool(faked))                    # текст с выдуманным вызовом — не в ответ
+                        turn.force_call = self.s.get("llm", "force_call") is True
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"},
                                        {"role": "user", "content": FAKE_NUDGE if faked else promise_nudge(want_task, again=nudged > 1,
                                                                                  hint=getattr(turn, "plugin_hint", ""))}]
@@ -1403,12 +1408,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             said = text + (" [к сообщению была приложена картинка]" if images else "")
             acts = list(dict.fromkeys(getattr(turn, "tools_ok", None) or []))
             facts = list(getattr(turn, "facts", None) or [])
+            calls = hist_calls(getattr(turn, "done_calls", None)) if self.s.get("llm", "history_native") is True else []
             # передал слово явно (call_persona) или специалист, позванный на вопрос, возвращает слово главному — тому
             # его разговор справкой; просто переключились — нет
             hand = getattr(turn, "switch_to", None) or getattr(turn, "back_to", None)
             self.history += [{"role": "user", "content": said},
                              {"role": "assistant", "content": turn.full.strip(), "who": self.s.get("persona"),
                               **({"acts": acts} if acts else {}), **({"facts": facts} if facts else {}), **({"handoff": hand} if hand else {}),
+                              **({"calls": calls} if calls else {}),
                               **({"model": turn.model} if getattr(turn, "model", "") else {}),
                               **({"net": True} if getattr(turn, "net", False) else {})}]
             self.last_turn_time = time.monotonic()

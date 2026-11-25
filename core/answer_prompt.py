@@ -27,7 +27,7 @@ def prompt_parts(system, specs, msgs, profile="", ask=""):
 
 from answer_rules import (
     BIG_PC_RX, CORE_TOOLS, DATE_ASK_RX, device_os, IDEA_RULE, model_label, month_years, PRIVACY_ASK_RX,
-    profile_delta, SONGS_ASK_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window)
+    native_msgs, profile_delta, SONGS_ASK_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window)
 
 
 class PromptMixin:
@@ -43,8 +43,10 @@ class PromptMixin:
         out = []
         # своё окно у каждого персонажа: сначала его разговор из общей истории, потом окно (раньше окно резалось по общей
         # истории, и после долгого разговора с Патриком Лира не помнила свой)
+        # Опыт 1 (llm.history_native): у Claude действия в истории без описаний действий в запросе — ошибка; ему — пометкой
+        native = self.s.get("llm", "history_native") is True and (prof or {}).get("kind") != "anthropic"
         mine = team_window(self.history, me, lambda pid: (self.personas.get(pid) or {}).get("name") or "коллега",
-                           model=model_label(prof) if prof else "")
+                           model=model_label(prof) if prof else "", native=native)
         for m in (self.conv.window(mine, turns) if turns > 0 else []):
             if out and out[-1]["role"] == m["role"] == "user" and isinstance(out[-1]["content"], str):
                 out[-1] = {"role": "user", "content": out[-1]["content"] + "\n\n" + m["content"]}
@@ -52,7 +54,12 @@ class PromptMixin:
                 out.append(m)
         if out and out[-1].get("team"):                 # перед вопросом — чужой разговор: явно отделяем, к кому обращаются
             text = "[Теперь пользователь обращается к тебе:]\n" + text
-        out = [{"role": m["role"], "content": m["content"]} for m in out]
+        plain = []
+        for m in out:
+            if m.get("calls"):
+                plain += native_msgs(prof, m["calls"], len(plain) * 10)
+            plain.append({"role": m["role"], "content": m["content"]})
+        out = plain
         cur = user_message(prof or {}, text, images)
         if out and out[-1]["role"] == "user" and isinstance(cur["content"], str) and isinstance(out[-1]["content"], str):
             out[-1] = {"role": "user", "content": out[-1]["content"] + "\n\n" + cur["content"]}
