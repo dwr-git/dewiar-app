@@ -415,6 +415,8 @@ run "YouTube 27.10: «сейчас открою» без действия — п
 run "стенд 25.11 (pc_can): «скажите, что сделать — сейчас сделаю» — предложение, а не обещание" $PY "$T/promise_offer1125_test.py"
 run "Опыт 1 (аудит Fable 25.11): действия прошлых ответов — в истории родным форматом (llm.history_native)" $PY "$T/history_native1125_test.py"
 run "Опыт 9 (аудит Fable 25.11): обещала и не сделала — повторный шаг с обязательным действием (llm.force_call)" $PY "$T/force_call1125_test.py"
+run "Опыт 2 (аудит Fable 25.11): правила действий — только к действиям хода (llm.rules_with_tools)" $PY "$T/rules_with_tools1125_test.py"
+run "Опыт 4 (аудит Fable 25.11): при «Каркасе хода» — одни ворота вместо каскада *_claim (llm.gate_only)" $PY "$T/gate_only1125_test.py"
 run "YouTube 27.10: знания персонажа из папки на компьютере — без интернета и входа" $PY "$T/kfolder1027_test.py"
 run "YouTube 26.10: текстовый режим — без микрофона и голоса, «Выполнить?» и шаги хода в «Чате»" $PY "$T/textmode1027_test.py"
 run "YouTube 27.10: «Забыть ключ» на телефоне — вернуть одной кнопкой" $PY "$T/forgetkey1027_test.py"

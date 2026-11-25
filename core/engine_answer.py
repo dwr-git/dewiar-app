@@ -13,7 +13,7 @@ from answer_rules import (
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
     PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, ack_again, REPEAT_RX, shown_q, SONGS_ASK_RX,
     SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT, hist_calls)  # noqa: F401 — прежние имена на месте
-from answer_prompt import PromptMixin, prompt_parts
+from answer_prompt import PromptMixin, prompt_parts, spec_names
 from xray import current as xray_current, turned as xray_turned
 from answer_models import ModelsMixin
 from answer_report import ReportMixin
@@ -444,6 +444,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             # Иначе каждая такая добавка ломала кэш начала запроса и для всех инструментов после подсказки (tools/prefix_audit.py)
             pmsg = self._profile_in_msgs(prof)
             full_ = bool(specs) and not turn.lean       # «Чистый разговор» — подсказка как без действий, плюс короткое правило
+            self._rule_names = spec_names(specs)        # Опыт 2 (llm.rules_with_tools): правила — только к действиям этого хода
             system = self._system(full_, personal=not pmsg, talk=turn.lean)
             if turn.lean:
                 import talk_lean
@@ -683,6 +684,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         turn.full = turn.full[:-len(step_text)]
             seen_calls = {}                              # одинаковый вызов в одном ходе — не повторяем (результат уже есть)
             done_calls, checked = [], False                  # что вызвано с результатами — сверить числа ответа (number_mismatch)
+            import ledger as _ledger
+            # Опыт 4 (аудит Fable 25.11, llm.gate_only): при «Каркасе хода» — одни ворота по журналу вместо каскада проверок
+            # «сказала сделано без действия» (*_claim) и их честных замен после хода: журнал сверяет ответ один раз, в конце
+            gate_only = self.s.get("llm", "gate_only") is True and _ledger.on(self.s.get("llm", "ledger"), prof)
             turn.done_calls = done_calls                     # и в историю — родным форматом (Опыт 1, llm.history_native)
             drew = 0                                         # просили схему, а её нет — попросили нарисовать (до двух раз за ход)
             saved_checked = False                            # «записала» без единого действия — попросили записать (раз за ход)
@@ -704,6 +709,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     # уже с полной подсказкой и всеми действиями: налегке их нет (полный прогон 22.11: «полнолуние» — плагин «Луна»)
                     turn.lean = False
                     specs = self.toolbox.specs(slim_text, keep=set(getattr(turn, "packs", None) or ()))
+                    self._rule_names = spec_names(specs)
                     system = self._system(True, personal=not pmsg)
                     log.info("🧰 Проверка просит переделать — дальше с полной подсказкой и действиями")
                 if step == 5 and specs:                  # последний шаг — только слова: ответить тем, что уже узнал
@@ -979,7 +985,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             log.info("💬 Правило, как говорить, — записала сама: «%s»", rule[:80])
                         except Exception:  # noqa: BLE001
                             log.debug("правило общения", exc_info=True)
-                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
+                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked and not gate_only:
                     fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
                         or saved_claim(text, step_text, called) \
                         or (note_claim(text, step_text, called) if "save_note" in {x.get("name") for x in specs or []} else "") \
@@ -996,7 +1002,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             turn.full += " "
                         self.set_state("thinking")
                         continue
-                if not calls and not turn.cancel.is_set() and step < 6 and specs and not failed_checked and getattr(turn, "tools_err", None):
+                if not calls and not turn.cancel.is_set() and step < 6 and specs and not failed_checked and getattr(turn, "tools_err", None) \
+                        and not gate_only:
                     from quality import failed_claim
                     fix = failed_claim(step_text, turn.tools_err, getattr(turn, "tools_ok", None) or [])
                     if fix:                                  # №573: «нет такого пути», а ответ — «открыла папку»
@@ -1142,11 +1149,18 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     turn.lean = False
                     turn.packs = set(getattr(turn, "packs", None) or ()) | (set(more) - {"core"})
                     specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    self._rule_names = spec_names(specs)
                     system = self._system(True, personal=not pmsg)
                     log.info("🧰 Из разговора — к делу: полная подсказка и действия (%s)", ", ".join(sorted(more)))
                 elif more and specs:                    # модель попросила группу действий — следующий шаг уже с ними
                     turn.packs = set(getattr(turn, "packs", None) or ()) | set(more)
                     specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    if self.s.get("llm", "rules_with_tools") is True:   # Опыт 2: пришла группа — с ней её правила (на месте прежних)
+                        old_r = self._tool_rules()
+                        self._rule_names = spec_names(specs)
+                        new_r = self._tool_rules()
+                        if new_r != old_r and old_r in system:
+                            system = system.replace(old_r, new_r, 1)
                     log.info("🧰 Модель попросила действия: %s", ", ".join(sorted(turn.packs)))
                 if any(c.get("name") == "start_task" and not str(r).startswith(("Ошибка", "Инструмент")) for c, r in zip(calls, results)):
                     specs = []                          # задача запущена — делает она; в разговоре только сказать, что взялся
