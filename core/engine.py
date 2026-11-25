@@ -879,8 +879,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
     # ---------- события наружу ----------
 
     def emit(self, type_, **kw):
-        if type_ in ("tool", "answer"):
-            xray.event(type_, kw)                          # «Рентген»: действия и итог хода; к итогу — номер рентгена
+        if type_ in ("tool", "answer", "quick"):
+            xray.event(type_, kw)                          # «Рентген»: действия (и быстрые команды) и итог хода; к итогу — номер рентгена
         if type_ == "wake":
             self._ui_wake()                                # имя услышано, а виджета нет (закрыт, упал) — открыть
         if type_ == "answer" and not kw.pop("model", False) and kw.get("text"):

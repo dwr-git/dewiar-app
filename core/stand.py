@@ -51,6 +51,44 @@ def groups_list():
     return by
 
 
+# Опыт 0 (аудит Fable 25.11: «стенд шумит сильнее, чем меняются гипотезы»): сбой сети или судьи — не провал сценария, а «не
+# считается» (стенд 24.11: «судья не ответил: Сервер модели: нет связи» решил «Честность» 31 → 33)
+NET_RX = __import__("re").compile(r"нет связи|не ответил вовремя|соединени\w* не установ|ConnectError|ConnectTimeout|ReadTimeout|"
+                                  r"RemoteProtocolError|Server disconnected|судья не ответил|ошибкой 50[234]|занят", __import__("re").I)
+
+
+def net_fail(r):
+    """Прогон оборвала сеть или не ответил судья — не модель ошиблась."""
+    if r.get("passed"):
+        return False
+    why = " ".join([str(r.get("error") or ""), str((r.get("judge") or {}).get("why") or "")])
+    return bool(NET_RX.search(why)) and (r.get("judge") or {}).get("score") is None
+
+
+def dispute(r):
+    """Проверки и судья разошлись: проверка не сдана, а судья поставил 8+ — или наоборот (стенд 25.11: sit_preference —
+    «курицей» в самоисправлении, судья 10/10). Такие прогоны — отдельной строкой, их решает человек."""
+    sc_ = (r.get("judge") or {}).get("score")
+    bad = [c for c in r.get("checks") or [] if not c.get("ok")]
+    if sc_ is None:
+        return ""
+    if bad and sc_ >= 8:
+        return f"проверка «{bad[0]['name'][:60]}» не сдана, судья {sc_:g}/10"
+    if not bad and sc_ <= 3 and r.get("checks"):
+        return f"проверки сданы, судья {sc_:g}/10"
+    return ""
+
+
+def noise(a_ok, a_n, b_ok, b_n):
+    """Разница «до → после» больше разброса? Двухсторонняя оценка по долям (2 стандартные ошибки)."""
+    if not a_n or not b_n:
+        return True
+    pa, pb = a_ok / a_n, b_ok / b_n
+    p = (a_ok + b_ok) / (a_n + b_n)
+    se = (p * (1 - p) * (1 / a_n + 1 / b_n)) ** 0.5
+    return abs(pb - pa) <= 2 * se if se else pa == pb
+
+
 def aggregate(runs):
     """runs: {"A": [rep, …], "B": [rep, …]} -> по сценариям и группам."""
     sc, gr = {}, {}
@@ -59,7 +97,15 @@ def aggregate(runs):
             for r in rep["scenarios"]:
                 if r.get("skipped"):
                     continue
-                e = sc.setdefault(r["id"], {"group": r["group"], "title": r["title"], "A": [], "B": [], "why": {"A": [], "B": []}})
+                e = sc.setdefault(r["id"], {"group": r["group"], "title": r["title"], "A": [], "B": [], "why": {"A": [], "B": []},
+                                            "net": {"A": 0, "B": 0}, "dispute": {"A": [], "B": []}})
+                if net_fail(r):
+                    e["net"][side] += 1                  # не считается: ни в сданные, ни в проваленные
+                    gr.setdefault(r["group"], {"A": [0, 0, []], "B": [0, 0, []]}).setdefault("net", {"A": 0, "B": 0})[side] += 1
+                    continue
+                d = dispute(r)
+                if d:
+                    e["dispute"][side].append(d)
                 e[side].append({"ok": bool(r["passed"]), "t": r.get("time_s"), "score": r.get("score"),
                                 "fail": "" if r["passed"] else fail_line(r)})
                 e["why"][side].append(r.get("xray") or [])
@@ -108,19 +154,31 @@ def markdown(meta, sc, gr):
          f"Модель: {meta['model']}. Повторов: {meta['repeat']}. Группы: {', '.join(meta['groups'])}.",
          f"До: {json.dumps(meta['A'], ensure_ascii=False) if meta['A'] else 'как у людей'}."
          + (f" После: {json.dumps(meta['B'], ensure_ascii=False)}." if ab else ""), ""]
-    L += ["## Группы", "", "| группа | " + ("до | после | разница |" if ab else "сдано | время, с |"),
-          "|---|" + ("---|---|---|" if ab else "---|---|")]
+    if meta.get("judge"):
+        L[-1:-1] = [f"Судья: {meta['judge']}."]
+    if int(meta.get("repeat") or 1) < 5:
+        L += [f"⚠ Повторов {meta['repeat']} — меньше 5: разница меньше 20 п. почти всегда — разброс (аудит 25.11).", ""]
+    L += ["## Группы", "", "| группа | " + ("до | после | разница | вывод |" if ab else "сдано | время, с |"),
+          "|---|" + ("---|---|---|---|" if ab else "---|---|")]
     for g, v in sorted(gr.items()):
         pa = v["A"][0] / v["A"][1] if v["A"][1] else 0
         if ab:
             pb = v["B"][0] / v["B"][1] if v["B"][1] else 0
-            L.append(f"| {g} | {v['A'][0]}/{v['A'][1]} ({pa:.0%}) | {v['B'][0]}/{v['B'][1]} ({pb:.0%}) | {(pb - pa) * 100:+.0f} п. |")
+            verdict = "в пределах разброса" if noise(v["A"][0], v["A"][1], v["B"][0], v["B"][1]) else ("лучше" if pb > pa else "хуже")
+            L.append(f"| {g} | {v['A'][0]}/{v['A'][1]} ({pa:.0%}) | {v['B'][0]}/{v['B'][1]} ({pb:.0%}) | {(pb - pa) * 100:+.0f} п. | {verdict} |")
         else:
             t = round(statistics.mean(v["A"][2]), 1) if v["A"][2] else "—"
             L.append(f"| {g} | {v['A'][0]}/{v['A'][1]} ({pa:.0%}) | {t} |")
     unstable = [k for k, e in sc.items() if 0 < sum(x["ok"] for x in e["A"]) < len(e["A"])
                 or (ab and 0 < sum(x["ok"] for x in e["B"]) < len(e["B"]))]
-    L += ["", f"Непредсказуемых сценариев (то сдаёт, то нет): {len(unstable)} из {len(sc)}.", "", "## Сценарии", ""]
+    nets = sum(e["net"]["A"] + e["net"]["B"] for e in sc.values())
+    disp = sum(len(e["dispute"]["A"]) + len(e["dispute"]["B"]) for e in sc.values())
+    L += ["", f"Непредсказуемых сценариев (то сдаёт, то нет): {len(unstable)} из {len(sc)}."]
+    if nets:
+        L.append(f"Не считаются (сбой сети или судьи — не ошибка модели): {nets} прогонов.")
+    if disp:
+        L.append(f"Проверка и судья разошлись: {disp} прогонов — решает человек (строки «спор» ниже).")
+    L += ["", "## Сценарии", ""]
     for k, e in sorted(sc.items(), key=lambda kv: (kv[1]["group"], kv[0])):
         a = f"{sum(x['ok'] for x in e['A'])}/{len(e['A'])}"
         b = f" → {sum(x['ok'] for x in e['B'])}/{len(e['B'])}" if ab else ""
@@ -137,6 +195,10 @@ def markdown(meta, sc, gr):
             fails = list(dict.fromkeys(x["fail"] for x in e[side] if x.get("fail")))[:2]   # не больше двух разных причин
             for f in fails:
                 L.append(f"  - ✗ {name}: {f}")
+            for d in list(dict.fromkeys(e["dispute"][side]))[:2]:
+                L.append(f"  - ⚖ спор, {name}: {d}")
+            if e["net"][side]:
+                L.append(f"  - ⌁ {name}: не считается {e['net'][side]} (сбой сети или судьи)")
     return "\n".join(L) + "\n"
 
 
@@ -154,7 +216,8 @@ async def run_stand(prof, jp, groups, A, B, repeat, log=print):
             runs[side].append(rep)
     sc, gr = aggregate(runs)
     meta = {"started": started.isoformat(timespec="seconds"), "model": prof.get("title") or prof.get("model"), "repeat": repeat,
-            "groups": list(groups), "A": A, "B": B}
+            "groups": list(groups), "A": A, "B": B,
+            "judge": ((jp or {}).get("title") or (jp or {}).get("model")) if jp else "та же модель (лучше — другая: аудит 25.11)"}
     last = (runs["B"] or runs["A"])[-1]
     allr = [r for side in ("A", "B") for rep in runs[side] for r in rep["scenarios"]]
     md = markdown(meta, sc, gr)

@@ -543,9 +543,16 @@ def judge(profile, sc, transcript, state_text, at=None, memory=""):
     content = (f"СЦЕНАРИЙ: {sc['title']}\n\nРАЗГОВОР:\n{transcript}\n\nЧТО ПРОИЗОШЛО В ПРОГРАММЕ:\n{state_text or '—'}\n\n"
                + (f"ЧТО ПОМОЩНИК ЗНАЛ О ПОЛЬЗОВАТЕЛЕ (его память с прошлых разговоров — упоминать это не выдумка):\n{memory[-2500:]}\n\n" if memory.strip() else "")
                + f"ХОРОШИЙ ОТВЕТ: {sc['judge']}\n\nРазговор шёл {when:%d.%m.%Y} ({WDAYS[when.weekday()]}) в {when:%H:%M}.")
+    import contextlib
+    px = contextlib.nullcontext()
+    if profile.get("proxy"):                         # внешний судья через свой прокси (исполнитель: DEWIAR_JUDGE_PROXY)
+        import net
+        net.install()
+        px = net.profile_proxy(profile)
     try:
-        out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=300, timeout=min(float(profile.get("timeout") or 90), 90)),
-                                  JUDGE_SYSTEM, [{"role": "user", "content": content}]))
+        with px:
+            out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=300, timeout=min(float(profile.get("timeout") or 90), 90)),
+                                      JUDGE_SYSTEM, [{"role": "user", "content": content}]))
     except Exception as e:  # noqa: BLE001
         return {"score": None, "why": f"судья не ответил: {e}"}
     m = re.search(r"\{.*\}", out, re.S)
@@ -568,6 +575,9 @@ def tools_of(events):
             out.append({"name": e.get("name", ""), "args": json.dumps(args or {}, ensure_ascii=False)[:200],
                         "result": str(e.get("result") or "")[:1500], "error": str(e.get("error") or "")[:300],
                         "ok": e.get("status") == "done"})
+        elif e.get("type") == "quick":     # Опыт 6: быстрая команда сделала дело без модели — тоже действие (судья видит его)
+            out.append({"name": "команда «" + str(e.get("title") or e.get("name") or "") + "»", "args": "{}",
+                        "result": str(e.get("result") or "")[:1500], "error": "", "ok": True})
         elif e.get("type") == "window" and e.get("do") == "play":      # быстрая команда без модели — игра открылась в окне
             out.append({"name": "open_game", "args": json.dumps({"game": e.get("game") or ""}, ensure_ascii=False),
                         "result": "игра открыта в окне Dewiar (лист «Досуг»)", "error": "", "ok": True})
@@ -866,10 +876,7 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                 said = fill(stp["say"])
                 ans, ev = await core.say(said, img)
                 src = [x.get("label") or x.get("name") for e in ev if e.get("type") == "answer" and e.get("done") for x in e.get("sources") or []]
-                # ответила сама программа (быстрая команда: диск, дело по расписанию, напоминание) — у ответов модели model=True
-                quick = bool(ans.strip()) and not any(e.get("model") for e in ev if e.get("type") == "answer")
-                res["steps"].append({"say": said, "image": stp.get("image"), "answer": ans[:2000], "tools": tools_of(ev), "sources": src,
-                                     "quick": quick})
+                res["steps"].append({"say": said, "image": stp.get("image"), "answer": ans[:2000], "tools": tools_of(ev), "sources": src})
                 # проверки шага (Б12 «Человек в контуре», 17.11): что должно быть в ответе ИМЕННО этого шага и каких действий
                 # на нём быть не должно («сначала спроси, потом отправляй»)
                 n_ = len(res["steps"])
@@ -928,10 +935,6 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                                    for x in res["checks"] if "ответе" not in x["name"])
         transcript = "\n".join((f"Пользователь: {s['say']}" + (" [приложена картинка]" if s.get("image") else "")
                                 + "".join(f"\n  [помощник вызвал {x['name']}({x['args']}) → {x['result'] or x['error']}]" for x in s.get("tools") or [])
-                                # стенд 25.11: «На диске свободно 200 ГБ из 490» и «беру на себя: по будням в 8:00» судья считал
-                                # выдумкой — не видел, что ответила сама программа по настоящим данным
-                                + ("\n  [ответила сама программа, без модели: быстрая команда — данные настоящие, действие выполнено]"
-                                   if s.get("quick") and not s.get("tools") else "")
                                 + f"\nПомощник: {s['answer']}") for s in res["steps"])
         try:
             mem = (core.tmp / "ws" / "Память" / "Обо мне.md").read_text(encoding="utf-8")
@@ -1331,7 +1334,8 @@ def main():
                 "cloud": True, "title": m.get("title") or m["id"]}
     else:
         ap.error("нужен --key или --llm")
-    jp = json.loads(a.judge) if a.judge else None
+    env_judge = os.environ.get("DEWIAR_EXAM_JUDGE")       # исполнитель: судья — другая модель облака (доступ — не в командной строке)
+    jp = json.loads(env_judge) if env_judge else (json.loads(a.judge) if a.judge else None)
     if a.group or a.set or a.repeat > 1:              # стенд гипотез (core/stand.py): группы, «до / после», повторы
         import stand
         groups = [g.strip() for g in (a.group or "").split(",") if g.strip()] or sorted(stand.groups_list())

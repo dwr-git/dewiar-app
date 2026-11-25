@@ -123,6 +123,18 @@ EXAM_BEAT = float(os.environ.get("DEWIAR_EXAM_BEAT") or 10)
 EXAM_CANCELLED = 3                                   # exam.py вышел сам: доступ к модели отозван (экзамен остановлен)
 
 
+def external_judge():
+    """Запасной путь для внешнего судьи — из окружения исполнителя (DEWIAR_JUDGE_URL/KEY/MODEL/PROXY), если задание его не
+    принесло. Обычно судью настраивают в кабинете («Экзамен» → «Внешний судья»)."""
+    url, key, model = (os.environ.get(k, "").strip() for k in ("DEWIAR_JUDGE_URL", "DEWIAR_JUDGE_KEY", "DEWIAR_JUDGE_MODEL"))
+    if not (url and key and model):
+        return None
+    p = {"name": "Судья", "kind": "openai", "base_url": url, "api_key": key, "model": model, "title": model}
+    if os.environ.get("DEWIAR_JUDGE_PROXY", "").strip():
+        p["proxy"] = os.environ["DEWIAR_JUDGE_PROXY"].strip()
+    return p
+
+
 class ExamJob(threading.Thread):
     """Экзамен из кабинета: окружение → core/exam.py → ход и итог в кабинет. Кабинет сказал «остановить» — останавливаем.
     Ход — строки «[i/n] группа — сценарий» из exam.py; пока сценарий долгий — весточка «жив» раз в EXAM_BEAT секунд."""
@@ -311,6 +323,15 @@ class ExamJob(threading.Thread):
                 "model": j.get("model") or MODEL, "cloud": True, "title": j.get("title") or j.get("model") or MODEL}
         env = {k: v for k, v in os.environ.items() if k not in ("DEWIAR_RUNNER_KEY",)}
         env.update(DEWIAR_EXAM_LLM=json.dumps(prof, ensure_ascii=False), PYTHONUNBUFFERED="1", HOME=str(self.home))
+        if j.get("judge") == "ext":             # внешний судья (владелец 25.11) — из задания (кабинет → «Внешний судья»)
+            jx = j.get("judge_ext") if isinstance(j.get("judge_ext"), dict) else external_judge()
+            if not jx:
+                self.post("failed", note="Внешний судья не настроен: кабинет → «Экзамен» → «Внешний судья».")
+                return
+            env["DEWIAR_EXAM_JUDGE"] = json.dumps(jx, ensure_ascii=False)
+        elif j.get("judge"):                    # Опыт 0 (аудит 25.11): судья — другая модель облака (кабинет → «Судья»)
+            env["DEWIAR_EXAM_JUDGE"] = json.dumps(dict(prof, model=str(j["judge"]), title=str(j.get("judge_title") or j["judge"])),
+                                                  ensure_ascii=False)
         if j.get("big") and not os.environ.get("DEWIAR_EXAM_PYTHON") and self.big_pkgs(py) and not self.cancel:
             env["PLAYWRIGHT_BROWSERS_PATH"] = str(self.browser(py))   # большие задачи: Б5 — в браузере
         args = [str(py), str(Path(__file__).resolve().parent / "exam.py"), "--out", str(out), "--json-out", str(rep_f)]
