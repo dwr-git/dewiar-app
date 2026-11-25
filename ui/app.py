@@ -1841,7 +1841,7 @@ class Api:
                     out = []
 
                     def run():
-                        if f.TopMost:                     # студия «впереди» (_studio_focus_win) — не заслонять диалог
+                        if f.TopMost:                     # окно «поверх» — не заслонять им диалог
                             f.TopMost = False
                         out.append(w.create_file_dialog(kind, **kw))
                     f.Invoke(Action(run))
@@ -2270,8 +2270,9 @@ class Api:
                 win.events.loaded += drop
                 lift = lambda *a: __import__("threading").Thread(target=self._gtk, args=(self._studio_focus_hook,), daemon=True).start()  # noqa: E731
                 win.events.shown += lift
-        else:                                              # Windows — то же по событиям формы (_studio_focus_win)
-            win.events.shown += lambda *a: self._studio_focus_win(win)
+        # Windows: «студия впереди» (TopMost у студии, 1.0.67–1.0.77) убрана — №1059, №1093, №1096, №1060, письмо 25.11:
+        # с ней зависали окна и окна выбора файла, кнопки виджета не нажимались, виджет пропадал при открытой студии.
+        # Её просили на Ubuntu; в Windows щелчок и так поднимает окно, а виджет — маленький и «поверх всех» по выбору.
         if own:
             import threading
             hook = lambda *a: threading.Thread(target=self._gtk, args=(self._studio_frame,), daemon=True).start()  # noqa: E731
@@ -2544,49 +2545,6 @@ class Api:
         wv.connect("motion-notify-event", on_motion)
         wv.connect("button-release-event", on_release)
         reshape()
-
-    def _studio_focus_win(self, win):
-        """Windows — как _studio_focus_hook: пока студия активна, она сама TopMost и выше окон Лиры; ушли из неё — обычное
-        окно. Окна Лиры не трогаем.
-        №1059 (25.11, Windows 11, «поверх всех» включено: «после 1.0.68–69 зависают главный экран и плавающее окно, лечится
-        только перезапуском»): на каждое Activated/Deactivate запускался поток с синхронным Invoke в окно, и TopMost
-        ставился, даже если уже такой. Смена TopMost сама двигает активацию окон — события шли лавиной, окна вставали. Теперь
-        события уже в потоке окна: только если состояние правда меняется, и BeginInvoke (без ожидания и без потоков)."""
-        try:
-            from webview.platforms.winforms import BrowserView
-            from System import Action                 # noqa: PLC0415 — pythonnet есть только в Windows
-            f = BrowserView.instances.get(getattr(win, "uid", None))
-        except Exception:  # noqa: BLE001
-            return
-        if f is None or getattr(self, "_studio_focus_form", None) is f:
-            return
-        self._studio_focus_form = f
-        last = [None]                                  # что ставили этой форме (у новой студии — с начала)
-
-        def put(front):
-            if not ON_TOP[0] or last[0] == front:
-                return
-            last[0] = STUDIO_FRONT[0] = front
-
-            def _set():
-                try:
-                    if bool(f.TopMost) != front:
-                        f.TopMost = front
-                    win._Window__on_top = front        # pywebview помнит значение у себя — держим в согласии
-                except Exception as e:  # noqa: BLE001
-                    _ui_log(f"студия впереди: {e}")
-            try:
-                f.BeginInvoke(Action(_set))
-            except Exception as e:  # noqa: BLE001
-                _ui_log(f"студия впереди: {e}")
-
-        try:
-            f.Activated += lambda *_: put(True)
-            f.Deactivate += lambda *_: put(False)
-        except Exception as e:  # noqa: BLE001
-            _ui_log(f"студия впереди: {e}")
-            return
-        put(True)
 
     def _studio_focus_hook(self):
         """Владелец 24.11 (Ubuntu): «виджет всегда выше всех — открываю студию, она под виджетом… на чём фокус, то и

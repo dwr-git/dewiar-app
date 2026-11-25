@@ -60,71 +60,7 @@ gsrc = src[src.index("def keep_above_guard"):src.index("def keep_above_guard") +
 ok("if STUDIO_FRONT[0]:" in gsrc, "сторож «поверх окон» не поднимает Лиру над активной студией")
 ok(re.search(r"win\.events\.shown \+= lift", src) is not None, "Linux: подключение при показе студии")
 
-# Windows: то же по событиям формы студии — TopMost у самой студии, окна Лиры не трогаем
-i = src.index("    def _studio_focus_win(self, win):"); j = src.index("\n    def _studio_focus_hook(self):", i)
-
-
-class Ev:
-    def __init__(self):
-        self.fns = []
-
-    def __iadd__(self, fn):
-        self.fns.append(fn)
-        return self
-
-    def fire(self):
-        for fn in self.fns:
-            fn(None, None)
-
-
-class Form:
-    def __init__(self):
-        self.Activated, self.Deactivate = Ev(), Ev()
-        self._top, self.sets, self.posted = False, 0, 0
-
-    @property
-    def TopMost(self):
-        return self._top
-
-    @TopMost.setter
-    def TopMost(self, v):
-        self._top = v; self.sets += 1
-        # как в Windows: смена TopMost двигает активацию окна — событие приходит снова (№1059: лавина событий)
-        if self.sets < 50:
-            (self.Activated if v else self.Deactivate).fire()
-
-    def BeginInvoke(self, act):
-        self.posted += 1; act()
-
-
-form = Form()
-wfmod = types.ModuleType("webview.platforms.winforms")
-wfmod.BrowserView = type("BV", (), {"instances": {"st": form}})
-sys.modules["webview.platforms.winforms"] = wfmod
-sysm = types.ModuleType("System"); sysm.Action = lambda f: f; sys.modules["System"] = sysm
-import threading  # noqa: E402
-spawned = []
-_RealThread = threading.Thread
-threading.Thread = lambda *a, **k: spawned.append(1) or _RealThread(*a, **k)
-ON_TOP[0] = True
-ns2 = {"ON_TOP": ON_TOP, "STUDIO_FRONT": FRONT, "_ui_log": print}
-exec("class B:\n" + src[i:j] + "\n", ns2)
-b = ns2["B"](); st = types.SimpleNamespace(uid="st")
-b.wins = {"mini": types.SimpleNamespace(uid="a")}
-FRONT[0] = False
-b._studio_focus_win(st)
-ok(form.TopMost is True and form.sets == 1, f"Windows: студия открылась — сама TopMost один раз (установок: {form.sets})")
-form.Deactivate.fire()
-ok(form.TopMost is False and form.sets == 2, f"Windows: ушли из студии — обычное окно (установок: {form.sets})")
-form.Activated.fire(); form.Activated.fire(); form.Activated.fire()
-ok(form.TopMost is True and form.sets == 3, f"№1059: повторные «активна» — без новых установок, без лавины (установок: {form.sets})")
-ok(not spawned, "№1059: ни одного потока на события окна — BeginInvoke из потока окна")
-b._studio_focus_win(st)
-ok(len(form.Activated.fns) == 1, "Windows: к одной форме подключаемся один раз")
-form2 = Form(); wfmod.BrowserView.instances["st2"] = form2; FRONT[0] = True
-b._studio_focus_win(types.SimpleNamespace(uid="st2"))
-ok(form2.TopMost is True, "закрыли и открыли студию заново — новая снова впереди")
-ON_TOP[0] = False; n = form.sets; form.Deactivate.fire()
-ok(form.sets == n, "Windows: «поверх всех» выключено — не трогаем")
+# Windows: «студия впереди» убрана (25.11: №1059, №1093, №1096, №1060 — зависания, виджет не нажимается и пропадает)
+ok("def _studio_focus_win" not in src and "self._studio_focus_win(" not in src, "Windows: студия не делается «поверх всех» — окна живут как обычно")
 print("ИТОГ: " + ("всё прошло" if not fails else f"провалов {len(fails)}"))
 sys.exit(1 if fails else 0)
