@@ -96,6 +96,22 @@ def launch(cmd):
 _BROWSER_NEW_WINDOW = re.compile(r"chrome|chromium|firefox|yandex|brave|opera|vivaldi|edge|librewolf|floorp|waterfox", re.I)
 
 
+def launch_browser(target):
+    """Открыть в БРАУЗЕРЕ адрес или свой .html-файл. Windows: браузер по умолчанию (а не программа, которой отдан .html —
+    26.11 это был редактор кода); Linux — browser_cmd (новое окно); Mac — open. Проверки (DRY) — как launch."""
+    t = str(target)
+    url = t if re.match(r"^[a-z][a-z0-9+.-]*:", t, re.I) and not re.match(r"^[a-z]:[\\/]", t, re.I) else Path(t).resolve().as_uri()
+    if DRY or EXAM_LAUNCH or MAC:
+        return launch(["xdg-open", t if DRY or EXAM_LAUNCH else url])
+    if WIN:
+        try:
+            winsys.open_in_browser(t)
+        except OSError as e:
+            raise ToolError(f"не открылось: {e}") from e
+        return
+    launch(browser_cmd(url))
+
+
 def browser_cmd(url):
     """Команда открыть адрес в браузере — в НОВОМ окне (отзыв 17.10: «включи смешное видео на YouTube» раз сработало, потом
     «включаю» — и ничего: ролик открывался новой вкладкой в окне браузера, которое было свёрнуто или на другом мониторе).

@@ -273,6 +273,11 @@ cfg = S.settings()
 ok(cfg["boards"] == [25] and cfg["projects"] == ["NSHIELD"], f"ссылка на доску и ключ проекта вперемешку: {cfg}")
 sc = S.scope(cfg)
 ok(sc == 'project in ("NSHIELD") OR (project = AI AND labels = asr)', f"доска — её фильтр из Jira, без сортировки доски: {sc}")
+# владелец 26.11: «вторую доску через запятую вставил — не видит»: две ссылки через запятую, хвосты &selectedIssue / &quickFilter
+os.environ["DEWIAR_PLUGIN_SETTINGS"] = json.dumps(dict(SET, projects="https://j.x/secure/RapidBoard.jspa?rapidView=25&projectKey=AI&selectedIssue=AI-311,"
+                                                   "https://j.x/secure/RapidBoard.jspa?rapidView=31&projectKey=NSHIELD&quickFilter=7\nWEB"))
+cfg2 = S.settings()
+ok(cfg2["boards"] == [25, 31] and cfg2["projects"] == ["WEB"], f"две доски через запятую и проект строкой ниже — все три: {cfg2}")
 os.environ["DEWIAR_PLUGIN_SETTINGS"] = json.dumps(dict(SET, projects="99"))
 try:
     S.scope(S.settings()); e = ""
@@ -297,7 +302,13 @@ m3.close()
 sys.path.insert(0, str(ROOT / "core"))
 import plugins as PL  # noqa: E402
 man = PL.parse_plugin(PLUG, True)
-ok([s["type"] for s in man["settings"]] == ["text", "secret", "text"], "plugin.json: токен — настройка secret")
+ok([s["type"] for s in man["settings"]] == ["text", "secret", "list"], "plugin.json: токен — secret, доски — список (строка на доску)")
+long2 = "https://jira.example.com/secure/RapidBoard.jspa?rapidView=31&projectKey=NSHIELD&quickFilter=1234&selectedIssue=NSHIELD-77&view=planning.nodetail&issueLimit=100"
+cl2 = PL.Plugins._clean(man, {"projects": "https://jira.example.com/secure/RapidBoard.jspa?rapidView=25&projectKey=AI&selectedIssue=AI-311\n\n" + long2 + "\n  WEB  "})
+ok(cl2["projects"].split("\n") == ["https://jira.example.com/secure/RapidBoard.jspa?rapidView=25&projectKey=AI&selectedIssue=AI-311", long2, "WEB"],
+   "список сохраняется строками, длинные ссылки не режутся (раньше текст обрезался на 200 знаках — вторая доска терялась)")
+js_pl = (ROOT / "ui/studio/plugins.js").read_text(encoding="utf-8")
+ok('s.type === "list"' in js_pl and "function plgListWire" in js_pl and "+ Добавить" in js_pl, "в настройках плагина — строки, «×» и «+ Добавить»")
 
 
 class FakeS:
@@ -436,6 +447,7 @@ with sync_playwright() as p:
     ok(pg.locator("#ab-tl .lane button").count() == 2 and pg.locator("#ab-tl .today").count() >= 1, "отсутствия — лента: две полосы и «сегодня»")
     ok(pg.is_visible("#ab-loose-p") and "свой счёт" in pg.inner_text("#ab-loose"), "без распознанных дат — отдельным списком")
     pg.screenshot(path="/tmp/claude-0/jira_absences.png", full_page=True)
+    ok(pg.locator("#proj button").count() == 0 or pg.locator("#proj button.on").count() == 1, "проекты — кнопками, а не выпадающим списком")
     pg.click('#tabs [data-t="sk"]')
     ok(pg.locator("#stuck tr").count() > 1, "вкладка «Застряло» — таблица")
     pg.set_viewport_size({"width": 400, "height": 800})

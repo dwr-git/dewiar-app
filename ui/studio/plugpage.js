@@ -369,6 +369,7 @@ function plpSettings(box) {
   box.innerHTML = `${p.settings.length ? `<div class="plp-card plp-set"><div class="row one">${p.settings.map(s => plgField(p, s).replace(/id="pls-/g, 'id="pps-')).join("")}</div>
       <p class="hint plp-saved" id="plp-saved">${p.installed ? "Меняется сразу — сохранять не нужно." : "Заполнится при установке."}</p></div>` : ""}
     ${p.jobs.length ? `<h2 class="plp-h2">Дела по расписанию <small>Лира делает сама и сообщает итог</small></h2><div class="plp-card">${p.jobs.map(j => `<div class="switch"><div>${plpEsc(j.title)}</div><label class="tg"><input type="checkbox" data-job="${plpEsc(j.id)}" ${j.on ? "checked" : ""} ${p.installed ? "" : "disabled"}><i></i></label></div>`).join("")}${p.installed ? `<p class="hint" style="margin:8px 0 0">Время и дни включённого дела меняются в «Календаре»: нажмите на дело и поставьте своё время. <a href="#" class="plp-cal">Открыть календарь</a></p>` : ""}</div>` : ""}`;
+  plgListWire(box);
   const vals = () => { const o = {}; $$("#plp-body [data-k]").forEach(el => { o[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value; }); return o; };
   let t = 0;
   const saveNow = (msg) => { if (!p.installed) return; clearTimeout(t);

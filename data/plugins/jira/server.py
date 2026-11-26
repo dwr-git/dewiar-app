@@ -53,9 +53,14 @@ def settings():
     # «Доски или проекты» (владелец 25.11: «права на просмотр доски или нескольких досок»): ссылка на доску
     # (…RapidBoard.jspa?rapidView=25, …/boards/25), номер доски или ключ проекта — через точку с запятой
     projects, boards = [], []
-    for w in re.split(r"[;\s]+", str(s.get("projects") or "")):
-        w = w.strip().strip(",")
-        b = re.search(r"(?:rapidView=|/boards/)(\d+)", w) or re.fullmatch(r"#?(\d+)", w)
+    raw = str(s.get("projects") or "")
+    # доски — все rapidView=N и /boards/N во всём поле (26.11: две ссылки через запятую — вторую не видели); остальное — по
+    # строкам, «;», «,» и пробелам: номер доски или ключ проекта
+    for b in re.findall(r"(?:rapidView=|/boards/)(\d+)", raw):
+        boards.append(int(b))
+    for w in re.split(r"[;,\s]+", re.sub(r"\S*(?:rapidView=|/boards/)\S*", " ", raw)):
+        w = w.strip()
+        b = re.fullmatch(r"#?(\d+)", w)
         if b:
             boards.append(int(b.group(1)))
         elif re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,30}", w):

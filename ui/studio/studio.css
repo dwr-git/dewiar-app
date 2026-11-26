@@ -296,7 +296,7 @@ section.wide > .lead { max-width: 860px; }
 .md ol li strong, .md ol li b { color: #6FD6FF; }
 .md em { color: #E9D7FF; font-style: italic; }
 .md strong em, .md em strong { color: #FFD27A; }
-.md a { color: #6FBEFF; text-decoration: none; border-bottom: 1px solid rgba(111,190,255,.35); }
+.md a { color: #6FBEFF; text-decoration: none; border-bottom: 1px solid rgba(111,190,255,.35); overflow-wrap: anywhere; }
 .md code { font-family: ui-monospace, "Ubuntu Mono", monospace; background: rgba(255,255,255,.09); padding: 1px 7px; border-radius: 6px; font-size: 13px; color: #A7F3D0; }
 .md pre, pre.code { background: rgba(0,0,0,.35); padding: 14px 16px; border-radius: 12px; overflow: auto; margin: 0 0 12px; font: 13px/1.55 ui-monospace, "Ubuntu Mono", monospace; color: #DDE0F5; white-space: pre; }
 .md pre code { background: none; padding: 0; color: inherit; }
@@ -5384,3 +5384,12 @@ html.st-light .xr-det code, html.st-neu .xr-det code { background: rgba(20,30,60
 .px-row .f { margin: 0; } .px-type { width: 110px; } .px-host { flex: 2 1 170px; min-width: 0; } .px-port { width: 90px; }
 .px-user, .px-pass { flex: 1 1 130px; min-width: 0; }
 .px-f > span:first-child { display: block; margin-bottom: 6px; }
+
+/* поле-список плагина: строка на пункт, «×» и «+ Добавить» (26.11) */
+.plist { display: grid; gap: 6px; }
+.plist .plrows { display: grid; gap: 6px; }
+.plist .plr { display: flex; gap: 6px; align-items: center; }
+.plist .plr .pli { flex: 1; min-width: 0; }
+.plist .plx { flex: none; width: 34px; padding: 0; font-size: 16px; line-height: 1; opacity: .7; }
+.plist .plx:hover { opacity: 1; }
+.plist .pla { justify-self: start; }

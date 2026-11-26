@@ -169,6 +169,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._clock_cmd(text, via):
             return                                       # «сколько времени?», «какое сегодня число?» — по часам, без модели
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._open_link_cmd(text, via):
+            return                                       # «открой в браузере» сразу после ответа с одной ссылкой — её и открываем
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._youtube_cmd(text, via):
             return                                       # «включи смешное видео на YouTube» — сразу, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._send_cmd(text, via):

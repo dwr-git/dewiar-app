@@ -41,7 +41,7 @@ log = logging.getLogger("dewiar.plugins")
 BUILTIN_DIR = DATA_DIR / "plugins"
 USER_DIR = CONFIG_DIR / "plugins"
 MAX_ZIP = 20 * 1024 * 1024
-SET_TYPES = ("text", "select", "number", "toggle", "folder", "secret")   # folder — путь с кнопкой «Выбрать папку…» (№461)
+SET_TYPES = ("text", "select", "number", "toggle", "folder", "secret", "list")   # list — по строке на пункт (26.11)   # folder — путь с кнопкой «Выбрать папку…» (№461)
 # secret — ключ или токен (25.11, плагин Jira): поле со звёздочками; уходит только серверу плагина (DEWIAR_PLUGIN_SETTINGS),
 # но не в текст навыка и не в поручения дел — модель его не видит
 # данные Лиры, которые странице плагина можно попросить (только с разрешения человека; core/plugin_bridge.py)
@@ -484,6 +484,9 @@ class Plugins:
                 continue
             elif s["type"] == "secret":
                 out[s["key"]] = "".join(str(v).split())[:2000]
+            elif s["type"] == "list":
+                items = [x.strip() for x in re.split(r"\n", str(v)) if x.strip()]
+                out[s["key"]] = "\n".join(x[:600] for x in items[:30])
             else:
                 out[s["key"]] = " ".join(str(v).split())[:200]
         return out

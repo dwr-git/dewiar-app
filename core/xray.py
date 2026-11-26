@@ -41,7 +41,7 @@ CMD_NAMES = {
     "_weather_cmd": "Погода", "_clock_cmd": "Часы и дата", "_timer_cmd": "Таймер", "_money_cmd": "Деньги",
     "_job_cmd": "Работа", "_vault_cmd": "Сейф", "_home_cmd": "Умный дом", "_pc_cmd": "Компьютер",
     "_window_cmd": "Окна", "_speed_cmd": "Скорость речи", "_bug_cmd": "Сообщить об ошибке", "_draft_cmd": "Черновик книги",
-    "_mail_table_cmd": "Таблица по почте", "_youtube_cmd": "YouTube", "_send_cmd": "Сообщение близкому",
+    "_mail_table_cmd": "Таблица по почте", "_youtube_cmd": "YouTube", "_open_link_cmd": "Ссылка из ответа", "_send_cmd": "Сообщение близкому",
     "_call_cmd": "Звонок близкому", "_plan_cmd": "План дня", "_task_del_cmd": "Удалить задачу", "_mark_cmd": "Отметка дела",
     "_direct_call": "Позвать персонажа", "_direct_update": "Обновление", "_direct_look": "Образ персонажа",
 }

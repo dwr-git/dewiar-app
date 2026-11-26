@@ -34,7 +34,10 @@
   .seg button.on, .tabs button.on { background: var(--brand); color: #fff; }
   .seg button:hover:not(.on), .tabs button:hover:not(.on) { color: var(--ink); }
   .tabs { margin: 0 0 12px; } .tabs i { font-style: normal; opacity: .75; margin-left: 5px; font-weight: 700; }
-  .bar select { width: auto; padding: 7px 30px 7px 12px; font-size: 13px; box-shadow: none; background: var(--soft, rgba(127,127,127,.1)); }
+  .seg.projs { max-width: 100%; overflow-x: auto; scrollbar-width: none; } .seg.projs::-webkit-scrollbar { display: none; }
+  .seg button { white-space: nowrap; }
+  .plist { display: grid; gap: 6px; } .plist .plr { display: flex; gap: 6px; } .plist .plr input { flex: 1; min-width: 0; }
+  .plist .plx { flex: none; width: 36px; padding: 0; font-size: 16px; } .plist .pla { justify-self: start; }
   .fresh { font-size: 12.5px; color: var(--dim); display: inline-flex; gap: 8px; align-items: center; }
   .fresh .btn { background: var(--soft, rgba(127,127,127,.1)); box-shadow: none; }
 
@@ -220,14 +223,15 @@
     <li><b>Права.</b> Токен видит ровно то же, что вы сами: открывается у вас доска — Лира её тоже увидит, отдельные права не
       нужны. Доски не видно — попросите администратора Jira добавить вас в проект (просмотр проекта). Для сводки по всей
       команде нужен токен того, кто видит все её проекты.</li>
-    <li><b>Что загружать.</b> Ссылки на доски (скопируйте адрес открытой доски) или ключи проектов — через точку с запятой.
+    <li><b>Что загружать.</b> Ссылки на доски (скопируйте адрес открытой доски) или ключи проектов — по одной в строке, «+ Добавить» — ещё одна.
       Пусто — всё, что видит токен. Отпуска и больничные ведёте задачами в отдельном проекте — добавьте и его.</li>
     <li><b>Обновление.</b> Первая загрузка — несколько минут, дальше Лира сама дотягивает изменённое, когда её спрашивают
       или открыта эта страница. Срок токена кончился — создайте новый и вставьте сюда вместо старого.</li>
   </ol>
   <label>Адрес Jira<input type="text" id="s-url" placeholder="https://jira.company.ru" spellcheck="false"></label>
   <label>Личный токен<input type="password" id="s-token" placeholder="вставьте токен" autocomplete="off" spellcheck="false"></label>
-  <label>Доски или проекты — через точку с запятой, пусто — всё<input type="text" id="s-proj" placeholder="https://jira.company.ru/secure/RapidBoard.jspa?rapidView=25; AI" spellcheck="false"></label>
+  <div class="plist"><label style="margin:0">Доски или проекты — по одной в строке, пусто — всё, что видит токен</label>
+    <div id="s-proj"></div><button class="btn small pla" type="button" id="s-add">+ Добавить доску или проект</button></div>
   <p class="hint" style="margin:0">Облачная Jira (atlassian.net): токен — на id.atlassian.com → «Безопасность» → «API-токены», вставлять как «почта:токен».</p>
   <div class="row"><button class="btn primary" id="s-go">Подключить и загрузить</button><button class="btn" id="s-back" hidden>К сводке</button><button class="btn" id="s-full" hidden title="Если в Jira поменяли статусы или задачи переносили между проектами">Загрузить всё заново</button><span class="hint" id="s-hint">Только чтение — в Jira ничего не меняется.</span></div>
   <div class="prog" id="s-prog" hidden><i></i></div>
@@ -236,7 +240,7 @@
 <main id="main" hidden>
   <div class="bar">
     <div class="seg" id="period"><button data-d="7">7 дней</button><button data-d="30" class="on">30 дней</button><button data-d="90">90 дней</button></div>
-    <select id="proj" aria-label="Проект"><option value="">Все проекты</option></select>
+    <div class="seg projs" id="proj" role="group" aria-label="Проект"></div>
     <span class="grow"></span>
     <span class="fresh"><span id="fresh"></span><button class="btn small" id="sync">Обновить</button><button class="btn small" id="conn" title="Адрес, токен, проекты">Подключение</button></span>
   </div>
@@ -448,9 +452,11 @@
   function draw() {
     const d = st.data, o = d.overview;
     $("#fresh").textContent = d.synced ? `Обновлено ${d.synced_at}` : "";
-    const sel = $("#proj"), was = sel.value;
-    sel.innerHTML = `<option value="">Все проекты</option>` + o.projects.map((p) => `<option ${p === st.project ? "selected" : ""}>${esc(p)}</option>`).join("");
-    if (was && !o.projects.includes(was)) st.project = "";
+    // проекты — кнопками в цвет переключателя дней (26.11, владелец: выпадающий список «выбивается из общей красоты»)
+    if (st.project && !o.projects.includes(st.project)) st.project = "";
+    $("#proj").hidden = o.projects.length < 2;
+    $("#proj").innerHTML = [["", "Все проекты"], ...o.projects.map((p) => [p, p])]
+      .map(([v, t]) => `<button data-p="${esc(v)}" class="${v === st.project ? "on" : ""}">${esc(t)}</button>`).join("");
     $$("#period button").forEach((b) => b.classList.toggle("on", +b.dataset.d === st.days));
     const per = `${st.days} ${plural(st.days, "день", "дня", "дней")}`;
     const diff = o.done_period - o.created_period, prev = o.done_prev;
@@ -578,11 +584,29 @@
     finally { st.busy = false; pb.hidden = true; btn.disabled = false; btn.textContent = "Обновить"; }
   }
 
+  // доски и проекты — по строке, «×» убирает, «+ Добавить» — ещё одну (26.11, владелец: «несколько полей… добавлять и удалять»)
+  function projRows(items) {
+    const box = $("#s-proj");
+    box.innerHTML = "";
+    (items.length ? items : [""]).forEach(addProjRow);
+  }
+  function addProjRow(v) {
+    const r = document.createElement("div");
+    r.className = "plr";
+    r.innerHTML = `<input type="text" placeholder="https://jira.company.ru/secure/RapidBoard.jspa?rapidView=25 или AI" spellcheck="false"><button class="btn small plx" type="button" title="Убрать">×</button>`;
+    r.querySelector("input").value = v || "";
+    r.querySelector(".plx").onclick = () => { if ($("#s-proj").children.length > 1) r.remove(); else r.querySelector("input").value = ""; };
+    $("#s-proj").appendChild(r);
+    return r;
+  }
+  $("#s-add").onclick = () => addProjRow("").querySelector("input").focus();
+
   async function showSetup(d) {
     $("#main").hidden = true; $("#setup").hidden = false;
+    if (!$("#s-proj").children.length) projRows([]);
     try {
       const s = await dewiar.settings(), v = s.values || {};
-      $("#s-url").value = v.url || ""; $("#s-proj").value = v.projects || "";
+      $("#s-url").value = v.url || ""; projRows(String(v.projects || "").split(/\n|;\s*|,\s*(?=https?:)/).map((x) => x.trim()).filter(Boolean));
       $("#s-token").placeholder = v.token ? "токен сохранён — вставьте новый, чтобы заменить" : "вставьте токен";
     } catch (e) { /* без настроек — пустая форма */ }
     if (d && d.configured && !d.issues) $("#s-hint").textContent = "Адрес и токен есть — осталось загрузить задачи.";
@@ -591,7 +615,8 @@
   }
 
   $("#s-go").onclick = async () => {
-    const url = $("#s-url").value.trim(), token = $("#s-token").value.trim(), projects = $("#s-proj").value.trim();
+    const url = $("#s-url").value.trim(), token = $("#s-token").value.trim(),
+      projects = $$("#s-proj input").map((i) => i.value.trim()).filter(Boolean).join("\n");
     if (!url) { msg("Вставьте адрес Jira.", "bad"); $("#s-url").focus(); return; }
     const b = $("#s-go"); b.disabled = true;
     try {
@@ -613,7 +638,7 @@
   $("#s-back").onclick = () => { msg(""); load().catch((x) => msg(x.message, "bad")); };
   $("#conn").onclick = () => showSetup(st.data);
   $("#period").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; st.days = +b.dataset.d; load().catch((x) => msg(x.message, "bad")); };
-  $("#proj").onchange = (e) => { st.project = e.target.value; load().catch((x) => msg(x.message, "bad")); };
+  $("#proj").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; st.project = b.dataset.p; load().catch((x) => msg(x.message, "bad")); };
   $("#tabs").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; st.tab = b.dataset.t;
     $$("#tabs button").forEach((x) => x.classList.toggle("on", x === b)); $$("section[data-p]").forEach((s) => s.hidden = s.dataset.p !== st.tab);
     if (st.tab === "pp" && st.graphPending && st.data) { st.graphPending = false; drawGraph($("#graph"), st.data.graph); } };

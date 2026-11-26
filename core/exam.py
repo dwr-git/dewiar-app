@@ -536,6 +536,12 @@ async def wait_task(core, since_ts, timeout, tid=None):
     return t
 
 
+def asked_back(ans):
+    """Уточнила, а не сделала наугад. 26.11: «Уточни, пожалуйста, кому и что отправить.» — тоже уточнение, хоть и без «?»."""
+    return "?" in ans or bool(re.search(r"\b(уточни|уточните|подскажи|подскажите|скажи|скажите|напиши|напишите)\b[^.!]{0,60}"
+                                         r"\b(кому|кто|что|какой|какую|какое|о ком|о чём|о чем)\b", ans, re.I))
+
+
 class JudgeDown(RuntimeError):
     pass
 
@@ -907,7 +913,7 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                 for c in check_answer(stp.get("expect"), ans):
                     res["checks"].append(dict(c, name=f"шаг {n_}: {c['name']}"))
                 if stp.get("ask"):
-                    res["checks"].append({"name": f"шаг {n_}: уточняющий вопрос", "ok": "?" in ans, "detail": ans[:120]})
+                    res["checks"].append({"name": f"шаг {n_}: уточняющий вопрос", "ok": asked_back(ans), "detail": ans[:120]})
                 for name in stp.get("no_tool") or []:
                     hit = [x for x in res["steps"][-1]["tools"] if x["name"] == name]
                     res["checks"].append({"name": f"шаг {n_}: без {name}", "ok": not hit, "detail": ", ".join(str(x.get("args"))[:80] for x in hit)})
@@ -1115,7 +1121,8 @@ def markdown(rep):
     lines = [f"# Экзамен Dewiar {rep['version']} — {rep['started'][:16].replace('T', ' ')}", "",
              f"Модель: **{rep['model']}**. Сдано **{s['passed']} из {s['total']}**"
              + (f" (и ещё {s['partial']} — не проверено до конца: нет браузера)" if s.get("partial") else "")
-             + (f", средняя оценка судьи {s['avg_score']}" if s.get("avg_score") is not None else "") + f", {round(rep['duration_s'] / 60)} мин.", ""]
+             + (f", средняя оценка судьи {s['avg_score']}" if s.get("avg_score") is not None else "") + f", {round(rep['duration_s'] / 60)} мин."
+             + (f" Судья: {rep['judge']}." if rep.get("judge") else ""), ""]
     if s.get("unjudged"):
         lines[-1:-1] = [f"⚠ Судья не оценил {s['unjudged']} сценариев — они не в счёте. Причина: {s.get('unjudged_why') or '—'}"]
     for g, v in s["by_group"].items():
@@ -1268,6 +1275,8 @@ async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, k
            # проба короткой инструкции — в подписи модели: в кабинете и отчёте сразу видно, какой прогон с чем сравнивать
            "model": (profile.get("title") or profile.get("model") or "?") + (" · короткая инструкция" if lean else "") + (" · сцена разговора" if scene else ""),
            "lean": bool(lean), "scene": bool(scene),
+           # кто судил (26.11: «вроде заработала оценка от Джемини» — а в отчёте не было видно, Gemini это или та же модель)
+           "judge": (judge_prof.get("title") or judge_prof.get("model") or "?") if judge_prof and judge_prof is not profile else "та же модель",
            "host": platform.node()[:40],
            "os": f"{platform.system()} {platform.release()}"[:60], "long": bool(long), "big": bool(big), "scenarios": results}
     rep["summary"] = summary(results)

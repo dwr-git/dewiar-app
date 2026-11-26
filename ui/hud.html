@@ -179,7 +179,9 @@
   #cap .you::before { content: "Вы: "; opacity: .75; }
   html[lang]:not([lang="ru"]) #cap .you::before, html[lang]:not([lang="ru"]) #rd-body .q::before { content: "You: "; }   /* подпись в CSS — словарь её не видит */
   /* длинный ответ прокручивается колесом или пальцем; край, за которым есть ещё текст, плавно тает */
-  #cap .bot { color: var(--ink); user-select: text; -webkit-user-select: text; white-space: pre-wrap; flex: 0 1 auto; min-height: 0;
+  #cap .bot a, #rd-body a { color: #8FC8FF; text-decoration: none; border-bottom: 1px solid rgba(143,200,255,.4); overflow-wrap: anywhere; cursor: pointer; }
+  body.light #cap .bot a, body.light #rd-body a { color: #2563c9; border-bottom-color: rgba(37,99,201,.35); }
+  #cap .bot { color: var(--ink); user-select: text; -webkit-user-select: text; white-space: pre-wrap; flex: 0 1 auto; min-height: 0; overflow-wrap: anywhere;
               overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; margin-right: -8px; padding-right: 8px;
               scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
   #cap .bot p { margin: 0 0 .55em; } #cap .bot p:last-child { margin-bottom: 0; }
@@ -1034,11 +1036,33 @@ function capParas(t) {
   }
   return out.length ? out : [String(t)];
 }
+/* Ссылки в ответе — нажимаются и не разъезжаются (26.11, владелец: «ссылка не нажимается… в виджете ещё и обрезается»):
+   голая https-ссылка — <a> с короткой подписью (сайт/…/конец), целиком — в подсказке; откроется в браузере. */
+const URL_RX = /https?:\/\/[^\s<>«»"'`]*[^\s<>«»"'`.,;:!?)]/g;
+function shortUrl(u) {
+  if (String(u).length <= 48) return String(u);                    // короткая — как есть
+  const s = String(u).replace(/^https?:\/\/(www\.)?/i, "");
+  const [path] = s.split(/[?#]/), parts = path.split("/").filter(Boolean), host = parts.shift() || "";
+  const out = host + (parts.length > 1 ? "/…/" + parts[parts.length - 1] : parts.length ? "/" + parts[0] : "") + (path !== s ? "?…" : "");
+  return out.length > 56 ? out.slice(0, 54) + "…" : out;
+}
+function linkify(el, text) {
+  let at = 0;
+  for (const m of String(text).matchAll(URL_RX)) {
+    if (m.index > at) el.appendChild(document.createTextNode(text.slice(at, m.index)));
+    const a = document.createElement("a");
+    a.href = m[0]; a.target = "_blank"; a.rel = "noopener"; a.title = m[0]; a.textContent = shortUrl(m[0]);
+    a.addEventListener("mousedown", (e) => e.stopPropagation());      // не тянуть виджет за ссылку
+    a.addEventListener("click", (e) => e.stopPropagation());          // и не открывать «целиком» — только ссылку
+    el.appendChild(a); at = m.index + m[0].length;
+  }
+  if (at < text.length) el.appendChild(document.createTextNode(text.slice(at)));
+}
 function capSet(text) {
   const b = $("bot"), paras = capParas(text);
   b.textContent = "";
-  if (paras.length < 2) b.textContent = text;
-  else paras.forEach((x) => { const e = document.createElement("p"); e.textContent = x; b.appendChild(e); });
+  if (paras.length < 2) linkify(b, String(text));
+  else paras.forEach((x) => { const e = document.createElement("p"); linkify(e, x); b.appendChild(e); });
   b.classList.toggle("long", String(text).length > 360);
 }
 function showCap(you, bot, err) {
@@ -2127,7 +2151,8 @@ function mdLite(t) {
   const parts = String(t || "").split(/```/);
   return parts.map((p, i) => {
     if (i % 2) { const code = p.replace(/^[\w+-]*\n/, ""); return `<pre><button class="cp">Копировать</button><code>${escR(code.replace(/\n$/, ""))}</code></pre>`; }
-    let h = escR(p).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    let h = escR(p).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, t, u) => `<a href="${u}" target="_blank" rel="noopener" title="${u}">${t}</a>`)
+      .replace(/(^|[\s(«])(https?:\/\/[^\s<>«»"'`]*[^\s<>«»"'`.,;:!?)])/g, (_, p, u) => `${p}<a href="${u}" target="_blank" rel="noopener" title="${u}">${escR(shortUrl(u.replace(/&amp;/g, "&")))}</a>`)
       .replace(/(^|[\s(«])\*([^*\s][^*\n]*?)\*(?=[\s.,;:!?)»]|$)/gm, "$1<i>$2</i>");   // *курсив*
     const out = []; let list = null, num = 0;          // num — номер первого пункта нумерованного списка (0 — точки)
     const close = () => { if (list) out.push(num ? `<ol start="${num}">${list.join("")}</ol>` : `<ul>${list.join("")}</ul>`); list = null; };
