@@ -61,20 +61,35 @@
     ["ou", "ау"], ["qu", "кв"], ["kh", "х"], ["zh", "ж"], ["ya", "я"], ["yu", "ю"], ["yo", "ё"], ["ts", "ц"]];
   const TR1 = { a: "а", b: "б", c: "к", d: "д", e: "е", f: "ф", g: "г", h: "х", i: "и", j: "дж", k: "к", l: "л", m: "м", n: "н", o: "о",
     p: "п", q: "к", r: "р", s: "с", t: "т", u: "у", v: "в", w: "в", x: "кс", y: "и", z: "з" };
-  const KNOWN = { linux: "линукс", ubuntu: "убунту", windows: "виндоус", telegram: "телеграм", max: "макс", dewiar: "дэвиаар",
-    youtube: "ютуб", google: "гугл", yandex: "яндекс", wifi: "вай-фай", "wi-fi": "вай-фай", ok: "окей", email: "имейл", sudo: "судо",
-    python: "пайтон", chrome: "хром", obsidian: "обсидиан", android: "андроид", iphone: "айфон", bluetooth: "блютус", hdmi: "эйч-ди-эм-ай",
-    jazz: "джаз", relax: "релакс", fm: "эф-эм" };
+  // как core/speechnorm.py _KNOWN (№1111, 26.11: «Deep Space One» — «дип спейс уан», а не «дип спаке оне»)
+  const KNOWN = { linux: "линукс", ubuntu: "убунту", windows: "виндоус", telegram: "телеграм", max: "макс", dewiar: "дэвиаар", youtube: "ютуб", google:
+    "гугл", yandex: "яндекс", wifi: "вай-фай", "wi-fi": "вай-фай", ok: "окей", email: "имейл", sudo: "судо", python: "пайтон", chrome: "хром",
+    obsidian: "обсидиан", android: "андроид", iphone: "айфон", bluetooth: "блютус", hdmi: "эйч-ди-эм-ай", jazz: "джаз", relax: "релакс", fm:
+    "эф-эм", deep: "дип", space: "спейс", one: "уан", two: "ту", three: "фри", the: "зэ", of: "оф", and: "энд", radio: "радио", rock: "рок",
+    pop: "поп", chill: "чилл", chillout: "чиллаут", lounge: "лаунж", house: "хаус", dance: "дэнс", classic: "классик", classics: "классикс",
+    love: "лав", smooth: "смус", groove: "грув", soul: "соул", hits: "хитс", hit: "хит", music: "мьюзик", city: "сити", sky: "скай", star:
+    "стар", stars: "старс", sun: "сан", moon: "мун", night: "найт", day: "дэй", live: "лайв", heart: "харт", kiss: "кисс", energy: "энерджи",
+    plus: "плюс", record: "рекорд", best: "бест", top: "топ", fresh: "фреш", cafe: "кафе", lofi: "лоу-фай", ambient: "эмбиент", trance: "транс",
+    techno: "техно", beat: "бит", beats: "битс", vibe: "вайб", vibes: "вайбс", power: "пауэр", rap: "рэп", metal: "метал", blues: "блюз",
+    country: "кантри", retro: "ретро", disco: "диско", piano: "пиано", nature: "нэйче", ocean: "оушен", world: "ворлд", news: "ньюс", sport:
+    "спорт", hot: "хот", cool: "кул", europa: "европа", radio1: "радио уан", station: "стейшен", sound: "саунд", sounds: "саундс", mix: "микс",
+    chart: "чарт", gold: "голд", new: "нью", old: "олд", school: "скул", dream: "дрим", dreams: "дримс", jungle: "джангл", bass: "бейс", drum:
+    "драм", drive: "драйв", free: "фри", time: "тайм", life: "лайф", light: "лайт", zone: "зон", wave: "вэйв", waves: "вэйвс", coffee: "кофи",
+    morning: "морнинг", evening: "ивнинг", "lounge fm": "лаунж эф-эм" };
+  const MAGIC_E = { a: "ей", i: "ай", o: "оу", u: "ью" };
   function latinWord(w) {
     const low = w.toLowerCase();
     if (KNOWN[low]) return KNOWN[low];
     if ((w === w.toUpperCase() && w.length <= 6) || w.length === 1) return [...low].map(c => LETTER[c] || c).join("-");
-    let out = "", i = 0;
-    while (i < low.length) {
-      const t2 = TR2.find(([a]) => low.startsWith(a, i));
-      if (t2) { out += t2[1]; i += t2[0].length; } else { out += TR1[low[i]] || low[i]; i++; }
+    let out = "", i = 0, src = low, tail = "";
+    const m = src.length >= 4 ? src.match(/([aiou])([bcdfgklmnprstvz])e$/) : null;
+    if (m) { src = src.slice(0, m.index); tail = MAGIC_E[m[1]] + (m[2] === "c" ? "с" : TR1[m[2]] || m[2]); }   // «немое e»: space — спейс
+    while (i < src.length) {
+      if (src[i] === "c" && "eiy".includes(src[i + 1] || "-")) { out += "с"; i++; continue; }            // ce, ci, cy — «с»
+      const t2 = TR2.find(([a]) => src.startsWith(a, i));
+      if (t2) { out += t2[1]; i += t2[0].length; } else { out += TR1[src[i]] || src[i]; i++; }
     }
-    return out;
+    return out + tail;
   }
   function num(s) {
     if (s.includes(":")) {

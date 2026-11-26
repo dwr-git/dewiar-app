@@ -111,5 +111,24 @@ ok('name="pd_need" value="1"' in h, "серверу — как раньше: б�
 js = (ROOT / "android/www-src/app/06-ears-voice.js").read_text(encoding="utf-8")
 ok(js.count("слушать будет сервер Dewiar, а ваша модель останется") == 2, "подсказка про вход: своя модель останется")
 
+# ---------- №1110: рамка вокруг ползунка громкости после щелчка ----------
+from playwright.sync_api import sync_playwright  # noqa: E402
+with sync_playwright() as p_:
+    b_ = p_.chromium.launch()
+    pg = b_.new_page()
+    pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1")
+    pg.wait_for_timeout(1200)
+    res = []
+    for cls in ("", "st-light st-neu st-skin"):
+        pg.evaluate(f"""() => {{ document.documentElement.className = {cls!r}; let r = document.getElementById('t-rng');
+            if (!r) {{ r = document.createElement('input'); r.type = 'range'; r.id = 't-rng'; document.body.prepend(r); }} r.focus(); }}""")
+        res.append(pg.evaluate("() => { const c = getComputedStyle(document.getElementById('t-rng')); return [c.boxShadow, c.backgroundColor]; }"))
+    b_.close()
+ok(all(x[0] == "none" and x[1] in ("rgba(0, 0, 0, 0)", "transparent") for x in res), f"№1110: ползунок в фокусе — без рамки и подложки (тёмная и светлая тема): {res}")
+
+# ---------- №1111: английское название станции вслух ----------
+from speechnorm import speech_norm  # noqa: E402
+ok("дип спейс уан" in speech_norm("Включаю Deep Space One.", latin=True).lower(), "№1111: «Deep Space One» — «дип спейс уан»")
+
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -71,7 +71,23 @@ _TR1 = {"a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "
 _KNOWN = {"linux": "линукс", "ubuntu": "убунту", "windows": "виндоус", "telegram": "телеграм", "max": "макс", "dewiar": "дэвиаар",
           "youtube": "ютуб", "google": "гугл", "yandex": "яндекс", "wifi": "вай-фай", "wi-fi": "вай-фай", "ok": "окей",
           "email": "имейл", "sudo": "судо", "python": "пайтон", "chrome": "хром", "obsidian": "обсидиан", "android": "андроид",
-          "iphone": "айфон", "bluetooth": "блютус", "hdmi": "эйч-ди-эм-ай", "jazz": "джаз", "relax": "релакс", "fm": "эф-эм"}
+          "iphone": "айфон", "bluetooth": "блютус", "hdmi": "эйч-ди-эм-ай", "jazz": "джаз", "relax": "релакс", "fm": "эф-эм",
+          # №1111 (26.11): «Deep Space One» звучало «дип спаке оне» — частые английские слова названий радио и музыки
+          "deep": "дип", "space": "спейс", "one": "уан", "two": "ту", "three": "фри", "the": "зэ", "of": "оф", "and": "энд",
+          "radio": "радио", "rock": "рок", "pop": "поп", "chill": "чилл", "chillout": "чиллаут", "lounge": "лаунж", "house": "хаус",
+          "dance": "дэнс", "classic": "классик", "classics": "классикс", "love": "лав", "smooth": "смус", "groove": "грув",
+          "soul": "соул", "hits": "хитс", "hit": "хит", "music": "мьюзик", "city": "сити", "sky": "скай", "star": "стар",
+          "stars": "старс", "sun": "сан", "moon": "мун", "night": "найт", "day": "дэй", "live": "лайв", "heart": "харт",
+          "kiss": "кисс", "energy": "энерджи", "plus": "плюс", "record": "рекорд", "best": "бест", "top": "топ", "fresh": "фреш",
+          "cafe": "кафе", "lofi": "лоу-фай", "ambient": "эмбиент", "trance": "транс", "techno": "техно", "beat": "бит",
+          "beats": "битс", "vibe": "вайб", "vibes": "вайбс", "power": "пауэр", "rap": "рэп", "metal": "метал", "blues": "блюз",
+          "country": "кантри", "retro": "ретро", "disco": "диско", "piano": "пиано", "nature": "нэйче", "ocean": "оушен",
+          "world": "ворлд", "news": "ньюс", "sport": "спорт", "hot": "хот", "cool": "кул", "europa": "европа", "radio1": "радио уан",
+          "station": "стейшен", "sound": "саунд", "sounds": "саундс", "mix": "микс", "chart": "чарт", "gold": "голд",
+          "new": "нью", "old": "олд", "school": "скул", "dream": "дрим", "dreams": "дримс", "jungle": "джангл", "bass": "бейс",
+          "drum": "драм", "drive": "драйв", "free": "фри", "time": "тайм", "life": "лайф", "light": "лайт", "zone": "зон",
+          "wave": "вэйв", "waves": "вэйвс", "coffee": "кофи", "morning": "морнинг", "evening": "ивнинг", "lounge fm": "лаунж эф-эм"}
+_MAGIC_E = {"a": "ей", "i": "ай", "o": "оу", "u": "ью"}
 
 
 def latin_word(w):
@@ -81,7 +97,14 @@ def latin_word(w):
     if w.isupper() and len(w) <= 6 or len(w) == 1:              # USB, HDMI, AI — по буквам
         return "-".join(_LETTER.get(c, c) for c in low)
     out, i = "", 0
+    tail = ""
+    m = re.search(r"([aiou])([bcdfgklmnprstvz])e$", low) if len(low) >= 4 else None
+    if m:                                     # «немое e»: space -> спейс, time -> тайм, tone -> тоун
+        low, tail = low[:m.start()], _MAGIC_E[m.group(1)] + _TR1.get(m.group(2), m.group(2)).replace("к", "с" if m.group(2) == "c" else "к")
     while i < len(low):
+        if low[i] == "c" and i + 1 < len(low) and low[i + 1] in "eiy":   # ce, ci, cy — «с»
+            out, i = out + "с", i + 1
+            continue
         for a, b in _TR2:
             if low.startswith(a, i):
                 out, i = out + b, i + len(a)
@@ -89,7 +112,7 @@ def latin_word(w):
         else:
             out += _TR1.get(low[i], low[i])
             i += 1
-    return out
+    return out + tail
 
 
 def _num(m):
