@@ -431,7 +431,11 @@ function netErr(e, url) {
   // веб-версия (пакет 30.10, iPhone: «связь с мозгом: Load failed») — так Safari называет любой обрыв запроса
   if (/^(?:TypeError:\s*)?(?:Load failed|Failed to fetch|NetworkError.*)$/i.test(e.trim()))
     return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась — слабая связь или страница была свёрнута";
-  if (/ECONNREFUSED|Connection refused|failed to connect|reset|closed|EOF|connection abort/i.test(e)) return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась";
+  // №1113 (26.11): «Не проверилось: unexpected end of stream on null» — так Android называет прокси, молча закрывший связь
+  // (свой, прокси Dewiar, прокси из настроек Wi-Fi или VPN). Телефон уже попробовал и напрямую — не вышло и так
+  if (/end of stream on null|response code for CONNECT|authenticate with proxy|SOCKS/i.test(e))
+    return "прокси на пути к серверу оборвал связь. Проверьте прокси в настройках Wi-Fi телефона (должно быть «Нет»), VPN-приложение и прокси в Dewiar: Настройки → Мозг → «Сеть»";
+  if (/ECONNREFUSED|Connection refused|failed to connect|reset|closed|EOF|end of stream|connection abort/i.test(e)) return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась";
   return e;
 }
 
@@ -1002,7 +1006,12 @@ async function dwProxyFetch(force) {
     S.net.dewiar_secret = normProxy(d.proxy || ""); S.net.dewiar_at = Date.now(); saveS();
     console.log("прокси Dewiar получен: " + hideProxy(S.net.dewiar_secret));
     return "";
-  } catch (e) { console.log("прокси Dewiar не получен: " + e.message); return e.message; }
+  } catch (e) {
+    // №1113: сайт ответил, что прокси не раздаётся (выключен администратором, а не сбой связи), — старый адрес больше не
+    // годится: с ним все запросы к Dewiar шли в мёртвый прокси, и обновить его было некому (запрос шёл туда же)
+    if (!e.net && S.net.dewiar_secret) { S.net.dewiar_secret = ""; S.net.dewiar_at = 0; saveS(); }
+    console.log("прокси Dewiar не получен: " + e.message); return e.message;
+  }
 }
 setTimeout(() => dwProxyFetch(false).catch(() => {}), 4000);
 /* socks5://user:pass@host:1080, http://host:3128, host:port, ссылка t.me/socks?… → адрес; MTProto — отказ (как на компьютере). */

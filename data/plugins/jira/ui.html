@@ -111,12 +111,39 @@
   .hero .say { margin: 12px 0 0; font-size: 14px; line-height: 1.5; opacity: .92; max-width: 40ch; }
   .hero .say b { font-weight: 750; }
   .hero .mini { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
-  .hero .mini div { background: rgba(255,255,255,.13); border-radius: 16px; padding: 10px 14px; }
+  .hero .mini button { all: unset; box-sizing: border-box; cursor: pointer; background: rgba(255,255,255,.13); border-radius: 16px; padding: 10px 14px;
+                       transition: background .15s, transform .15s; min-width: 0; }
+  .hero .mini button:hover { background: rgba(255,255,255,.22); transform: translateY(-1px); }
+  .hero .mini button:focus-visible, .hero .bigb:focus-visible, .pj button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .hero .mini button::after, .hero .bigb::after { content: "›"; float: right; opacity: 0; transition: opacity .15s; font-size: 18px; line-height: 1; }
+  .hero .mini button:hover::after, .hero .bigb:hover::after { opacity: .8; }
+  .hero .bigb { all: unset; cursor: pointer; border-radius: 14px; display: block; }
+  .hero .hc { position: relative; }
+  .hero .tip { position: absolute; top: 0; transform: translateX(-50%); pointer-events: none; white-space: nowrap; font-size: 12px; line-height: 1.45;
+               background: rgba(20, 16, 60, .55); backdrop-filter: blur(8px); border-radius: 12px; padding: 6px 10px; }
+  .hero .tip b { font-weight: 750; }
+  .hero .cx { stroke: #fff; stroke-opacity: .35; stroke-width: 1; }
+  .pj { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; }
+  .pj button { all: unset; cursor: pointer; display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 12px;
+               background: rgba(255,255,255,.13); font-size: 12.5px; transition: background .15s; }
+  .pj button:hover { background: rgba(255,255,255,.24); }
+  .pj b { font-weight: 800; letter-spacing: .02em; } .pj small { opacity: .82; font-size: 12px; }
+  /* список за цифрой «пульса» — в той же боковой панели, что и карточка задачи */
+  .lst { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 0; }
+  .lst li { grid-column: 1 / -1; display: grid; grid-template-columns: 86px minmax(0, 1fr); grid-template-columns: subgrid; gap: 2px 12px;
+            padding: 9px 10px; border-radius: 12px; cursor: pointer; }
+  .lst li:hover { background: var(--soft, rgba(127,127,127,.08)); }
+  .lst .kk { font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .lst .tt { font-size: 13.5px; line-height: 1.4; min-width: 0; }
+  .lst small { grid-column: 2; color: var(--dim); font-size: 12px; }
+  #task .back { border: 0; background: var(--soft, rgba(127,127,127,.1)); color: var(--muted); height: 32px; border-radius: 999px; padding: 0 12px; font: inherit; font-size: 13px; cursor: pointer; }
   .hero .mini b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
   .hero .mini small { font-size: 12px; opacity: .8; }
   .hero svg { width: 100%; height: auto; display: block; overflow: visible; }
   .hero svg text { fill: rgba(255,255,255,.7); font-size: 10.5px; font-family: inherit; }
-  .hero .hl { display: flex; gap: 14px; font-size: 12px; opacity: .85; margin: 4px 0 0; justify-content: flex-end; }
+  .hero svg text.yl { fill: rgba(255,255,255,.55); }
+  .hero .hl { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; opacity: .85; margin: 4px 0 0; justify-content: flex-end; }
+  .hero .hl em { font-style: normal; opacity: .75; margin-right: auto; }
   .hero .hl i { display: inline-block; width: 14px; height: 0; border-top: 2.5px solid #fff; vertical-align: middle; margin-right: 6px; }
   .hero .hl i.dash { border-top-style: dashed; opacity: .7; }
   .sec { font-size: 15px; margin: 16px 4px 10px; }
@@ -317,14 +344,18 @@
     let lab = "";
     o.weeks.forEach((w, i) => { if (i % every === 0 || i === n - 1) lab += `<text x="${x(i)}" y="${H - 4}" text-anchor="${i === n - 1 ? "end" : i === 0 ? "start" : "middle"}">${esc(w)}</text>`; });
     const hits = o.weeks.map((w, i) => { const hw = (W - L - R) / Math.max(1, n - 1) / 2;
-      return `<rect x="${x(i) - hw}" y="0" width="${hw * 2}" height="${H - B}" fill="transparent"><title>Неделя с ${esc(w)}: закрыто ${o.done_w[i]}, создано ${o.created_w[i]}</title></rect>`; }).join("");
-    const last = o.done_w.length - 1;
-    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Закрыто и создано по неделям"><defs><linearGradient id="hf" x1="0" x2="0" y1="0" y2="1">`
+      return `<rect data-i="${i}" x="${x(i) - hw}" y="0" width="${hw * 2}" height="${H - B}" fill="transparent"/>`; }).join("");
+    const last = o.done_w.length - 1, mx = Math.max(...o.created_w, ...o.done_w);
+    // шкала — две тихие подписи слева (без линий сетки: «минимум полосок»), чтобы высота читалась числом
+    const ys = mx ? [mx, Math.round(mx / 2)].filter((v, i, a) => v && a.indexOf(v) === i).map((v) => `<text x="${L}" y="${y(v) - 4}" class="yl">${v}</text>`).join("") : "";
+    st.chart = { o, x, y, n, W, H, B };
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Сколько задач закрыто и создано по неделям"><defs><linearGradient id="hf" x1="0" x2="0" y1="0" y2="1">`
       + `<stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>`
       + `<path d="${smooth(o.done_w)}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z" fill="url(#hf)"/>`
       + `<path d="${smooth(o.created_w)}" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round"/>`
       + `<path d="${smooth(o.done_w)}" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`
-      + `<circle cx="${x(last)}" cy="${y(o.done_w[last])}" r="5" fill="#fff"/>${lab}${hits}</svg>`;
+      + `<circle cx="${x(last)}" cy="${y(o.done_w[last])}" r="5" fill="#fff"/>${lab}${ys}`
+      + `<g id="hx" visibility="hidden"><line class="cx" y1="${T}" y2="${H - B}"/><circle r="5" fill="#fff" class="pd"/><circle r="4" fill="none" stroke="#fff" stroke-width="2" class="pc"/></g>${hits}</svg>`;
   }
 
   function donut(list) {
@@ -462,15 +493,20 @@
     const diff = o.done_period - o.created_period, prev = o.done_prev;
     const tr = !prev ? (o.done_period ? "впервые за такой срок" : "") : (() => { const pc = Math.round((o.done_period - prev) / prev * 100);
       return pc > 0 ? `▲ на ${pc}% больше, чем ${per} до этого` : pc < 0 ? `▼ на ${-pc}% меньше, чем ${per} до этого` : `столько же, сколько ${per} до этого`; })();
-    $("#hero").innerHTML = `<div><p class="cap">Команда · за ${per}${st.project ? " · " + esc(st.project) : ""}</p>
-        <div class="big"><b data-n="${o.done_period}">0</b><span>${plural(o.done_period, "задача закрыта", "задачи закрыто", "задач закрыто")}</span></div>
+    const allP = !st.project && (o.by_project || []).length > 1;
+    $("#hero").innerHTML = `<div><p class="cap">${allP ? `Все проекты вместе: ${esc(o.projects.join(", "))}` : `Команда${st.project ? " · проект " + esc(st.project) : ""}`} · за ${per}</p>
+        <button class="bigb" data-list="done" title="Какие задачи закрыты"><div class="big"><b data-n="${o.done_period}">0</b><span>${plural(o.done_period, "задача закрыта", "задачи закрыто", "задач закрыто")}</span></div></button>
         ${tr ? `<span class="trend">${esc(tr)}</span>` : ""}
         <p class="say">${!o.created_period && !o.done_period ? "Задач не создавали и не закрывали."
           : diff >= 0 ? `Команда успевает: закрыто <b>${num(o.done_period)}</b> при <b>${num(o.created_period)}</b> новых.`
-            : `Бэклог растёт: новых на <b>${num(-diff)}</b> больше, чем закрыто.`}</p></div>
-      <div>${heroChart(o)}<div class="hl"><span><i></i>закрыто</span><span><i class="dash"></i>создано</span></div></div>
-      <div class="mini"><div><b data-n="${o.in_progress}">0</b><small>в работе сейчас</small></div><div><b data-n="${o.todo}">0</b><small>ждут</small></div>
-        <div><b data-n="${o.bugs_open}">0</b><small>открытых ошибок</small></div><div><b data-n="${o.people_period}">0</b><small>${plural(o.people_period, "человек", "человека", "человек")} закрывали</small></div></div>`;
+            : `Бэклог растёт: новых на <b>${num(-diff)}</b> больше, чем закрыто.`}</p>
+        ${allP ? `<div class="pj">${o.by_project.map((b) => `<button data-p="${esc(b.project)}" title="Только проект ${esc(b.project)}"><b>${esc(b.project)}</b>`
+          + `<small>закрыто ${num(b.done)} · в работе ${num(b.in_progress)}</small></button>`).join("")}</div>` : ""}</div>
+      <div class="hc">${heroChart(o)}<div class="tip" id="tip" hidden></div><div class="hl"><em>по неделям${allP ? ", все проекты вместе" : ""}</em>`
+        + `<span><i></i>закрыли задач</span><span><i class="dash"></i>завели новых</span></div></div>
+      <div class="mini"><button data-list="progress"><b data-n="${o.in_progress}">0</b><small>в работе сейчас</small></button><button data-list="todo"><b data-n="${o.todo}">0</b><small>ждут</small></button>
+        <button data-list="bugs"><b data-n="${o.bugs_open}">0</b><small>${plural(o.bugs_open, "открытая ошибка", "открытые ошибки", "открытых ошибок")}</small></button>`
+        + `<button data-list="people"><b data-n="${o.people_period}">0</b><small>${plural(o.people_period, "человек закрывал", "человека закрывали", "человек закрывали")}</small></button></div>`;
     countUp($("#hero"));
     $("#sk-n").textContent = d.stuck.length ? d.stuck.length : "";
     $("#donut").innerHTML = o.statuses.length ? donut(o.statuses) : `<p class="empty">Задач нет.</p>`;
@@ -538,7 +574,7 @@
     try {
       const t = await run("jira_task", { key: k });
       const fact = (l, v) => v ? `<div><small>${l}</small><span>${esc(v)}</span></div>` : "";
-      box.innerHTML = `<div class="th"><span class="key">${esc(t.key)}</span>${status(t.status, t.cat)}<button class="x" id="t-close" aria-label="Закрыть">×</button></div>
+      box.innerHTML = `<div class="th">${st.list ? `<button class="back" id="t-back">← ${esc(LISTS[st.list][0])}</button>` : ""}<span class="key">${esc(t.key)}</span>${status(t.status, t.cat)}<button class="x" id="t-close" aria-label="Закрыть">×</button></div>
         <h2>${esc(t.title)}</h2>${t.note ? `<p class="hint">${esc(t.note)}</p>` : ""}
         <div class="facts">${fact("Исполнитель", t.who)}${fact("Закрыл", t.done_by)}${fact("Автор", t.author)}${fact("Тип", t.type)}${fact("Создана", t.created)}
           ${fact("В работе с", t.started)}${fact("Закрыта", t.done)}${fact(t.done ? "Цикл" : "В работе уже", t.started ? t.age : "")}</div>
@@ -550,7 +586,28 @@
       $("#t-ask").onclick = () => dewiar.ask(`Расскажи про задачу ${t.key} в Jira: что нужно, кто делает, что мешает?`).catch((x) => msg(x.message, "bad"));
     } catch (e) { box.insertAdjacentHTML("beforeend", `<p class="msg bad">${esc(e.message)}</p>`); box.querySelector(".hint").remove(); }
   }
-  function closeTask() { $("#task").hidden = true; $("#veil").hidden = true; }
+  function closeTask() { $("#task").hidden = true; $("#veil").hidden = true; st.list = "";
+    const a = document.activeElement; if (a && a.closest && a.closest("#hero")) a.blur(); }      // рамка фокуса на цифре после Esc не нужна
+
+  // ---------- за каждой цифрой «пульса» — её задачи (26.11); задача из списка открывается здесь же, «←» — назад к списку ----------
+  const LISTS = {
+    done: ["Закрыто", (r) => `${r.by || r.who} · ${r.done}`], created: ["Новые", (r) => `${r.type} · ${r.status} · ${r.created}`],
+    progress: ["В работе сейчас", (r) => `${r.who} · ${r.status} · ${days(r.days)}`], todo: ["Ждут", (r) => `${r.who} · ${r.status} · заведена ${r.created}`],
+    bugs: ["Открытые ошибки", (r) => `${r.who} · ${r.status} · заведена ${r.created}`],
+  };
+  function openList(kind) {
+    const o = st.data && st.data.overview, L = LISTS[kind];
+    if (!o || !L) return;
+    const rows = (o.lists || {})[kind] || [], box = $("#task"), per = `${st.days} ${plural(st.days, "день", "дня", "дней")}`;
+    const total = { done: o.done_period, created: o.created_period, progress: o.in_progress, todo: o.todo, bugs: o.bugs_open }[kind] || rows.length;
+    const many = !st.project && (o.projects || []).length > 1;
+    st.list = kind;
+    $("#veil").hidden = false; box.hidden = false; box.scrollTop = 0;
+    box.innerHTML = `<div class="th"><b>${esc(L[0])}${kind === "done" ? ` за ${per}` : ""}</b><span class="sub">${num(total)}</span><button class="x" id="t-close" aria-label="Закрыть">×</button></div>
+      ${rows.length ? `<ul class="lst">${rows.map((r) => `<li data-key="${esc(r.key)}" data-from="list"><span class="kk">${esc(r.key)}</span><span class="tt">${esc(r.title)}</span>`
+        + `<small>${esc((many ? r.project + " · " : "") + L[1](r))}</small></li>`).join("")}</ul>` : `<p class="empty">Здесь пусто.</p>`}
+      ${total > rows.length ? `<p class="hint">Показаны первые ${rows.length} из ${num(total)} — остальные в Jira.</p>` : ""}`;
+  }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTask(); });
   $("#graph").addEventListener("mouseover", (e) => { const g = e.target.closest(".nd"), box = $("#graph");
     box.querySelectorAll(".on").forEach((x) => x.classList.remove("on"));
@@ -558,6 +615,21 @@
     const i = g.dataset.i; box.classList.add("focus"); g.classList.add("on");
     box.querySelectorAll(`.ed[data-a="${i}"]:not(.team), .ed[data-b="${i}"]:not(.team)`).forEach((l) => { l.classList.add("on"); box.querySelector(`.nd[data-i="${l.dataset.a === i ? l.dataset.b : l.dataset.a}"]`).classList.add("on"); }); });
   $("#graph").addEventListener("mouseleave", () => $("#graph").classList.remove("focus"));
+  // наведение на график «пульса»: неделя и обе цифры словами — что за линии, видно без легенды
+  $("#hero").addEventListener("mousemove", (e) => {
+    const r = e.target.closest && e.target.closest("rect[data-i]"), c = st.chart, g = $("#hx"), tip = $("#tip");
+    if (!g || !tip) return;
+    if (!r || !c) { g.setAttribute("visibility", "hidden"); tip.hidden = true; return; }
+    const i = +r.dataset.i, o = c.o, px = c.x(i), svg = r.ownerSVGElement, k = svg.getBoundingClientRect().width / c.W;
+    g.setAttribute("visibility", "visible");
+    g.querySelector("line").setAttribute("x1", px); g.querySelector("line").setAttribute("x2", px);
+    g.querySelector(".pd").setAttribute("cx", px); g.querySelector(".pd").setAttribute("cy", c.y(o.done_w[i]));
+    g.querySelector(".pc").setAttribute("cx", px); g.querySelector(".pc").setAttribute("cy", c.y(o.created_w[i]));
+    tip.innerHTML = `Неделя с ${esc(o.weeks[i])}${i === o.weeks.length - 1 ? " (идёт сейчас)" : ""}<br>закрыли <b>${o.done_w[i]}</b> · завели <b>${o.created_w[i]}</b>`;
+    tip.hidden = false;
+    tip.style.left = Math.min(Math.max(px * k, 70), svg.getBoundingClientRect().width - 70) + "px";
+  });
+  $("#hero").addEventListener("mouseleave", () => { const g = $("#hx"); if (g) g.setAttribute("visibility", "hidden"); const t = $("#tip"); if (t) t.hidden = true; });
 
   async function load() {
     const d = await run("jira_page", { days: st.days, project: st.project, person: st.person });
@@ -645,7 +717,12 @@
   document.addEventListener("click", (e) => {
     const k = e.target.closest(".key");
     const kk = k || e.target.closest("li[data-key], .lane button[data-key]");
-    if (kk) { e.stopPropagation(); openTask(kk.dataset.key); return; }
+    if (kk) { e.stopPropagation(); if (!kk.dataset.from && !e.target.closest("#task")) st.list = ""; openTask(kk.dataset.key); return; }
+    if (e.target.closest("#t-back")) { openList(st.list); return; }
+    const ls = e.target.closest("[data-list]");
+    if (ls) { if (ls.dataset.list === "people") $('#tabs [data-t="pp"]').click(); else openList(ls.dataset.list); return; }
+    const pj = e.target.closest(".pj button[data-p]");
+    if (pj) { st.project = pj.dataset.p; load().catch((x) => msg(x.message, "bad")); return; }
     const mh = e.target.closest("[data-mate]");
     if (mh) { st.person = mh.dataset.mate; $('#tabs [data-t="pp"]').click(); load().then(() => $("#person").scrollIntoView({ behavior: "smooth", block: "nearest" })).catch((x) => msg(x.message, "bad")); return; }
     if (e.target.closest("#t-close") || e.target.id === "veil") { closeTask(); return; }

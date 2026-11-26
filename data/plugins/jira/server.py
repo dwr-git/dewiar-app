@@ -541,7 +541,8 @@ def pick(d, project="", with_absences=False):
 
 
 def row(x, now):
-    return {"key": x["k"], "title": x["s"], "status": x["st"], "cat": x["c"], "who": x["a"] or "—", "type": x["t"],
+    return {"key": x["k"], "title": x["s"], "status": x["st"], "cat": x["c"], "who": x["a"] or "—", "type": x["t"], "project": x["p"],
+            "created": fmt_d(x["cr"]) if x["cr"] else "",
             "days": round((now - (x["go"] or x["cr"])) / DAY) if x["c"] != "done" else None,
             "done": fmt_d(x["dn"]) if x["dn"] else "", "by": x.get("by") or ""}
 
@@ -571,7 +572,22 @@ def overview(d, days=30, project=""):
     mix = {}
     for x in xs:
         mix[(x["st"], x["c"])] = mix.get((x["st"], x["c"]), 0) + 1
-    return {"period_days": days, "project": project or "все",
+    # 26.11 (владелец: «хочется нажать „11 в работе сейчас“ — и посмотреть их, „2 открытых ошибок“ — и сразу увидеть»): за
+    # каждой цифрой «пульса» — её задачи; и по проектам отдельно («два проекта — какой где, непонятно»)
+    lim = 80
+    lists = {"done": [row(x, now) for x in sorted(done_p, key=lambda x: -x["dn"])[:lim]],
+             "created": [row(x, now) for x in sorted((x for x in xs if x["cr"] >= t0), key=lambda x: -x["cr"])[:lim]],
+             "progress": [row(x, now) for x in prog[:lim]],
+             "todo": [row(x, now) for x in sorted((x for x in xs if x["c"] == "new"), key=lambda x: -x["cr"])[:lim]],
+             "bugs": [row(x, now) for x in sorted((x for x in xs if x["bug"] and x["c"] != "done"), key=lambda x: x["cr"])[:lim]]}
+    by_p = {}
+    for x in xs:
+        b = by_p.setdefault(x["p"], {"project": x["p"], "done": 0, "created": 0, "in_progress": 0})
+        b["done"] += x["dn"] >= t0
+        b["created"] += x["cr"] >= t0
+        b["in_progress"] += x["c"] == "indeterminate"
+    return {"period_days": days, "project": project or "все", "lists": lists,
+            "by_project": sorted(by_p.values(), key=lambda b: (-b["done"], b["project"])) if len(by_p) > 1 else [],
             "done_prev": sum(t0 - days * DAY <= x["dn"] < t0 for x in xs),
             "statuses": [{"name": n, "cat": c, "count": v} for (n, c), v in sorted(mix.items(), key=lambda kv: -kv[1])[:8]],
             "total": len(xs), "done": sum(x["c"] == "done" for x in xs), "in_progress": len(prog),
@@ -751,7 +767,7 @@ def ask(a):
     else:
         r = overview(d, days, pr)
         r["oldest"] = r["oldest"][:5]
-        for k in ("weeks", "created_w", "done_w"):
+        for k in ("weeks", "created_w", "done_w", "lists"):           # списки за цифрами — для страницы, модели хватит цифр
             r.pop(k, None)
     r["data_at"] = fmt_dt(d.get("synced"))
     if note:

@@ -351,6 +351,47 @@ _ACK_HEAD = re.compile(r"^\s*(?:(?:хорошо|готово|ок|окей|от�
 
 
 def ack_again(said, new, fin=False):
+    """Повтор подтверждения или пересказ уже сказанного в начале шага после действия -> сколько знаков new срезать
+    (0 — нечего, None — рано судить). Сначала — короткое «Записала.» (_ack_once), потом — та же мысль другими словами
+    (para_again)."""
+    r = _ack_once(said, new, fin)
+    if r is None or r:
+        return r
+    return para_again(said, new, fin)
+
+
+_WORD = re.compile(r"[a-zа-яё0-9]+", re.I)
+
+
+def para_again(said, new, fin=False):
+    """Стенд 26.11 (sit_preference): «Запомню. Пять лет — солидный срок, уже не „попробовал“, а устоявшийся образ жизни.» —
+    remember — «Пять лет — это уже не эксперимент, а устоявшийся выбор. Как ты это называешь?» Модель сказала мысль до
+    действия и после — другими словами, и в ответе она дважды. Первая фраза нового шага — пересказ фразы, уже сказанной в
+    этом ходе: те же два первых слова, больше половины слов (по основе) общие и нет новых чисел. -> сколько знаков new
+    срезать; 0 — не пересказ; None — первая фраза ещё не кончилась."""
+    n = str(new or "")
+    m = re.search(r"[.!?…]+(?=\s|$)", n)
+    if not m:
+        return 0 if fin or len(n) > 240 else None
+    first = n[:m.end()]
+    ws = [w.lower().replace("ё", "е") for w in _WORD.findall(first)]
+    if len(ws) < 4:
+        return 0
+    stems = {w[:5] for w in ws}
+    nums = set(re.findall(r"\d+", first))
+    for sent in re.split(r"(?<=[.!?…])\s+", str(said or "")):
+        sw = [w.lower().replace("ё", "е") for w in _WORD.findall(sent)]
+        if len(sw) < 4 or sw[:2] != ws[:2] or not nums <= set(re.findall(r"\d+", sent)):
+            continue
+        if len(stems & {w[:5] for w in sw}) / len(stems) >= 0.5:
+            k = m.end()
+            while k < len(n) and n[k].isspace():
+                k += 1
+            return k
+    return 0
+
+
+def _ack_once(said, new, fin=False):
     """Экзамен 20.11 (оба прогона): «Поняла, записала.» — remember — «Записала. Пять лет — уже образ жизни». До действия
     модель уже подтвердила, после — подтверждает снова. -> сколько знаков в начале new срезать (второе короткое
     подтверждение), 0 — нечего, None — рано судить (нет конца фразы). Только если сказанное до действия — тоже подтверждение."""

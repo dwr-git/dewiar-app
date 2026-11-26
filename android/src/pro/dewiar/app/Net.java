@@ -30,9 +30,11 @@ public final class Net {
             @Override public void run() {
                 HttpURLConnection c = null;
                 boolean got = false;                                  // ответ уже начал приходить — повторять нельзя
+                boolean direct = false;                               // №1113: повтор — напрямую, мимо прокси
+                Throwable first = null;
                 for (int attempt = 0; ; attempt++) {
                 try {
-                    c = (HttpURLConnection) NetProxy.open(new URL(url));
+                    c = (HttpURLConnection) (direct ? NetProxy.openDirect(new URL(url)) : NetProxy.open(new URL(url)));
                     // №994 (24.11): «Не проверилось: unexpected end of stream on null» — обновление и отчёт с телефона. Сервер
                     // закрыл соединение, не ответив (старое «живое» соединение или обрыв сети по пути). Второй раз —
                     // новым соединением, без повторного использования
@@ -71,6 +73,7 @@ public final class Net {
                     }
                     int code = c.getResponseCode();
                     got = true;
+                    if (direct) NetProxy.directOk(new URL(url));      // через прокси — нет, напрямую — да: пока так и ходим
                     InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
                     if (stream && code < 400 && in != null) {
                         BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
@@ -96,14 +99,21 @@ public final class Net {
                     break;
                 } catch (Throwable e) {
                     String m = String.valueOf(e.getMessage());
+                    boolean viaProxy = false;
+                    try { viaProxy = NetProxy.viaAnyProxy(new URL(url)); } catch (Throwable ignored) { }
                     boolean again = attempt == 0 && !got && RUNNING.containsKey(id) && (e instanceof java.io.IOException)
-                            && (m.contains("unexpected end of stream") || m.contains("Connection reset") || m.contains("closed"));
+                            && (m.contains("unexpected end of stream") || m.contains("Connection reset") || m.contains("closed")
+                                || NetProxy.proxyFail(e) || (viaProxy && !(e instanceof java.net.SocketTimeoutException)));
                     if (again) {
+                        direct = viaProxy || NetProxy.proxyFail(e);
+                        first = e;
                         try { c.disconnect(); } catch (Throwable ignored) { }
                         try { Thread.sleep(700); } catch (InterruptedException ignored) { }
                         continue;
                     }
-                    try { sink.event("http_error", new JSONObject().put("id", id).put("error", String.valueOf(e.getMessage() == null ? e : e.getMessage()))); }
+                    // напрямую тоже не открылось — человеку причина первой попытки (через прокси): она и есть настоящая
+                    Throwable shown = direct && first != null && NetProxy.proxyFail(first) ? first : e;
+                    try { sink.event("http_error", new JSONObject().put("id", id).put("error", String.valueOf(shown.getMessage() == null ? shown : shown.getMessage()))); }
                     catch (Throwable ignored) { }
                     break;
                 } finally {

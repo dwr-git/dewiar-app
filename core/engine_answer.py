@@ -277,6 +277,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
 
     # ---------- для фоновых задач (TaskManager.host) ----------
 
+    def _mail_on(self):
+        """Почта подключена? Не узнать (нет почты в сборке, сбой) — считаем, что да: проверка «с почтой не работаю» молчит."""
+        try:
+            m = getattr(self, "mail", None)
+            return True if m is None else bool(m.configured())
+        except Exception:  # noqa: BLE001
+            return True
+
     def confirm(self, question, timeout=120, cancel=None, always=False, quiet=False):
         """Спросить «да/нет» вне разговора (для фоновой задачи): голосом и кнопками в виджете.
         Блокирует вызывающий поток до ответа, timeout секунд или cancel (Event задачи: «останови задачу» не ждёт
@@ -645,7 +653,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, mail_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -992,6 +1000,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         or saved_claim(text, step_text, called) \
                         or (note_claim(text, step_text, called) if "save_note" in {x.get("name") for x in specs or []} else "") \
                         or call_claim(text, step_text, called) \
+                        or mail_claim(text, step_text, self._mail_on(), called) \
                         or found_pics_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
                         or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")

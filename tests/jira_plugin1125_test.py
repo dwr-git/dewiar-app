@@ -339,6 +339,11 @@ ok('s.type === "secret"' in js and 'type="password"' in js, "в карточке
 # ---------- страница ----------
 page = S.page({"days": 30})
 ok(page["configured"] and page["issues"] == 133 and page["overview"]["weeks"] and page["people"] and page["busy"], "jira_page: всё для страницы одним вызовом")
+ov_ = page["overview"]
+ok(len(ov_["lists"]["progress"]) == ov_["in_progress"] and len(ov_["lists"]["bugs"]) == ov_["bugs_open"] and len(ov_["lists"]["done"]) == min(80, ov_["done_period"])
+   and all(r["key"].startswith("AI-") for r in ov_["lists"]["todo"]), "за цифрами «пульса» — их задачи (26.11: «нажать „11 в работе“ — и посмотреть их»)")
+ok(ov_["by_project"] == [], "один проект — разбивки по проектам нет")
+ok("lists" not in json.dumps(S.ask({"what": "overview"}), ensure_ascii=False)[:20000] or "lists" not in S.ask({"what": "overview"}), "модели — цифры без списков")
 tk = S.task("AI-5")
 ok(tk["done_by"] == "Maria Kudelevich" and tk["history"] and tk["comments"] and tk["started"], f"jira_task: из Jira и ход из учёта: {tk['done_by']}, {len(tk['history'])} шага")
 # для снимка — команда побольше (как у владельца: 28 человек, три проекта): граф рисуется по тем же правилам
@@ -364,6 +369,9 @@ for i_, a_ in enumerate(_names):
         if _team[a_] == _team[b_] and k_ not in _seen:
             RICH["edges"].append({"a": k_[0], "b": k_[1], "w": 0, "team": True})
 page["graph"] = RICH
+# два проекта, как у владельца (26.11: «два проекта — какой из них где и что значит»): под цифрой — по проекту кнопкой
+page["overview"]["projects"] = ["AI", "NSHIELD"]
+page["overview"]["by_project"] = [{"project": "AI", "done": 31, "created": 20, "in_progress": 7}, {"project": "NSHIELD", "done": 12, "created": 9, "in_progress": 4}]
 from playwright.sync_api import sync_playwright  # noqa: E402
 BRIDGE = """window.calls = []; window.PAGE = %s; window.dewiar = {
   run: async (t, a) => { calls.push([t, a]); if (t === 'jira_page') return { ok: true, data: Object.assign({}, PAGE, a && a.person ? { person: PERSON } : {}) };
@@ -418,6 +426,35 @@ with sync_playwright() as p:
     ok(any(c[0] == "url" and "/browse/AI-" in c[1] for c in pg.evaluate("calls")), "«Открыть в Jira» — задача в Jira")
     pg.keyboard.press("Escape")
     ok(not pg.is_visible("#task"), "Esc закрывает карточку")
+    # 26.11: цифры «пульса» нажимаются — список задач; из списка — карточка и «←» назад к списку
+    pg.click('#hero .mini button[data-list="progress"]')
+    pg.wait_for_timeout(200)
+    n_ = pg.locator("#task .lst li").count()
+    ok(pg.is_visible("#task") and n_ == page["overview"]["in_progress"] and "В работе сейчас" in pg.inner_text("#task"), f"«в работе сейчас» — их список ({n_})")
+    ok("AI · " in pg.inner_text("#task .lst li >> nth=0"), "при всех проектах у задачи виден её проект")
+    pg.screenshot(path="/tmp/claude-0/jira_list.png")
+    pg.click("#task .lst li >> nth=0")
+    pg.wait_for_timeout(300)
+    ok(pg.is_visible("#t-back") and "Ход" in pg.inner_text("#task"), "задача из списка — карточка с «← В работе сейчас»")
+    pg.click("#t-back")
+    ok(pg.locator("#task .lst li").count() == n_, "«←» — снова список")
+    pg.keyboard.press("Escape")
+    pg.click('#hero .mini button[data-list="bugs"]')
+    ok("Открытые ошибки" in pg.inner_text("#task") and pg.locator("#task .lst li").count() == page["overview"]["bugs_open"], "«открытых ошибок» — сами ошибки")
+    pg.keyboard.press("Escape")
+    pg.click("#hero .bigb")
+    ok("Закрыто за 30 дней" in pg.inner_text("#task"), "большая цифра — какие задачи закрыты")
+    pg.keyboard.press("Escape")
+    ok(pg.locator("#hero .pj button").count() == 2 and "NSHIELD" in pg.inner_text("#hero .pj") and "Все проекты вместе: AI, NSHIELD" in pg.inner_text("#hero"),
+       "все проекты — так и сказано, и по каждому кнопка «закрыто · в работе»")
+    ok("закрыли задач" in pg.inner_text("#hero .hl") and "завели новых" in pg.inner_text("#hero .hl") and "по неделям" in pg.inner_text("#hero .hl"), "линии подписаны словами")
+    box_ = pg.locator("#hero rect[data-i] >> nth=3").bounding_box()
+    pg.mouse.move(box_["x"] + box_["width"] / 2, box_["y"] + 40)
+    pg.wait_for_timeout(100)
+    tip_ = pg.inner_text("#tip") if pg.is_visible("#tip") else ""
+    ok("Неделя с" in tip_ and "закрыли" in tip_ and "завели" in tip_, f"наведение на график — неделя и обе цифры: {tip_!r}")
+    pg.screenshot(path="/tmp/claude-0/jira_hover.png")
+    pg.mouse.move(5, 5)
     pg.click('#tabs [data-t="ov"]')
     pg.click("#oldest .key >> nth=0")
     pg.wait_for_timeout(300)

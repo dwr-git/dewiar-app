@@ -16,7 +16,7 @@ from quality_files import (  # noqa: F401,E402 — прежние имена qua
 from quality_answer import (  # noqa: F401,E402 — прежние имена quality.* на месте
     _ACTION, _ACTION_ASK, action_claim, _ACTION_FUT, add_style_rule, _AGENDA_FREE, agenda_invented, agenda_missed,
     appt_ask, APPT_NOTE, APPT_TIME, APPT_WHAT, ask_places, _ASK_THINK, ask_url, _BARE_DONE, bare_done, _BRIEF_TODO,
-    _BUDGET, _CALL_ASK, call_claim, _CALL_SAID, CALL_TOOLS, _CAP_RU, CHAT_ASK, CONFIRM_ECHO_RX, _CONFIRM_SAY,
+    _BUDGET, _CALL_ASK, call_claim, mail_claim, _CALL_SAID, CALL_TOOLS, _CAP_RU, CHAT_ASK, CONFIRM_ECHO_RX, _CONFIRM_SAY,
     COUNCIL_ASK, council_missing, COUNCIL_NOTE, _DEG, DELIVERABLE, DIAGRAM_ASK, diagram_missing, _DO, _DOING,
     _DONE_ANY, DRAWN_TOOLS, _ending, _FACT, _FAIL_VERBS, failed_claim, failed_note, fake_call, FAKE_GIVEUP,
     _FAKE_HEAD, FAKE_NUDGE, _FAKE_WAIT, FEATURE_DENY, feature_deny, _FILLER, found_pics_claim, _FOUND_SAID, _GEN_PIC,
