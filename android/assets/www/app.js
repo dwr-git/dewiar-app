@@ -1656,7 +1656,7 @@ function needPerm(name) {
    Сторож sttGuard: распознаватель телефона бывает «есть, но молчит» (планшеты без сервисов Google — Huawei и др.):
    не начал слушать за 4 с — переходим на сервер Dewiar насовсем (S.stt.auto) или честно говорим, что слуха нет;
    замолчал посреди (нет событий 15 с) или не отпускает после нажатия «стоп» — сами заканчиваем, кнопка не залипает. */
-let sttActive = false, heardPartial = "", sttWatch = null, sttStarted = false, sttVia = "", sttGen = 0, sttOnce = null;
+let sttActive = false, heardPartial = "", sttWatch = null, sttStarted = false, sttVia = "", sttGen = 0, sttOnce = null, sttStartAgain = false;
 function sttGuard(ms, why) { clearTimeout(sttWatch); sttWatch = ms ? setTimeout(() => sttStall(why), ms) : null; }
 /* Событие слуха из прежнего сеанса (поле g от Speech.java; после cancel ещё приходит «отменено») — не наше: иначе оно
    сбило бы новый сеанс, и кнопка осталась бы «слушаю». В браузере-заглушке поля g нет — принимаем всё. */
@@ -1739,6 +1739,9 @@ function sttStall(why) {
   sttActive = false; D.cancelListen(); sttGen++;
   plog("warn", "распознавание: нет ответа (" + why + ", " + sttVia + ")");
   if (why === "start" && sttVia === "system" && !sttStarted) {
+    // №1128 (26.11, realme, Android 16: «первое сообщение уходит, на втором сразу ошибка»): распознаватель телефона завис —
+    // ни «готов», ни ошибки. Один раз сразу заново: Speech.java берёт новый распознаватель (прежний не дождался «готов»)
+    if (!sttStartAgain) { sttStartAgain = true; return listen(); }        // в журнале — «нет ответа» и сразу «слушаю»
     const c = Date.now() < sttSysUntil ? null : cloudEars();     // сервер сейчас не пускает — не ходим по кругу
     if (c) {
       // Первый раз — только этот вопрос слушает сервер (распознаватель мог просто долго подключаться к сети);
@@ -1759,7 +1762,7 @@ function sttStall(why) {
   if (heardPartial || dict) { if (dictMore(heardPartial, false)) return; askHeard(dictTake(heardPartial)); return; }
   setState("idle"); showYou("");
 }
-const sttAlive = () => { sttStarted = true; sttRetry = 0; if (sttVia === "system" && S.stt.sysFails) { S.stt.sysFails = 0; saveS(); } if (sttActive) sttGuard(15000, "silent"); };
+const sttAlive = () => { sttStarted = true; sttRetry = 0; sttStartAgain = false; if (sttVia === "system" && S.stt.sysFails) { S.stt.sysFails = 0; saveS(); } if (sttActive) sttGuard(15000, "silent"); };
 N.on("stt_start", e => { if (sttMine(e)) sttAlive(); });
 N.on("stt_end", e => {
   if (!sttMine(e) || !sttActive) return;
@@ -1840,7 +1843,7 @@ N.on("stt_error", e => {
   }
   plog([6, 7, 5].includes(e.code) ? "info" : "warn", `распознавание (${sttVia}): ${e.code === 6 ? "речи не было" + (/громкость/.test(e.msg || "") ? " — " + String(e.msg).replace(/^[^(]*/, "") : "") : e.code === 7 ? "не расслышал" : "ошибка " + (e.code ?? "") + " " + (e.msg || "")}`);
   // распознаватель телефона сломался, не начав слушать (не запустился, нет сервиса, сеть) — слушает сервер Dewiar
-  if (sttVia === "system" && !sttStarted && ![6, 7].includes(e.code) && cloudEars() && Date.now() >= sttSysUntil) { sttActive = true; sttStall("start"); return; }
+  if (sttVia === "system" && !sttStarted && ![6, 7].includes(e.code) && cloudEars() && Date.now() >= sttSysUntil) { sttActive = true; sttStartAgain = true; sttStall("start"); return; }   // ответил ошибкой — не завис: сразу сервер (№1128 — только для молчания)
   // сервер не пустил (кончились талеры, лимит, ключ) — слушает сам телефон; сказанное пропало, просим повторить
   if (sttVia === "server" && STT_DENIED.test(String(e.msg || ""))) {
     const why = String(e.msg).replace(/^[^:]*:?\s*/, "").trim();

@@ -542,6 +542,9 @@ def asked_back(ans):
                                          r"\b(кому|кто|что|какой|какую|какое|о ком|о чём|о чем)\b", ans, re.I))
 
 
+JUDGE_RETRY = (5, 20)                 # с: паузы перед повторами оценки судьи (перегруженный прокси, «не с первого раза»)
+
+
 class JudgeDown(RuntimeError):
     pass
 
@@ -576,13 +579,23 @@ def judge(profile, sc, transcript, state_text, at=None, memory=""):
         import net
         net.install()
         px = net.profile_proxy(profile)
-    try:
-        with px:
-            # max_tokens 4096 (25.11): внешний судья бывает думающей моделью (Gemini) — размышления съедают место до JSON
-            out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=4096, timeout=min(float(profile.get("timeout") or 90), 90)),
-                                      JUDGE_SYSTEM, [{"role": "user", "content": content}]))
-    except Exception as e:  # noqa: BLE001
-        return {"score": None, "why": "судья не ответил: " + re.sub(r"(\w+://[^:/@\s]+:)[^@\s]+@", r"\1•••@", str(e))[:300]}   # пароль прокси — не в отчёт
+    # Оценка не меняет ничего — повторять безопасно. 26.11 (владелец: «прокси бывает перегружен»): судья через купленный
+    # прокси не отвечал с первого раза, и сценарий оставался без оценки. Ещё две попытки с паузой; пустой ответ — тоже повтор
+    out, err = "", None
+    for i, pause in enumerate(JUDGE_RETRY + (None,)):
+        try:
+            with px:
+                # max_tokens 4096 (25.11): внешний судья бывает думающей моделью (Gemini) — размышления съедают место до JSON
+                out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=4096, timeout=min(float(profile.get("timeout") or 90), 90)),
+                                          JUDGE_SYSTEM, [{"role": "user", "content": content}]))
+            err = None
+        except Exception as e:  # noqa: BLE001
+            out, err = "", e
+        if out.strip() or pause is None:
+            break
+        time.sleep(pause)
+    if err is not None:
+        return {"score": None, "why": "судья не ответил: " + re.sub(r"(\w+://[^:/@\s]+:)[^@\s]+@", r"\1•••@", str(err))[:300]}   # пароль прокси — не в отчёт
     if not out.strip():
         return {"score": None, "why": "судья ответил пусто — думающая модель не успела ответить; выберите модель без долгих размышлений"}
     m = re.search(r"\{.*\}", out, re.S)
