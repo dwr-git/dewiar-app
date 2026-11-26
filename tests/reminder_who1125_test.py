@@ -29,7 +29,39 @@ r.upsert({"id": it["id"], "text": "Обед — взять карту", "who": "
 ok(r.get(it["id"])["who"] == "lira", "правка с устройства без «кто ставил» его не стирает")
 r.upsert({"id": "p1", "at": it["at"], "text": "С телефона", "kind": "reminder", "who": "patrik"})
 ok(r.get("p1")["who"] == "patrik", "с телефона — кто ставил сохраняется")
-ok("engine" and 'self.reminders.who = lambda: self.s.get("persona")' in srctext.text(ROOT, "core/engine.py"), "движок: кто ставил — главный персонаж")
+ok('self.reminders.who = lambda: getattr(getattr(self, "turn", None), "back_to", None) or self.s.get("persona")' in srctext.text(ROOT, "core/engine.py"),
+   "движок: кто ставил — главный персонаж; вопрос, переданный специалисту, — от главного (back_to)")
+
+# №980, четвёртый раз (26.11: «только что опять на телефоне от Патрика пришло»): «напомни обсудить…» уходило Патрику по слову
+# «обсуд» — он и ставил напоминание. Напоминание, будильник, таймер — дело главного, специалисту не передаётся
+from engine_tools import ToolsMixin  # noqa: E402
+from personas import BUILTIN  # noqa: E402
+
+
+class _P:
+    l = [dict(BUILTIN["lira"], id="lira"), dict(BUILTIN["patrik"], id="patrik")]
+
+    def get(self, pid):
+        return next(p for p in self.l if p["id"] == pid)
+
+    def all(self):
+        return self.l
+
+
+class _St:
+    def get(self, a, b=None):
+        return "lira" if b is None else True
+
+
+class _E(ToolsMixin):
+    personas, s = _P(), _St()
+
+
+_e = _E()
+ok(_e._route("Помоги обсудить, стоит ли менять работу") == "patrik", "разговор о решении — по-прежнему Патрику")
+for q in ("Напомни в 21:00 обсудить с женой даты отпуска", "напомни завтра определиться, стоит ли ехать",
+          "Поставь будильник на семь, надо обсудить план", "засеки 10 минут, потом обсудим"):
+    ok(_e._route(q) is None, f"«{q}» — ставит Лира, не Патрик")
 snap = srctext.text(ROOT, "core/sync_snap.py")
 ok('d["who"] = str(r["who"])[:40]' in snap, "компьютер → облако: who в напоминании")
 ok('**({"who": str(d["who"])[:40]} if d.get("who") else {})' in srctext.text(ROOT, "core/sync_apply.py"), "облако → компьютер: who принимается")

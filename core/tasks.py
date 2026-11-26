@@ -139,6 +139,20 @@ class TaskManager(SchedMixin, PlanMixin, VerifyMixin, LoopMixin, ToolsMixin, Fil
                     log.info("Файл задачи %s: текст не извлечён (%s)", dst.name, e)
         return out
 
+    PAID_BUDGET = 1_500_000
+
+    def _paid_budget(self):
+        """№1123 (26.11, ключ Yandex AI Studio, DeepSeek): «сделать из документа на 2 страницы красивее — через полчаса
+        выдал версию, а я попал на круглую сумму: более 11 млн токенов». Бюджет задачи был «без предела», а каждый шаг
+        большой задачи шлёт модели всё сделанное заново. Теперь «Бюджет задачи: сам» — у платного ключа сервиса (не
+        Dewiar, не своя модель и не сервер дома) задача на 1,5 млн токенов: на половине — весточка, на 80 % — итог и
+        пауза, «продолжи» — ещё столько же. «Без предела» — только если выбрать его явно. -> токенов или 0."""
+        try:
+            import health
+            return self.PAID_BUDGET if health.brain_kind(self.host.llm_profile()) == "cloud" else 0
+        except Exception:  # noqa: BLE001
+            return 0
+
     def create(self, title, goal, project="", start=True, persona="", parent="", folders=(), search_url="", net=False, files=(), budget_tokens=None):
         """Создать папку задачи и начальные файлы; project — папка проекта для режима «Код»; folders — папки человека, которые
         задача может читать без вопросов (менять — с разрешения; выпуск 2). search_url — свой поиск (SearXNG JSON) только для
@@ -192,6 +206,8 @@ class TaskManager(SchedMixin, PlanMixin, VerifyMixin, LoopMixin, ToolsMixin, Fil
                 bt = int(budget_tokens if budget_tokens is not None else (self._opt("budget_tokens") or 0))
             except (TypeError, ValueError):
                 bt = 0
+            if bt == 0:                                    # «сам»: платный ключ — с пределом (№1123), остальное — без
+                bt = self._paid_budget()
             if bt > 0:
                 data["budget"] = {"tokens": bt, "base": bt}
         (d / "план.md").write_text(f"# {title}\n\n**Цель:** {goal.strip()}\n\n_План появится, когда ассистент начнёт._\n", encoding="utf-8")

@@ -150,7 +150,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self._chatter = collections.deque(maxlen=20)        # когда слышали фразы «не мне» — вокруг разговор
         self.vosk_wake_check, self._vosk_wake_word = -1, ""
         self.reminders = Reminders(self._on_reminder)
-        self.reminders.who = lambda: self.s.get("persona")        # кто ставил — в уведомлении телефона (№980, 25.11)
+        # кто ставил — в уведомлении телефона (№980, 25.11). Вопрос, переданный специалисту команды (Патрику, Джарвису…), —
+        # от главного: человек говорил с Лирой (№980 в четвёртый раз, 26.11: «опять от Патрика»)
+        self.reminders.who = lambda: getattr(getattr(self, "turn", None), "back_to", None) or self.s.get("persona")
         try:
             n = self.reminders.dedupe_jobs()               # два одинаковых дела по расписанию выполнялись оба (30.10) — оставить одно
             if n:
