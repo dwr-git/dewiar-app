@@ -412,6 +412,9 @@ class TasksCommands:
                         out["day"].append({"k": "lead", "ts": int(ts), "t": (r.get("name") or "Посетитель сайта")[:60]})
             except Exception:  # noqa: BLE001
                 pass
+        pw = getattr(self, "plugwatch", None)
+        if pw is not None:
+            out["day"] += pw.day(now)                          # события плагинов (Jira: кто завёл, перевёл, закрыл) — 26.11
         out["day"] = sorted((x for x in out["day"] if abs(x["ts"] - now) <= 12 * 3600), key=lambda x: x["ts"])[-40:]
         return out
 

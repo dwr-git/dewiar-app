@@ -64,5 +64,45 @@ ok(bool(mail_claim("Напиши письмо Ивану", "Напишу и от
 eng = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 ok("mail_claim(text, step_text, self._mail_on(), called)" in eng, "проверка стоит в ходе рядом со «звонила / отправила»")
 
+# ---------- стенд Б: «место на диске» — без модели, но в журнале хода (судья 0/10 «ничего не вызвал, выдумал цифры») ----------
+import types  # noqa: E402
+import xray  # noqa: E402
+import exam  # noqa: E402
+import engine_answer as EA  # noqa: E402
+
+
+class DiskEng:
+    _disk_cmd = EA.AnswerMixin._disk_cmd
+
+    def __init__(self):
+        self.events = []
+
+    def emit(self, type_, **kw):
+        if type_ in ("tool", "answer", "quick"):
+            xray.event(type_, kw)
+        self.events.append(dict(kw, type=type_))
+
+    def _say_quick(self, msg, said, via=None, **k):
+        self.emit("answer", text=msg, done=True)
+
+
+de = DiskEng()
+xray.instrument(de)
+xr = xray.begin("Проверь, сколько свободного места на диске этого компьютера.")
+ok(de._disk_cmd("Проверь, сколько свободного места на диске этого компьютера."), "«сколько места на диске» — быстрая команда")
+ok(xr["acts"] and xr["acts"][0]["name"] == "cmd:disk_cmd" and xr["acts"][0]["ok"], f"в журнале хода — сделанное дело: {xr['acts']}")
+t = exam.tools_of(de.events)
+ok(t and t[0]["name"] == "команда «Место на диске»" and "ГБ" in t[0]["result"], f"судья видит действие с настоящими числами: {t}")
+ok(not de._disk_cmd("Какой диск лучше купить?"), "другое про диски — не команда")
+
+# ---------- стенд Б: «Каркас хода» не правит пересказ найденного и вложения напоминания ----------
+import ledger as LG  # noqa: E402
+ok(LG.info_ask("Покажи заметки") and LG.info_ask("Найди заметку про ремонт") and not LG.info_ask("Покажи заметки и удали старые"),
+   "«покажи / найди» — сведения: ворота не нужны; «…и удали» — нужны")
+jt = LG.journal_text([{"name": "set_reminder", "ok": True, "result": "Напоминание «Обсудить с Сашей» поставлено: завтра в 9:00 (id 1a2b3c). "
+                       "Подтверди коротко одной фразой. Вложения из сообщения (1) приложены к напоминанию — в срок они будут прямо в окне напоминания; можно так и сказать."}])
+ok("приложены к напоминанию" in jt and "Подтверди" not in jt and "так и сказать" not in jt, f"журнал для проверки — итог целиком, без указаний модели: {jt}")
+ok("пересказ того, что" in LG.PROMPT and "сделал сам человек" in LG.PROMPT, "в вопросе проверке: пересказ найденного и сделанное человеком — не в счёт")
+
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

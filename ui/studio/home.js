@@ -585,6 +585,7 @@ function hmGo(p) {
   }
   if (p.startsWith("sites-blog:")) return studioGo(p);              // 0.93: черновик статьи — «Статьи» сайта
   if (p.startsWith("insight:")) { hmGo("insight"); setTimeout(() => window.rdRead && rdRead(p.slice(8)), 250); return; }   // материал Радара — в «читалку»
+  if (p.startsWith("plg:")) return hmOpen(p);                       // событие плагина на «Пульте» — его страница (26.11)
   const b = $(`nav button[data-p="${p}"]`); if (b) b.click();
 }
 /* «Чтобы люди узнали про уроки — ненавязчиво» (29.10, владелец): на «Главной» среди карточек «Сегодня» — самый ранний

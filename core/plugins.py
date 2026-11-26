@@ -170,6 +170,10 @@ def parse_plugin(d: Path, builtin: bool):
                       if isinstance(x, dict) and x.get("label") and x.get("path") and ".." not in str(x.get("path"))
                       and not str(x.get("path")).startswith(("/", "\\")) and ":" not in str(x.get("path"))][:3],
             "ui": parse_ui(m.get("ui")), "page": (d / "ui.html").is_file(),
+            # события на «Пульт» (26.11, core/plugin_watch.py): своё действие, которое ядро зовёт само раз в every минут
+            "watch": {"tool": str(m["watch"]["tool"]), "every": max(1, min(240, int(m["watch"].get("every") or 10)))}
+            if isinstance(m.get("watch"), dict) and re.fullmatch(r"[\w.-]{1,64}", str(m["watch"].get("tool") or ""))
+            and str(m["watch"].get("every") or "10").isdigit() else None,
             "data": [x for x in dict.fromkeys(str(s) for s in (m.get("data") or []) if isinstance(m.get("data"), list)) if x in DATA_SCOPES],
             "theme": m.get("theme") is True,
             # сделан Лирой по описанию (Creator, 03.11): только свой (не встроенный), код — только с согласия человека

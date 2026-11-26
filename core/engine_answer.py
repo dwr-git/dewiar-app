@@ -115,18 +115,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             return
         if not raw and not quiet and not images and not K and self._speed_cmd(text, via):
             return
-        if not raw and not quiet and not images and not K and DISK_ASK_RX.match((text or "").strip()):
-            import shutil
-            try:
-                du = shutil.disk_usage(str(Path.home()))
-                free, total = du.free / 1e9, du.total / 1e9
-                msg = (f"На диске свободно {free:.0f} ГБ из {total:.0f}." + (" Маловато — могу помочь найти, что занимает место."
-                                                                            if free < max(10, total * 0.08) else ""))
-                log.info("💽 «%s» → %s", text, msg)
-                self._say_quick(msg, text, via)
-                return
-            except Exception:  # noqa: BLE001
-                log.debug("диск: быстрый ответ не вышел", exc_info=True)
+        if not raw and not quiet and not images and not K and self._disk_cmd(text, via):
+            return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._vault_cmd(text, via):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._home_cmd(text, via):
@@ -276,6 +266,25 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
 
 
     # ---------- для фоновых задач (TaskManager.host) ----------
+
+    def _disk_cmd(self, text, via=None):
+        """«Сколько места на диске?» — настоящие числа сразу, без модели. Методом-командой (а не строками в ask): так ответ
+        попадает в журнал хода как сделанное дело — рентген, ворота ответа и экзамен его видят (стенд Б 26.11,
+        disk_free_real_call: судья 0 из 10 — «ничего не вызвал, выдумал цифры», а цифры были настоящие)."""
+        if not DISK_ASK_RX.match((text or "").strip()):
+            return False
+        import shutil
+        try:
+            du = shutil.disk_usage(str(Path.home()))
+        except Exception:  # noqa: BLE001
+            log.debug("диск: быстрый ответ не вышел", exc_info=True)
+            return False
+        free, total = du.free / 1e9, du.total / 1e9
+        msg = (f"На диске свободно {free:.0f} ГБ из {total:.0f}." + (" Маловато — могу помочь найти, что занимает место."
+                                                                    if free < max(10, total * 0.08) else ""))
+        log.info("💽 «%s» → %s", text, msg)
+        self._say_quick(msg, text, via)
+        return True
 
     def _mail_on(self):
         """Почта подключена? Не узнать (нет почты в сборке, сбой) — считаем, что да: проверка «с почтой не работаю» молчит."""

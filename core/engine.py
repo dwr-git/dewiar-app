@@ -427,6 +427,19 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
 
     # ---------- жизненный цикл ----------
 
+    def _plugin_watch_start(self):
+        """«Пульт»: события установленных плагинов (Jira: кто завёл, перевёл, закрыл) — раз в несколько минут, без модели."""
+        from plugin_pages import shape
+        from plugin_watch import Watch
+
+        def call(pid, tool, args):
+            r = shape(self.mcp.plugin_call(pid, tool, args, wait=20, timeout=90))
+            return next((x["data"] for x in r["parts"] if x["type"] == "data" and isinstance(x["data"], dict)), {})
+        self.plugwatch = Watch(self.plugins, call, announce=None if self.server else self.announce,
+                               on_new=lambda pid, new: self.emit("plugin_events", plugin=pid, n=len(new)))
+        if not self.wav_input:
+            self.plugwatch.start()
+
     def start(self):
         """Студия и настройки доступны сразу; слух запускается, как только готова модель Vosk."""
         if self.server:
@@ -467,7 +480,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self._diary_loop, name="diary", daemon=True).start()
         threading.Thread(target=self._pay_loop, name="payments", daemon=True).start()
         threading.Thread(target=self._welcome_loop, name="welcome", daemon=True).start()
-        threading.Thread(target=self._look_loop, name="looks", daemon=True).start()     # «Сама — по времени дня»: образ раз в час
+        threading.Thread(target=self._look_loop, name="looks", daemon=True).start()
+        self._plugin_watch_start()                         # события плагинов — на «Пульт», важные вслух (core/plugin_watch.py)     # «Сама — по времени дня»: образ раз в час
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()
         threading.Thread(target=lambda: self.stopping.wait(20) or self.mailing.resume(), name="mailing-resume", daemon=True).start()

@@ -808,6 +808,40 @@ def busy(d, project=""):
     return out
 
 
+def watch():
+    """События для «Пульта» (26.11, владелец: «Лира при активном событии — перемещении задачи в новый статус — оповещать?
+    Кто в какой доске что добавил, закрыл»). Ядро зовёт само раз в 5 минут, без модели (владелец 26.11: «события произошли, а я и не знаю»; «можно раз в 5 минут»): дообновить учёт и отдать, что
+    случилось с прошлого раза — новые задачи, переходы по статусам, закрытия. Важное — закрыта задача или заведена ошибка.
+    Первый раз — только отметка (историю не вываливаем); долгий перерыв (компьютер спал) — не больше 6 часов назад."""
+    cfg = settings()
+    if not (cfg["url"] and cfg["token"]):
+        return {"events": []}
+    try:
+        ensure(1, 20)                                     # «изменилось с прошлого раза» — один короткий запрос
+    except Exception as e:  # noqa: BLE001 — Jira не ответила: события в следующий раз
+        return {"events": [], "note": str(e)[:200]}
+    d = load()
+    now = int(time.time())
+    since = int(d.get("watch_at") or 0)
+    d["watch_at"] = now
+    save(d)
+    if not since:
+        return {"events": []}
+    since = max(since, now - 6 * 3600)
+    out = []
+    for x in pick(d):
+        name = x["s"] if len(x["s"]) <= 70 else x["s"][:68].rstrip() + "…"
+        if x["cr"] > since:
+            out.append({"id": f"{x['k']}|new", "ts": x["cr"], "important": x["bug"],
+                        "t": f"{'новая ошибка' if x['bug'] else 'новая задача'} {x['k']} «{name}»" + (f" — от {x['r']}" if x["r"] else "")})
+        for t, who, to, c in x.get("ev") or []:
+            if t > since:
+                out.append({"id": f"{x['k']}|{t}|{to}", "ts": t, "important": c == "done",
+                            "t": (f"закрыта {x['k']} «{name}»" if c == "done" else f"{x['k']} «{name}» → «{to}»") + (f" — {who}" if who else "")})
+    out.sort(key=lambda e: e["ts"])
+    return {"events": out[-40:]}
+
+
 def task(key):
     """Карточка задачи для страницы: из Jira (описание, комментарии) + ход по статусам из учёта."""
     d = load()
@@ -863,6 +897,8 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"full": {"type": "boolean"}}}},
     {"name": "jira_task", "annotations": dict(RO, title="Задача"), "_meta": {"dewiar/page": True},
      "inputSchema": {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}},
+    {"name": "jira_watch", "annotations": dict(RO, title="События для «Пульта»"), "_meta": {"dewiar/page": True},
+     "inputSchema": {"type": "object", "properties": {}}},
     {"name": "jira_check", "annotations": dict(RO, title="Проверить связь"), "_meta": {"dewiar/page": True},
      "inputSchema": {"type": "object", "properties": {}}},
 ]
@@ -880,6 +916,8 @@ def call(name, a):
             return task(a.get("key"))
         if name == "jira_check":
             return check()
+        if name == "jira_watch":
+            return watch()
     except JiraError as e:
         raise ValueError(str(e)) from None
     raise ValueError("нет такого действия")

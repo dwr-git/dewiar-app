@@ -335,11 +335,11 @@
   #ask button.danger { background: #FF6B8A; color: #fff; }
   /* «Пульт Лиры» (1.0.6, ui/padpult.js; макеты владельца 15.11): первая вкладка — чем Лира занята прямо сейчас.
      Обводок нет: цвет, тень, свечение, прозрачность. Движется только настоящее: дышит то, что идёт сейчас; тишина — тихо. */
-  body { --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #c49bff; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
+  body { --pu-plug: #f2b36b; --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #c49bff; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
          --pu-card: rgba(255,255,255,.045); --pu-lift: 0 10px 26px rgba(0,0,0,.28); --pu-glow: rgba(154,166,255,.30);
          --pu-veil: rgba(10,12,20,.55); --pu-leadbg: rgba(95,208,143,.11); }
   /* Радар — фиолетовый (владелец 19.11: «не нравится сочетание зелёный, синий и коричнево-оранжевый»): в одной холодной гамме с бирюзой «Дальше» и синим «Мыслей»; контраст с листом ≥ 4,3 */
-  body.light { --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #7c3aed; --pu-lead: #23784a; --pu-err: #c4473a;
+  body.light { --pu-plug: #b45f12; --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #7c3aed; --pu-lead: #23784a; --pu-err: #c4473a;
                --pu-card: rgba(255,255,255,.6); --pu-lift: 0 10px 24px rgba(36,50,74,.12); --pu-glow: rgba(74,99,216,.24);
                --pu-veil: rgba(219,229,241,.72); --pu-leadbg: #e2efe7; }
   /* 18.11 вечер, владелец: «слишком белый блок… нижние на каком-то фоне, скруглённые уголки на углах без скруглений»: тень
@@ -394,6 +394,7 @@
   .pu-ev .e.diary .dot { fill: var(--pu-think); } .pu-ev .e.radar .dot { fill: var(--pu-radar); }
   .pu-ev .e.lead .dot { fill: var(--pu-lead); filter: drop-shadow(0 0 5px var(--pu-lead)); }
   .pu-ev .e.remind .dot, .pu-ev .e.job .dot { fill: var(--pu-mem); }
+  .pu-ev .e.plugin .dot { fill: var(--pu-plug); } #pult i.plugin { background: var(--pu-plug); } .pu-tip .pu-k.plugin { color: var(--pu-plug); }
   .pu-ev .e.was .dot { stroke-width: 1.5; opacity: .8; }
   .pu-ev .e:hover .dot, .pu-ev .e:focus-visible .dot { r: 7px; }
   .pu-ev .e:focus-visible .hit, .pu-ev .e:hover .hit { fill: var(--pu-glow); }

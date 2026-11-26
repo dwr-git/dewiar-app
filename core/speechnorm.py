@@ -71,9 +71,11 @@ _TR1 = {"a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "
 _KNOWN = {"linux": "линукс", "ubuntu": "убунту", "windows": "виндоус", "telegram": "телеграм", "max": "макс", "dewiar": "дэвиаар",
           "youtube": "ютуб", "google": "гугл", "yandex": "яндекс", "wifi": "вай-фай", "wi-fi": "вай-фай", "ok": "окей",
           "email": "имейл", "sudo": "судо", "python": "пайтон", "chrome": "хром", "obsidian": "обсидиан", "android": "андроид",
-          "iphone": "айфон", "bluetooth": "блютус", "hdmi": "эйч-ди-эм-ай", "jazz": "джаз", "relax": "релакс", "fm": "эф-эм",
-          # №1111 (26.11): «Deep Space One» звучало «дип спаке оне» — частые английские слова названий радио и музыки
-          "deep": "дип", "space": "спейс", "one": "уан", "two": "ту", "three": "фри", "the": "зэ", "of": "оф", "and": "энд",
+          "iphone": "айфон", "bluetooth": "блютус", "hdmi": "эйч-ди-эм-ай", "jazz": "джаз", "relax": "релакс", "fm": "эф-эм"}
+# №1111 (26.11): «Deep Space One» звучало «дип спаке оне» — частые английские слова названий радио и музыки. Отдельно от
+# _KNOWN: это обычные английские слова, а не имена программ — английский голос (tts._en_spans) их читает сам («Good
+# morning!» на уроке английского — английским голосом, полный прогон 26.11)
+_WORDS = {"deep": "дип", "space": "спейс", "one": "уан", "two": "ту", "three": "фри", "the": "зэ", "of": "оф", "and": "энд",
           "radio": "радио", "rock": "рок", "pop": "поп", "chill": "чилл", "chillout": "чиллаут", "lounge": "лаунж", "house": "хаус",
           "dance": "дэнс", "classic": "классик", "classics": "классикс", "love": "лав", "smooth": "смус", "groove": "грув",
           "soul": "соул", "hits": "хитс", "hit": "хит", "music": "мьюзик", "city": "сити", "sky": "скай", "star": "стар",
@@ -92,8 +94,8 @@ _MAGIC_E = {"a": "ей", "i": "ай", "o": "оу", "u": "ью"}
 
 def latin_word(w):
     low = w.lower()
-    if low in _KNOWN:
-        return _KNOWN[low]
+    if low in _KNOWN or low in _WORDS:
+        return _KNOWN.get(low) or _WORDS[low]
     if w.isupper() and len(w) <= 6 or len(w) == 1:              # USB, HDMI, AI — по буквам
         return "-".join(_LETTER.get(c, c) for c in low)
     out, i = "", 0

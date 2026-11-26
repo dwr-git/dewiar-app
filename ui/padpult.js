@@ -159,6 +159,7 @@
     if (PU.active) drawQ(); else live();
   });
   core.on("diary", () => { if (PU.active) load(); else PU.at = 0; });
+  core.on("plugin_events", () => { PU.at = 0; if (PU.active) load(); });     // Jira: задачу закрыли — точка на круге сразу (26.11)
   core.on("insight", () => { PU.at = 0; if (PU.active && PU.state === "idle") load(); });
   core.on("sitechat", (e) => {
     const r = ((e && e.recent) || [])[0];
@@ -196,9 +197,11 @@
      Точки — настоящее: записи дневника (что Лира сделала), находки Радара, заявки с сайта, напоминания и дела. Наведите —
      что это, нажмите — откроется в студии. Думает — по кругу бежит свет, в центре вопрос и шаги. */
   const KIND = { diary: ["Дневник", "diary"], radar: ["Радар", "insight"], lead: ["Заявка с сайта", "clients"],
-                 remind: ["Напоминание", "reminders"], job: ["Дело по расписанию", "reminders"] };
+                 remind: ["Напоминание", "reminders"], job: ["Дело по расписанию", "reminders"], plugin: ["Плагин", "skills"] };
   // находка Радара — сразу статья в «читалке» (владелец 17.11: «из Пульта открывается просто Радар, а не статья»)
-  const goOf = (x) => x.k === "radar" && x.id ? "insight:" + x.id : KIND[x.k][1];
+  // событие плагина (26.11: Jira — кто завёл, перевёл, закрыл) — его страница; подпись — имя плагина
+  const goOf = (x) => x.k === "radar" && x.id ? "insight:" + x.id : x.k === "plugin" && x.go ? x.go : KIND[x.k][1];
+  const kindOf = (x) => x.k === "plugin" && x.src ? x.src : KIND[x.k][0];
   const H12 = 12 * 3600;
   const left = (ts) => { const m = Math.round((ts - Date.now() / 1000) / 60); if (m < 1) return "сейчас";
     const h = Math.floor(m / 60), mm = m % 60; return "через " + (h ? `${h} ч ` : "") + (mm || !h ? `${mm} мин` : "").trim(); };
@@ -251,7 +254,7 @@
       <g class="pu-ticks">${ticks}</g><g class="pu-hours">${labels}</g>
       <path class="pu-hand" d="M${hx.toFixed(1)} ${hy.toFixed(1)}L${nx.toFixed(1)} ${ny.toFixed(1)}"/>
       ${think ? `<g class="pu-sweep" style="transform-origin:${cx}px ${cy}px"><path d="${arc(an - 0.9, an, R)}"/></g>` : ""}
-      <g class="pu-ev">${ev.map((x, i) => `<g class="e ${x.k}${x.was ? " was" : ""}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(hhmm(x.ts) + " · " + KIND[x.k][0] + ": " + x.t)}"><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="9" class="hit"/><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="${x.k === "lead" ? 6 : x.was ? 3.8 : 4.6}" class="dot"/></g>`).join("")}</g>
+      <g class="pu-ev">${ev.map((x, i) => `<g class="e ${x.k}${x.was ? " was" : ""}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(hhmm(x.ts) + " · " + kindOf(x) + ": " + x.t)}"><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="9" class="hit"/><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="${x.k === "lead" ? 6 : x.was ? 3.8 : 4.6}" class="dot"/></g>`).join("")}</g>
       <circle class="pu-now" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="6"/>`;
     // центр: время, что дальше; лента «Сегодня» справа на широком листе
     const nextOne = ev.find(x => x.ts > now);
@@ -283,8 +286,8 @@
     tip.hidden = !x;
     if (!x) return;
     const now = Date.now() / 1000;
-    tip.innerHTML = `<p class="pu-k ${x.k}">${esc(KIND[x.k][0])} · ${esc(hhmm(x.ts))}</p><p>${esc(x.t)}</p>`
-      + (x.src || x.ts > now ? `<small>${esc([x.src, x.ts > now ? left(x.ts) : ""].filter(Boolean).join(" · "))}</small>` : "");
+    tip.innerHTML = `<p class="pu-k ${x.k}">${esc(kindOf(x))} · ${esc(hhmm(x.ts))}</p><p>${esc(x.t)}</p>`
+      + ((x.src && x.k !== "plugin") || x.ts > now ? `<small>${esc([x.k === "plugin" ? "" : x.src, x.ts > now ? left(x.ts) : ""].filter(Boolean).join(" · "))}</small>` : "");
     const st = el("#pu-stage"), tw = Math.min(240, st.clientWidth - 24);
     tip.style.width = tw + "px";
     tip.style.left = Math.max(12, Math.min(st.clientWidth - tw - 12, x.x - tw / 2)) + "px";

@@ -302,7 +302,7 @@ m3.close()
 sys.path.insert(0, str(ROOT / "core"))
 import plugins as PL  # noqa: E402
 man = PL.parse_plugin(PLUG, True)
-ok([s["type"] for s in man["settings"]] == ["text", "secret", "list"], "plugin.json: токен — secret, доски — список (строка на доску)")
+ok([s["type"] for s in man["settings"]] == ["text", "secret", "list", "toggle"], "plugin.json: токен — secret, доски — список (строка на доску), «Говорить о важном» — переключатель")
 long2 = "https://jira.example.com/secure/RapidBoard.jspa?rapidView=31&projectKey=NSHIELD&quickFilter=1234&selectedIssue=NSHIELD-77&view=planning.nodetail&issueLimit=100"
 cl2 = PL.Plugins._clean(man, {"projects": "https://jira.example.com/secure/RapidBoard.jspa?rapidView=25&projectKey=AI&selectedIssue=AI-311\n\n" + long2 + "\n  WEB  "})
 ok(cl2["projects"].split("\n") == ["https://jira.example.com/secure/RapidBoard.jspa?rapidView=25&projectKey=AI&selectedIssue=AI-311", long2, "WEB"],
@@ -335,6 +335,27 @@ cl = PL.Plugins._clean(man, {"token": "  abc def\n", "url": "x"})
 ok(cl["token"] == "abcdef", "токен сохраняется без пробелов и переносов (вставили с хвостом)")
 js = (ROOT / "ui/studio/plugins.js").read_text(encoding="utf-8")
 ok('s.type === "secret"' in js and 'type="password"' in js, "в карточке плагина токен — поле со звёздочками")
+
+# ---------- события для «Пульта» (26.11: «Лира при перемещении задачи в новый статус — оповещать? кто что добавил, закрыл») ----------
+_d = S.load()
+_d.pop("watch_at", None)
+S.save(_d)
+ok(S.watch() == {"events": []}, "jira_watch: первый раз — только отметка, историю не вываливаем")
+_d = S.load()
+_now = int(time.time())
+_d["watch_at"] = _now - 3 * 86400                       # компьютер спал три дня — не больше 6 часов назад
+_d["issues"]["AI-5"]["ev"].append([_now - 120, "Maria Kudelevich", "Готово", "done"])
+_d["issues"]["AI-7"]["ev"].append([_now - 60, "Artyom Kolago", "Ревью", "indeterminate"])
+_d["issues"]["AI-6"]["ev"].append([_now - 9 * 3600, "Artyom Kolago", "Ревью", "indeterminate"])
+S.save(_d)
+_w = S.watch()["events"]
+ok(any(e["t"].startswith("закрыта AI-5") and e["t"].endswith("— Maria Kudelevich") and e["important"] for e in _w),
+   f"закрыта задача — важное, с тем, кто закрыл: {[e['t'] for e in _w][:3]}")
+ok(any(e["t"].startswith("AI-7 «") and "→ «Ревью» — Artyom Kolago" in e["t"] and not e["important"] for e in _w), "переход по статусу — событие, не важное")
+ok(not any(e["id"].startswith("AI-6|") for e in _w), "старше 6 часов — не вываливаем")
+ok(S.watch()["events"] == [], "второй раз подряд — пусто: отдаём только новое")
+tl = [t["name"] for t in S.TOOLS]
+ok("jira_watch" in tl and next(t for t in S.TOOLS if t["name"] == "jira_watch")["_meta"] == {"dewiar/page": True}, "jira_watch модели не виден")
 
 # ---------- страница ----------
 page = S.page({"days": 30})
