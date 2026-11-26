@@ -16,7 +16,7 @@ def ok(c, m):
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 ok('gate_only = self.s.get("llm", "gate_only") is True and _ledger.on(self.s.get("llm", "ledger"), prof)' in src,
    "ворота одни — только при llm.gate_only И включённом «Каркасе хода»")
-casc = re.search(r"if not calls and not turn\.cancel\.is_set\(\) and step < 5 and specs and not saved_checked( and not gate_only)?:\n\s+fix = reminder_missing", src)
+casc = re.search(r"if not calls and not turn\.cancel\.is_set\(\) and step < 5 and specs and not saved_checked( and not gate_only)?(?: and not info_q)?:\n\s+fix = reminder_missing", src)
 ok(casc and casc.group(1), "каскад *_claim при gate_only молчит")
 fc = re.search(r"not failed_checked and getattr\(turn, \"tools_err\", None\)[^\n]*\n?[^\n]*not gate_only", src)
 ok(bool(fc), "failed_claim при gate_only молчит")

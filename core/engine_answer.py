@@ -662,7 +662,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, mail_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, mail_claim, mail_fresh_missing, CAN_ASK_RX, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -707,6 +707,11 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             # Опыт 4 (аудит Fable 25.11, llm.gate_only): при «Каркасе хода» — одни ворота по журналу вместо каскада проверок
             # «сказала сделано без действия» (*_claim) и их честных замен после хода: журнал сверяет ответ один раз, в конце
             gate_only = self.s.get("llm", "gate_only") is True and _ledger.on(self.s.get("llm", "ledger"), prof)
+            # стенд Г 26.11 (pc_can «Что ты умеешь на компьютере?»): «Открываю сайты, ищу в интернете…» — рассказ об умениях
+            # принимали за обещание и просили «сделай» — в ответ утекало «Проверка ошибочна… Инструменты не нужны». На вопрос
+            # об умениях («что ты умеешь?») проверки «обещала / сказала сделано» не нужны: рассказ — не обещание. Только этот
+            # вопрос: на «какая погода?» короткое «сейчас посмотрю» без дела — по-прежнему обещание
+            info_q = bool(CAN_ASK_RX.search(text or ""))
             turn.done_calls = done_calls                     # и в историю — родным форматом (Опыт 1, llm.history_native)
             drew = 0                                         # просили схему, а её нет — попросили нарисовать (до двух раз за ход)
             saved_checked = False                            # «записала» без единого действия — попросили записать (раз за ход)
@@ -948,7 +953,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     # №461 (ПК 0.76): «сейчас посмотрю» — просьба — и снова «сейчас посмотрю», и ход кончился: просим дважды,
                     # второй раз жёстче и с действиями плагина; не взялась и тогда — честно говорим это (ниже, PROMISE_GIVEUP)
                     faked = "" if want_task else fake_call(step_text, names0)       # №522: «[run_command: …] Жду вывод»
-                    promised = not want_task and (bool(faked) or looks_like_promise(step_text, text))
+                    promised = not want_task and (bool(faked) or (not info_q and looks_like_promise(step_text, text)))
                     if (faked or promised) and last_net() and not getattr(turn, "net_redo", False):
                         # рецензия 04.11, третья: ответ узла сети — не FAKE_NUDGE главному мозгу с текстом узла, а тот же
                         # вопрос главному мозгу заново, без текста узла и без заголовка сети
@@ -1004,12 +1009,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             log.info("💬 Правило, как говорить, — записала сама: «%s»", rule[:80])
                         except Exception:  # noqa: BLE001
                             log.debug("правило общения", exc_info=True)
-                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked and not gate_only:
+                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked and not gate_only and not info_q:
                     fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
                         or saved_claim(text, step_text, called) \
                         or (note_claim(text, step_text, called) if "save_note" in {x.get("name") for x in specs or []} else "") \
                         or call_claim(text, step_text, called) \
                         or mail_claim(text, step_text, self._mail_on(), called) \
+                        or (mail_fresh_missing(text, step_text, self._mail_on(), called) if "read_emails" in {x.get("name") for x in specs or []} else "") \
                         or found_pics_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
                         or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")
@@ -1284,6 +1290,11 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     log.warning("Действие с ошибкой так и выдано за сделанное — говорю правду")
                     turn.full = (turn.full.rstrip() + " " + note).strip()
                     sentences.put(note)
+            from quality import strip_meta
+            meta_ = strip_meta(turn.full)
+            if meta_ != turn.full:
+                log.warning("✋ В ответ попал спор с проверкой — убираю: %s", turn.full[:160])
+                turn.full = meta_
             import ledger
             if ledger.on(self.s.get("llm", "ledger"), prof) and not turn.cancel.is_set() and turn.full.strip():
                 # «Каркас хода» (план «Качество», шаг 3; отзыв Alex 21.11: «сказала, что сделала, а на самом деле нет»): ответ

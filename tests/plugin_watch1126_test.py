@@ -30,15 +30,15 @@ ok(any(s["key"] == "say_important" and s["type"] == "toggle" and s["default"] is
 
 
 class P:
-    def __init__(self, say):
-        self.say = say
+    def __init__(self, say, widget=None):
+        self.say, self.widget = say, widget
 
     def installed(self):
         return [{"id": "jira", "name": "Jira команды", "watch": {"tool": "jira_watch", "every": 2}},
                 {"id": "kitchen", "name": "Кухня", "watch": None}]
 
     def values(self, pid):
-        return {"say_important": self.say}
+        return {"say_important": self.say, **({"widget": self.widget} if self.widget else {})}
 
 
 T0 = 1_800_000_000
@@ -55,7 +55,7 @@ def call(pid, tool, args):
 
 
 got = []
-w = Watch(P(True), call, announce=said.append, on_new=lambda pid, new: got.append((pid, len(new))))
+w = Watch(P(True), call, announce=said.append, on_new=lambda p, new: got.append((p["id"], len(new))))
 n = w.tick(T0)
 ok(calls == [("jira", "jira_watch")], f"зовётся только плагин с watch, его действие: {calls}")
 ok(n == 4 and len(w.day(T0)) == 4 and all(x["k"] == "plugin" and x["src"] == "Jira команды" and x["go"] == "plg:jira" for x in w.day(T0)),
@@ -69,10 +69,21 @@ n2 = w.tick(T0 + 121)
 ok(len(calls) == 2 and n2 == 0 and len(said) == 1 and len(got) == 1, "то же самое снова — не новое: ни на круг, ни вслух, ни знака")
 ok(not w.day(T0 + 13 * 3600), "старше 12 часов — с круга уходит")
 
-said2 = []
-w2 = Watch(P(False), call, announce=said2.append)
+said2, cards = [], []
+w2 = Watch(P(False), call, announce=said2.append, push=lambda *a: cards.append(a))
 w2.tick(T0)
-ok(len(w2.day(T0)) == 4 and not said2, "«Говорить о важном» выключено — только «Пульт», молча")
+ok(len(w2.day(T0)) == 4 and not said2, "«Говорить о важном» выключено — молча")
+ok(cards == [("Jira команды", "закрыта AI-4 «Логи»", "и ещё 3 — на «Пульте»", "plg:jira")],
+   f"владелец 26.11: «проходит слишком незаметно» — тихая карточка в виджете: последнее и «ещё N», нажатие — плагин: {cards}")
+cards.clear()
+Watch(P(False, "Только важные"), call, push=lambda *a: cards.append(a)).tick(T0)
+ok(cards and cards[0][2] == "и ещё 2 — на «Пульте»", f"«Только важные» — карточка о трёх важных: {cards}")
+cards.clear()
+Watch(P(False, "Не показывать"), call, push=lambda *a: cards.append(a)).tick(T0)
+ok(not cards, "«Не показывать» — без карточки (на «Пульте» — по-прежнему)")
+cards.clear()
+Watch(P(True), call, announce=said2.append, push=lambda *a: cards.append(a)).tick(T0)
+ok(said2 and not cards, "сказала о важном вслух — карточку не дублирует")
 
 
 def boom(pid, tool, args):
@@ -87,12 +98,19 @@ ok(Watch(P(True), lambda *a: {"events": "мусор"}).tick(T0) == 0, "крив�
 ct = (ROOT / "core/commands_tasks.py").read_text(encoding="utf-8")
 ok('out["day"] += pw.day(now)' in ct, "pult_data: события плагинов — в круг дня")
 eng = (ROOT / "core/engine.py").read_text(encoding="utf-8")
+ok('self.push(title, head, quiet=True, telegram=False, open=open_, head=head, body=body)' in eng, "карточка — тихая: без звука, всплывающего окна и Telegram")
 ok('self.emit("plugin_events"' in eng and 'core.on("plugin_events"' in (ROOT / "ui/padpult.js").read_text(encoding="utf-8"), "открытый «Пульт» обновляется сразу")
 ok("self._plugin_watch_start()" in eng and "announce=None if self.server else self.announce" in eng, "ядро запускает наблюдение; на сервере — без голоса")
 pj = (ROOT / "ui/padpult.js").read_text(encoding="utf-8")
 ok('plugin: ["Плагин", "skills"]' in pj and 'x.k === "plugin" && x.go ? x.go' in pj and "kindOf(x)" in pj, "«Пульт»: точка плагина — его имя, нажатие — его страница")
 ph = (ROOT / "ui/pad.html").read_text(encoding="utf-8")
 ok(".pu-ev .e.plugin .dot { fill: var(--pu-plug); }" in ph and ph.count("--pu-plug:") == 2, "свой цвет точки — в тёмной и светлой теме")
+ok("PU.plug = {" in pj and 'lb.classList.toggle("plug", !!plug)' in pj and "PU.plug && Date.now() - PU.plug.seen < 3600e3" in pj,
+   "«Пульт»: свежее событие — карточкой сверху и строкой над листом, пока не посмотрели (час)")
+dj = (ROOT / "ui/studio/dewiar.js").read_text(encoding="utf-8")
+ok("/^plg:[\\w-]+$/.test(String(p" in dj and "#plg:" in dj, "студия открывает «plg:jira» — и открытая, и новым окном")
+import json as _j  # noqa: E402
+ok(_j.loads((ROOT / "data/i18n/ru.json").read_text(encoding="utf-8")).get("hud.push.open.plg") == "Открыть плагин", "кнопка карточки — «Открыть плагин»")
 hj = (ROOT / "ui/studio/home.js").read_text(encoding="utf-8")
 ok('if (p.startsWith("plg:")) return hmOpen(p);' in hj, "студия: «plg:jira» с «Пульта» — страница плагина")
 

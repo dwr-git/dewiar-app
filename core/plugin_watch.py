@@ -16,14 +16,16 @@ log = logging.getLogger("dewiar.plugwatch")
 KEEP_SEC = 12 * 3600          # на круге «Пульта» — 12 часов назад
 MAX_KEEP = 80                 # событий одного плагина в памяти
 MAX_SAY = 2                   # важных вслух за раз; остальные — числом
+WIDGET_ALL, WIDGET_IMP = "Все события", "Только важные"      # настройка плагина «widget» (по умолчанию — все)
 FIRST_DELAY = 30              # после запуска — дать подняться серверам плагинов
 
 
 class Watch:
     """plugins — core/plugins.Plugins, call(pid, tool, args) -> данные ответа (dict), announce(text) — сказать самой."""
 
-    def __init__(self, plugins, call, announce=None, on_new=None):
-        self.P, self.call, self.announce, self.on_new = plugins, call, announce, on_new
+    def __init__(self, plugins, call, announce=None, on_new=None, push=None):
+        """push(title, head, body, open) — тихая карточка в виджете."""
+        self.P, self.call, self.announce, self.on_new, self.push = plugins, call, announce, on_new, push
         self.events = {}
         self.seen = {}
         self.next = {}
@@ -97,14 +99,25 @@ class Watch:
         log.info("🧩 %s: событий %d (важных %d)", p["name"], len(new), sum(x["imp"] for x in new))
         if self.on_new:                                   # открытый «Пульт» перерисуется сразу, а не через минуту
             try:
-                self.on_new(pid, new)
+                self.on_new(p, new)
             except Exception:  # noqa: BLE001
                 log.debug("события плагинов: оповещение", exc_info=True)
+        vals = self.P.values(pid)
         imp = [x for x in new if x["imp"]]
-        if imp and self.announce and _on(self.P.values(pid).get("say_important")):
+        spoke = False
+        if imp and self.announce and _on(vals.get("say_important")):
             text = "; ".join(x["t"] for x in imp[:MAX_SAY])
             more = len(imp) - MAX_SAY
             self.announce(f"{p['name']}: {text}." + (f" И ещё {more} — на «Пульте»." if more > 0 else ""))
+            spoke = True
+        # владелец 26.11: «событие отобразилось в Пульте, но никакого оповещения — проходит слишком незаметно»: тихая карточка
+        # в виджете (без звука и всплывающих окон, виджет из трея не поднимается) — все события или только важные
+        show = str(vals.get("widget") or WIDGET_ALL)
+        card = new if show == WIDGET_ALL else imp if show == WIDGET_IMP else []
+        if card and self.push and not spoke:
+            last = sorted(card, key=lambda x: x["ts"])[-1]
+            more = len(card) - 1
+            self.push(p["name"], last["t"], "и ещё " + str(more) + " — на «Пульте»" if more else "", "plg:" + pid)
         return len(new)
 
     def day(self, now=None):

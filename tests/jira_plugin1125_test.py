@@ -302,7 +302,7 @@ m3.close()
 sys.path.insert(0, str(ROOT / "core"))
 import plugins as PL  # noqa: E402
 man = PL.parse_plugin(PLUG, True)
-ok([s["type"] for s in man["settings"]] == ["text", "secret", "list", "toggle"], "plugin.json: токен — secret, доски — список (строка на доску), «Говорить о важном» — переключатель")
+ok([s["type"] for s in man["settings"]] == ["text", "secret", "list", "select", "toggle"], "plugin.json: токен — secret, доски — список (строка на доску), «Говорить о важном» — переключатель")
 long2 = "https://jira.example.com/secure/RapidBoard.jspa?rapidView=31&projectKey=NSHIELD&quickFilter=1234&selectedIssue=NSHIELD-77&view=planning.nodetail&issueLimit=100"
 cl2 = PL.Plugins._clean(man, {"projects": "https://jira.example.com/secure/RapidBoard.jspa?rapidView=25&projectKey=AI&selectedIssue=AI-311\n\n" + long2 + "\n  WEB  "})
 ok(cl2["projects"].split("\n") == ["https://jira.example.com/secure/RapidBoard.jspa?rapidView=25&projectKey=AI&selectedIssue=AI-311", long2, "WEB"],

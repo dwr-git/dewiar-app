@@ -335,11 +335,11 @@
   #ask button.danger { background: #FF6B8A; color: #fff; }
   /* «Пульт Лиры» (1.0.6, ui/padpult.js; макеты владельца 15.11): первая вкладка — чем Лира занята прямо сейчас.
      Обводок нет: цвет, тень, свечение, прозрачность. Движется только настоящее: дышит то, что идёт сейчас; тишина — тихо. */
-  body { --pu-plug: #f2b36b; --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #c49bff; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
+  body { --pu-plugbg: rgba(242,179,107,.14); --pu-plug: #f2b36b; --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #c49bff; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
          --pu-card: rgba(255,255,255,.045); --pu-lift: 0 10px 26px rgba(0,0,0,.28); --pu-glow: rgba(154,166,255,.30);
          --pu-veil: rgba(10,12,20,.55); --pu-leadbg: rgba(95,208,143,.11); }
   /* Радар — фиолетовый (владелец 19.11: «не нравится сочетание зелёный, синий и коричнево-оранжевый»): в одной холодной гамме с бирюзой «Дальше» и синим «Мыслей»; контраст с листом ≥ 4,3 */
-  body.light { --pu-plug: #b45f12; --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #7c3aed; --pu-lead: #23784a; --pu-err: #c4473a;
+  body.light { --pu-plugbg: rgba(180,95,18,.09); --pu-plug: #b45f12; --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #7c3aed; --pu-lead: #23784a; --pu-err: #c4473a;
                --pu-card: rgba(255,255,255,.6); --pu-lift: 0 10px 24px rgba(36,50,74,.12); --pu-glow: rgba(74,99,216,.24);
                --pu-veil: rgba(219,229,241,.72); --pu-leadbg: #e2efe7; }
   /* 18.11 вечер, владелец: «слишком белый блок… нижние на каком-то фоне, скруглённые уголки на углах без скруглений»: тень
@@ -547,6 +547,10 @@
   .pu-live { width: 8px; height: 8px; border-radius: 50%; background: var(--pu-lead); animation: pu-breathe 1.6s ease-in-out infinite; }
   .pu-btn { padding: 8px 14px; border-radius: 13px; font-weight: 700; font-size: 13px; background: var(--chip2); color: var(--ink); }
   .pu-btn.main { background: var(--pu-think); color: #fff; box-shadow: 0 8px 18px var(--pu-glow); }
+  .pu-lead.plug { background: var(--pu-plugbg); } .pu-lead.plug .pu-k { color: var(--pu-plug); } .pu-lead.plug .pu-live { background: var(--pu-plug); }
+  .pu-lead.plug .pu-btn.main { background: var(--pu-plug); box-shadow: 0 8px 18px rgba(180,95,18,.28); }
+  .pu-lead .pu-row { display: flex; gap: 8px; }
+  body:not(.light) .pu-lead.plug .pu-btn.main { color: #24170a; }
   .pu-lead .pu-btn.main { background: var(--pu-lead); box-shadow: 0 8px 18px rgba(46,139,87,.3); }
   body:not(.light) .pu-btn.main { color: #10131c; }
   #pult button:focus-visible, .tab.pt:focus-visible, #pu-strip button:focus-visible { outline: none; box-shadow: 0 0 16px var(--pu-glow); background: var(--chip2); }

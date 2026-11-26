@@ -435,8 +435,14 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         def call(pid, tool, args):
             r = shape(self.mcp.plugin_call(pid, tool, args, wait=20, timeout=90))
             return next((x["data"] for x in r["parts"] if x["type"] == "data" and isinstance(x["data"], dict)), {})
-        self.plugwatch = Watch(self.plugins, call, announce=None if self.server else self.announce,
-                               on_new=lambda pid, new: self.emit("plugin_events", plugin=pid, n=len(new)))
+        def on_new(p, new):                               # «Пульт»: свежее — карточкой сверху и строкой на вкладке
+            last = sorted(new, key=lambda x: x["ts"])[-1]
+            self.emit("plugin_events", plugin=p["id"], n=len(new), t=last["t"], src=p["name"], go="plg:" + p["id"])
+
+        def push(title, head, body, open_):                # тихая карточка в виджете: без звука и всплывающего окна
+            self.push(title, head, quiet=True, telegram=False, open=open_, head=head, body=body)
+        self.plugwatch = Watch(self.plugins, call, announce=None if self.server else self.announce, on_new=on_new,
+                               push=None if self.server else push)
         if not self.wav_input:
             self.plugwatch.start()
 

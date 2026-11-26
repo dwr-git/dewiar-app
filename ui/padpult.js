@@ -106,6 +106,7 @@
   function live() {
     if (PU.active || !PU.on) return;
     const t = PU.lead && Date.now() - PU.lead.seen < 60000 ? `Заявка с сайта: ${PU.lead.name || "посетитель"}`
+      : PU.plug && Date.now() - PU.plug.seen < 3600e3 ? `${PU.plug.src}: ${PU.plug.t}${PU.plug.n > 1 ? ` · и ещё ${PU.plug.n - 1}` : ""}`
       : PU.state === "thinking" ? (PU.steps.length ? `${PU.who}: ${PU.steps[PU.steps.length - 1].t}` : `${PU.who} думает над вопросом`)
       : PU.state === "speaking" ? `${PU.who} отвечает` : "";
     tab.classList.toggle("live", !!t);
@@ -159,7 +160,13 @@
     if (PU.active) drawQ(); else live();
   });
   core.on("diary", () => { if (PU.active) load(); else PU.at = 0; });
-  core.on("plugin_events", () => { PU.at = 0; if (PU.active) load(); });     // Jira: задачу закрыли — точка на круге сразу (26.11)
+  // Jira: задачу закрыли — точка на круге сразу (26.11); владелец 26.11: «событие проходит слишком незаметно» — свежее
+  // ещё и карточкой сверху «Пульта» и строкой над листом (дышит точка на вкладке), пока не открыли или не прошёл час
+  core.on("plugin_events", (e) => {
+    PU.at = 0;
+    if (e && e.t) PU.plug = { src: e.src || "Плагин", t: e.t, n: +e.n || 1, go: e.go || "skills", ts: Date.now() / 1000, seen: Date.now() };
+    if (PU.active) load(); else live();
+  });
   core.on("insight", () => { PU.at = 0; if (PU.active && PU.state === "idle") load(); });
   core.on("sitechat", (e) => {
     const r = ((e && e.recent) || [])[0];
@@ -322,7 +329,14 @@
     const d = PU.data || {}, c = cfg(), out = [];
     const lead = PU.lead || ((d.leads || [])[0] && Date.now() / 1000 - d.leads[0].ts < 3600 ? d.leads[0] : null);
     const lb = el("#pu-lead");
-    lb.hidden = !lead;
+    const plug = !lead && PU.plug && Date.now() - PU.plug.seen < 3600e3 ? PU.plug : null;
+    lb.hidden = !lead && !plug;
+    lb.classList.toggle("plug", !!plug);
+    if (plug) {
+      lb.innerHTML = `<p class="pu-k"><i class="pu-live" aria-hidden="true"></i>${esc(plug.src)} · ${esc(ago(plug.ts))}</p>
+        <b>${esc(plug.t)}</b><span>${plug.n > 1 ? `и ещё ${plug.n - 1} — точками на круге` : "Точкой на круге — наведите, чтобы прочитать"}</span>
+        <div class="pu-row"><button type="button" class="pu-btn main" data-go="${esc(plug.go)}">Открыть</button><button type="button" class="pu-btn" data-plug-x="1">Понятно</button></div>`;
+    }
     if (lead) {
       lb.innerHTML = `<p class="pu-k"><i class="pu-live" aria-hidden="true"></i>Заявка с сайта · ${esc(ago(lead.ts))}</p>
         <b>${esc(lead.name || "Посетитель сайта")}</b><span>Контакт и разговор — в «Клиентах»</span>
@@ -347,7 +361,9 @@
     const b = e.target.closest("[data-go]"); if (!b) return;
     const a = A(); if (a && a.open_settings) a.open_settings(b.dataset.go);
     if (b.dataset.go === "clients") PU.lead = null;
+    if (PU.plug && b.dataset.go === PU.plug.go) { PU.plug = null; live(); }
   });
+  box.addEventListener("click", (e) => { if (e.target.closest("[data-plug-x]")) { PU.plug = null; live(); drawCards(); } });
   function draw() {
     if (!PU.active) return;
     head(); drawCards(); drawQ();
