@@ -39,7 +39,7 @@ function xrNodes(r) {
     t: acts.length ? (bad ? `${acts.length - bad} из ${acts.length} вышло` : `${acts.length} ${acts.length === 1 ? "действие" : acts.length < 5 ? "действия" : "действий"}`) : "Без действий",
     d: acts.slice(0, 3).map(a => a.title || a.name).join(", ") });
   // №1118 (26.11): «Всё чисто» — будто ответ проверен, а проверки могли и не понадобиться (своя модель без «Каркаса хода»)
-  n.push({ k: "checks", s: ch.length ? "warn" : "ok", t: ch.length ? `Поправила ${ch.length}` : "Без поправок",
+  n.push({ k: "checks", s: ch.length ? "warn" : "ok", t: ch.length ? `Проверки сработали: ${ch.length}` : "Без поправок",   // №1122: «Поправила» звучало как «исправлено»
     d: ch.length ? ch[0].replace(/^✋\s*/, "").slice(0, 90) : "Проверки ничего не поправили" });
   const a = r.answer;
   n.push({ k: "answer", s: r.cancelled ? "skip" : a ? "ok" : "fail", t: r.cancelled ? "Остановлено" : a ? `за ${xrSec(r.t != null ? r.t : a.t)}` : "Ответа нет",

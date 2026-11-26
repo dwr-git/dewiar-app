@@ -286,6 +286,52 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
         self._say_quick(msg, text, via)
         return True
 
+    def _mail_prefetch(self, text, turn):
+        """№1122 (26.11, Ollama gemma4:e2b): «Проверь почту» — «Вызываю инструмент read_emails», а в «Рентгене» «Без
+        действий», и так после двух переспросов: малая модель среди 44–50 действий не вызывает нужное. Гарантия — в
+        программе: просьбу проверить почту или прочитать последнее письмо программа выполняет сама до модели (read_emails,
+        для последнего письма — и read_email), действие видно в ходе и «Рентгене», а модель пересказывает полученное. Почта
+        не ответила — причина честно. Отправить, ответить, удалить — по-прежнему модель и только с подтверждением."""
+        from quality_answer import _MAIL_CHECK
+        t = (text or "").strip()
+        if (len(t) > 90 or not _MAIL_CHECK.search(t) or not self._mail_on()
+                or re.search(r"(?i)ответ|перешл|удал|отправ|напиши|спам|таблиц|excel|выгруз|статистик", t)):
+            return ""
+        last = bool(re.search(r"(?i)последн\w*\s+(?:\w+\s+)?письм|(?:прочита|прочти|открой)\w*\s+(?:\w+\s+)?письм", t))
+        unread = bool(re.search(r"(?i)нов\w*|непрочитан", t))
+        box = (re.search(r"(?i)\b([\w.-]+\.(?:ru|com|net|org|by|kz|ua))\b", t) or [None, None])[1]
+        args = {"limit": 1 if last else 8, **({"unread_only": True} if unread and not last else {}), **({"box": box} if box else {})}
+
+        def run(name, a, title):
+            try:
+                res = self.toolbox.run(name, a)
+            except Exception as e:  # noqa: BLE001 — почта не ответила: честно
+                self.emit("tool", name=name, title=title, status="error", args=a, error=str(e)[:300])
+                raise
+            res = str(res)
+            self.emit("tool", name=name, title=title, status="done", args=a, result=res[:2000], detail="программа выполнила сама")
+            turn.mail_fetched = set(getattr(turn, "mail_fetched", ()) or ()) | {name}
+            return res
+        try:
+            try:
+                got = run("read_emails", args, "Проверить почту")
+            except Exception as e:  # noqa: BLE001 — «List.ru», а такого ящика нет: смотрим все
+                if not (box and "нет ящика" in str(e)):
+                    raise
+                args.pop("box", None)
+                got = run("read_emails", args, "Проверить почту")
+            if last and got.startswith("[") and "]" in got:
+                uid = got[1:got.index("]")]
+                got = run("read_email", {"uid": uid}, "Прочитать письмо")
+        except Exception as e:  # noqa: BLE001
+            log.info("📬 почта не ответила: %s", e)
+            return (f"[Почту программа проверить не смогла: {str(e)[:300]}. Скажи это честно одной фразой: проверка не "
+                    "выполнена и почему. Письма из прошлых разговоров за свежие не выдавай.]")
+        log.info("📬 Почту программа проверила сама до модели (%s)", "последнее письмо" if last else "список")
+        return ("[Почту только что проверила программа (" + ("read_email — последнее письмо целиком" if last else "read_emails")
+                + "). Это свежие данные; отвечай только по ним, письма из прошлых разговоров не подмешивай. Вызывать почту "
+                "ещё раз не нужно.]\n" + got[:6000])
+
     def _mail_on(self):
         """Почта подключена? Не узнать (нет почты в сборке, сбой) — считаем, что да: проверка «с почтой не работаю» молчит."""
         try:
@@ -553,6 +599,9 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             kb = self._persona_knowledge(text, turn)
             if kb:
                 ctx.append(kb.strip())
+            mailed = self._mail_prefetch(text, turn) if specs and not images else ""
+            if mailed:
+                ctx.append(mailed)
             if images:
                 ctx.append(VISION_HINT)                      # фото: перевод, документ, еда (идеи пользователей 24.10)
             elif len(text) < 400:
@@ -1015,7 +1064,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         or (note_claim(text, step_text, called) if "save_note" in {x.get("name") for x in specs or []} else "") \
                         or call_claim(text, step_text, called) \
                         or mail_claim(text, step_text, self._mail_on(), called) \
-                        or (mail_fresh_missing(text, step_text, self._mail_on(), called) if "read_emails" in {x.get("name") for x in specs or []} else "") \
+                        or (mail_fresh_missing(text, step_text, self._mail_on(), set(called) | set(getattr(turn, "mail_fetched", ()) or ()))
+                            if "read_emails" in {x.get("name") for x in specs or []} else "") \
                         or found_pics_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
                         or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")
