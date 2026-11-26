@@ -233,6 +233,10 @@ def _currency(text, default):
     for code, (_, rx) in CURRENCIES.items():
         if code in ("BYN", "RUB") and not re.search(rx, t):
             continue
+        # №1101 (26.11, Беларусь): распознавание речи пишет «12 рублей» как «12 ₽» — у кого по умолчанию белорусские рубли,
+        # знак ₽ без «российских» — это просто «рубли», то есть валюта по умолчанию
+        if code == "RUB" and default == "BYN" and not re.search(r"российск\w*\s*руб\w*|\brub\b", t):
+            continue
         if re.search(rx, t):
             return code
     return default

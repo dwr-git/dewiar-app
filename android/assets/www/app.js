@@ -1688,7 +1688,7 @@ async function listen() {
   if (!server && !D.recognizer() && D.recognizerAny && D.recognizerAny()) D.useAnyRecognizer();   // №712: iPhone без входа — распознавание Safari
   if (!server && !D.recognizer()) {
     sttActive = false; setState("idle");
-    showBot("В этом устройстве нет распознавания речи. Войдите аккаунтом dewiar.pro (Настройки → Мозг) — слушать будет сервер Dewiar. Или напишите текстом.", "err"); return;
+    showBot("В этом устройстве нет распознавания речи. Войдите аккаунтом dewiar.pro (Настройки → Мозг): слушать будет сервер Dewiar, а ваша модель останется. Или напишите текстом.", "err"); return;
   }
   sttVia = server ? "server" : "system"; sttT0 = Date.now();
   plog("info", "слушаю: " + (server ? "сервер " + server.url.replace(/\?.*$/, "") : "распознавание телефона"));
@@ -1743,7 +1743,7 @@ function sttStall(why) {
       return listen();
     }
     setState("idle"); showYou("");
-    showBot("Распознавание речи этого устройства не отвечает. Войдите аккаунтом dewiar.pro (Настройки → Мозг) — слушать будет сервер Dewiar. Или напишите текстом.", "err");
+    showBot("Распознавание речи этого устройства не отвечает. Войдите аккаунтом dewiar.pro (Настройки → Мозг): слушать будет сервер Dewiar, а ваша модель останется. Или напишите текстом.", "err");
     return;
   }
   if (holdTalk) { dictMore(heardPartial, true); return; }

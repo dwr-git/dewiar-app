@@ -13,3 +13,7 @@ imageio-ffmpeg>=0.5
 pypdf>=4.0
 socksio>=1.0
 truststore>=0.10        # сертификаты из хранилища системы (антивирусы с проверкой HTTPS)
+# Word, Excel, PowerPoint по просьбе (№1103, 26.11) — навыки docx/xlsx/pptx на них рассчитаны
+openpyxl>=3.1
+python-docx>=1.1
+python-pptx>=1.0

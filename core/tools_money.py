@@ -25,8 +25,13 @@ def t_money_add(a, ctx):
         return ("Не записано: это план (бюджет, лимит), а не трата или доход — в расходы не пишу. Запомни его как факт "
                 "(remember, например «Бюджет на мебель — 65 тысяч рублей»): новое значение заменит старое и сохранит историю.")
     from money import fmt
+    cur = a.get("currency") or None
+    # №1101 (26.11): «12 рублей» голосом приходит как «12 ₽», и модель ставит RUB — у кого основная валюта BYN, это просто
+    # «рубли»: RUB — только если человек сказал «российских» (или RUB)
+    if str(cur or "").upper() == "RUB" and m.currency() == "BYN" and not re.search(r"российск|\brub\b", str((ctx.get("turn_text") or (lambda: ""))() or ""), re.I):
+        cur = None
     try:
-        it = m.add(a.get("kind") or "expense", a.get("amount") or 0, a.get("currency") or None, a.get("category") or "",
+        it = m.add(a.get("kind") or "expense", a.get("amount") or 0, cur, a.get("category") or "",
                    a.get("note") or "", a.get("date") or None)
     except (TypeError, ValueError) as e:
         raise ToolError(str(e)) from e
