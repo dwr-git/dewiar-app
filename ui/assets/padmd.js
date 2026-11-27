@@ -37,12 +37,17 @@
      на новую, а потом оно опять слипается» — раньше переводы в ячейке при сохранении становились пробелами) */
   const cell = (c) => c.split(/<br\s*\/?>/i).map(inline).join("<br>");
 
+  /* Пустые строки между абзацами (владелец 25.11: «если были переходы на следующую строку — после обновления Лиры они
+     исчезают»). В Markdown пустые строки схлопываются, поэтому пустой абзац записываем строкой из одного неразрывного
+     пробела: Obsidian и другие показывают её пустой строкой, а блокнот читает обратно как пустой абзац. */
+  const EMPTY = "\u00a0";
   function md2html(md) {
     const L = String(md || "").replace(/\r\n?/g, "\n").split("\n");
     let out = "", i = 0;
     const isTableSep = (l) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l || "") && /\|/.test(l || "");
     while (i < L.length) {
       const l = L[i];
+      if (l === EMPTY) { out += "<p><br></p>"; i++; continue; }   // пустая строка, которую человек оставил (25.11)
       if (!l.trim()) { i++; continue; }
       let m;
       if ((m = /^```\s*([\w+-]*)\s*$/.exec(l))) {                                 // блок кода
@@ -124,12 +129,16 @@
     return kids();
   }
   const wrap = (x, m) => { const a = x.match(/^\s*/)[0], b = x.match(/\s*$/)[0]; return a + m + x.trim() + m + b; };
-  function blocks(root, depth = 0) {
+  function blocks(root, depth = 0, keepEmpty = false) {
     const parts = [];
     let line = "";
     const flush = () => { if (line.replace(/\n/g, "").trim()) parts.push(line.replace(/\n+$/, "")); line = ""; };
     for (const n of root.childNodes) {
-      if (n.nodeType === 1 && BLOCK.test(n.tagName) && n.tagName !== "LI") { flush(); const b = block(n, depth); if (b !== null && b !== "") parts.push(b); }
+      if (n.nodeType === 1 && BLOCK.test(n.tagName) && n.tagName !== "LI") {
+        flush(); const b = block(n, depth);
+        if (b !== null && b !== "") parts.push(b);
+        else if (keepEmpty && /^(P|DIV)$/.test(n.tagName) && !n.querySelector("img,table,hr")) parts.push(EMPTY);   // пустая строка — сохраняем
+      }
       else line += inl(n);
     }
     flush();
@@ -175,7 +184,10 @@
   function html2md(rootOrHtml) {
     let root = rootOrHtml;
     if (typeof rootOrHtml === "string") { root = document.createElement("div"); root.innerHTML = rootOrHtml; }
-    return blocks(root).replace(/\n{3,}/g, "\n\n").replace(/[ \t]+$/gm, "").trim() + "\n";
+    const parts = blocks(root, 0, true).split("\n\n");
+    while (parts.length && parts[0] === EMPTY) parts.shift();                       // в начале и в конце пустые строки не нужны
+    while (parts.length && parts[parts.length - 1] === EMPTY) parts.pop();
+    return parts.join("\n\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]+$/gm, "").trim() + "\n";
   }
   window.PadMD = { md2html, html2md, inline };
 })();

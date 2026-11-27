@@ -36,7 +36,31 @@ function plgField(p, s) {
   // №461: «нужно вставить адрес папки — не каждый догадается»: путь к папке — кнопкой «Выбрать папку…» (диалог системы)
   if (s.type === "folder") return `<label class="f">${plgEsc(s.label)}<span class="pld-dir"><input type="text" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}">`
     + `<button class="btn small" type="button" data-pick="${plgEsc(s.key)}">Выбрать папку…</button></span></label>`;
-  return `<label class="f">${plgEsc(s.label)}<input type="${s.type === "number" ? "number" : "text"}" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}"></label>`;
+  // список (26.11, владелец про Jira: «вторую доску через запятую — не видит… удобно несколько полей, добавлять и удалять»):
+  // по строке на пункт, «+ Добавить» и «×»; хранится строками через перевод строки (старое «a; b» тоже разберётся)
+  if (s.type === "list") {
+    const items = String(v || "").split(/\n|;\s*|,\s*(?=https?:)/).map(x => x.trim()).filter(Boolean);
+    const row = (x) => `<span class="plr"><input type="text" class="pli" value="${plgEsc(x)}" placeholder="${plgEsc(s.placeholder || "")}" spellcheck="false">`
+      + `<button class="btn small plx" type="button" title="Убрать" aria-label="Убрать">×</button></span>`;
+    return `<div class="f plist" data-list="${plgEsc(s.key)}">${plgEsc(s.label)}<input type="hidden" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(items.join("\n"))}">`
+      + `<span class="plrows">${(items.length ? items : [""]).map(row).join("")}</span>`
+      + `<button class="btn small pla" type="button">+ Добавить</button>${s.hint ? `<span class="hint">${plgEsc(s.hint)}</span>` : ""}`
+      + `<template>${row("")}</template></div>`;
+  }
+  if (s.type === "secret") return `<label class="f">${plgEsc(s.label)}<input type="password" autocomplete="off" spellcheck="false" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}">${s.hint ? `<span class="hint">${plgEsc(s.hint)}</span>` : ""}</label>`;
+  return `<label class="f">${plgEsc(s.label)}<input type="${s.type === "number" ? "number" : "text"}" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}">${s.hint ? `<span class="hint">${plgEsc(s.hint)}</span>` : ""}</label>`;
+}
+/* Поля-списки: строки → скрытое поле (его читают plgValues и «Настройки» страницы), каждое изменение — событие input на нём. */
+function plgListWire(root) {
+  root.querySelectorAll(".plist").forEach(box => {
+    const hid = box.querySelector("input[type=hidden]"), rows = box.querySelector(".plrows"), tpl = box.querySelector("template");
+    const sync = () => { const v = [...rows.querySelectorAll(".pli")].map(i => i.value.trim()).filter(Boolean).join("\n");
+      if (hid.value !== v) { hid.value = v; hid.dispatchEvent(new Event("input", { bubbles: true })); } };
+    rows.addEventListener("input", sync);
+    rows.addEventListener("click", (e) => { const x = e.target.closest(".plx"); if (!x) return; e.preventDefault();
+      const r = x.closest(".plr"); if (rows.children.length > 1) r.remove(); else r.querySelector(".pli").value = ""; sync(); });
+    box.querySelector(".pla").onclick = (e) => { e.preventDefault(); rows.appendChild(tpl.content.firstElementChild.cloneNode(true)); rows.lastElementChild.querySelector(".pli").focus(); };
+  });
 }
 function plgValues() {
   const out = {}; $$("#pld [data-k]").forEach(el => { out[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value; }); return out;
@@ -78,6 +102,7 @@ function plgDrawer(id) {
   if ($("#pld-save")) $("#pld-save").onclick = () => run("plugin_values", { id, values: plgValues() }, "Настройки сохранены");
   // плагин Лиры синхронизируется между компьютерами (core/plugin_sync.py) — и удаляется со всех
   if ($("#pld-del")) $("#pld-del").onclick = async () => { if (!await ask(p.made ? `Удалить плагин «${p.name}»? Он удалится и с других ваших компьютеров, где включена синхронизация.` : `Удалить файлы плагина «${p.name}» с этого компьютера?`)) return; plgOpen = ""; plgClose(); run("plugin_delete", { id }, "Плагин удалён"); };
+  plgListWire($("#pld"));
   $$("#pld [data-pick]").forEach(b => b.onclick = async (ev) => {
     ev.preventDefault(); const a = window.api && window.api();
     if (!a || !a.pick_folder) return toast("Выбор папки доступен в окне студии — или впишите путь вручную");

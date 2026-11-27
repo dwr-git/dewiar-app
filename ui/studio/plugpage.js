@@ -369,6 +369,7 @@ function plpSettings(box) {
   box.innerHTML = `${p.settings.length ? `<div class="plp-card plp-set"><div class="row one">${p.settings.map(s => plgField(p, s).replace(/id="pls-/g, 'id="pps-')).join("")}</div>
       <p class="hint plp-saved" id="plp-saved">${p.installed ? "Меняется сразу — сохранять не нужно." : "Заполнится при установке."}</p></div>` : ""}
     ${p.jobs.length ? `<h2 class="plp-h2">Дела по расписанию <small>Лира делает сама и сообщает итог</small></h2><div class="plp-card">${p.jobs.map(j => `<div class="switch"><div>${plpEsc(j.title)}</div><label class="tg"><input type="checkbox" data-job="${plpEsc(j.id)}" ${j.on ? "checked" : ""} ${p.installed ? "" : "disabled"}><i></i></label></div>`).join("")}${p.installed ? `<p class="hint" style="margin:8px 0 0">Время и дни включённого дела меняются в «Календаре»: нажмите на дело и поставьте своё время. <a href="#" class="plp-cal">Открыть календарь</a></p>` : ""}</div>` : ""}`;
+  plgListWire(box);
   const vals = () => { const o = {}; $$("#plp-body [data-k]").forEach(el => { o[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value; }); return o; };
   let t = 0;
   const saveNow = (msg) => { if (!p.installed) return; clearTimeout(t);
@@ -470,7 +471,7 @@ h1,h2,h3{font-weight:650;letter-spacing:.01em;margin:0 0 8px}h1{font-size:22px}h
 button,input,select,textarea{font:inherit;color:inherit}
 .btn{border:0;background:var(--soft2,rgba(255,255,255,.1));padding:8px 16px;border-radius:12px;cursor:pointer;transition:background .2s,filter .2s}.btn:hover{filter:brightness(1.15)}
 .btn.primary{background:var(--brand);color:#fff;font-weight:700}.btn.small{padding:4px 10px;font-size:12.5px}.btn.ghost{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}.btn:disabled{opacity:.5;cursor:default}
-input[type=text],input[type=search],input[type=number],select,textarea{width:100%;padding:9px 12px;border-radius:12px;border:0;background:var(--field);color:var(--ink);outline:none;box-shadow:inset 0 0 0 1px var(--line)}
+input[type=text],input[type=password],input[type=search],input[type=number],select,textarea{width:100%;padding:9px 12px;border-radius:12px;border:0;background:var(--field);color:var(--ink);outline:none;box-shadow:inset 0 0 0 1px var(--line)}
 input:focus,select:focus,textarea:focus{box-shadow:inset 0 0 0 1.5px var(--accent)}
 textarea{resize:vertical;min-height:80px}select option{background:#1a1a2e;color:#F2F3FA}
 .card{background:var(--panel);border-radius:18px;padding:16px 18px}.hint{font-size:12.5px;color:var(--dim)}.muted{color:var(--muted)}

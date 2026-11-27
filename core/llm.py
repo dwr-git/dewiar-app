@@ -49,7 +49,7 @@ from settings import LLM_PRESETS
 # история и кеш — llm_messages, поток ответа (SSE, сборка) — llm_sse, подсказки к вопросу — llm_hints, «Сеть Лиры» — llm_net, текст для голоса — llm_speech.
 # Здесь — соединение с моделями: поток, повторы, свои серверы. Все прежние имена — по-прежнему llm.<имя>
 from llm_base import (  # noqa: F401,E402 — прежние имена llm.* на месте
-    LLMError, _flat, _llamacpp, _local_base, _LOCAL_HOST, log, _no_kw, _no_tools, _no_usage, prompt_tools_mode, _REJECT,
+    LLMError, _flat, _llamacpp, _local_base, _LOCAL_HOST, log, _no_force, _no_kw, _no_tools, _no_usage, prompt_tools_mode, _REJECT,
     _usage)
 from llm_text import (  # noqa: F401,E402 — прежние имена llm.* на месте
     _arg_value, _ARGS_KEYS, _BARE_CALL, BareCallCatcher, _BR_CALL, BR_MAX, _BR_OPEN, _br_place_ok, _BR_POS,
@@ -669,6 +669,14 @@ def _lmstudio_wake(url):
 
 
 @contextlib.contextmanager
+def _httpx_stream(method, url, extensions=None, cookies=None, proxy=None, verify=True, timeout=5.0, trust_env=True, **kw):
+    """httpx.stream, но с extensions (шаги дороги — «Рентген дороги», 1.0.70): у httpx.stream этого параметра нет."""
+    with httpx.Client(cookies=cookies, proxy=proxy, verify=verify, timeout=timeout, trust_env=trust_env) as client:
+        with client.stream(method, url, extensions=extensions, **kw) as response:
+            yield response
+
+
+@contextlib.contextmanager
 def _stream_retry(method, url, tries=2, **kw):
     """httpx.stream, но соединение не установилось (сеть моргнула, сервер не принял подключение) — ещё раз: запрос
     ещё не ушёл, повторять безопасно. Отчёт №69: «сервер модели не ответил вовремя» через 5 с, а следующий вопрос —
@@ -681,7 +689,7 @@ def _stream_retry(method, url, tries=2, **kw):
     waits = [1.0, 2.5, 5.0] if cloud else [0.8] * (tries - 1)
     dropped = False
     for i in range(len(waits) + 1):
-        cm = httpx.stream(method, url, **kw)
+        cm = _httpx_stream(method, url, **kw) if "extensions" in kw else httpx.stream(method, url, **kw)
         try:
             r = cm.__enter__()
         except httpx.RemoteProtocolError as e:
@@ -710,6 +718,55 @@ def _stream_retry(method, url, tries=2, **kw):
         finally:
             cm.__exit__(*exc)
         return
+
+
+# «Рентген дороги» (1.0.70, план 24.11): где теряются секунды между «сайт: первое слово за 1 с» и «у людей заголовки через
+# 8,7 с». Шаги httpcore: соединение (TCP), шифрование (TLS), запрос целиком отправлен (тело ушло — его сайт видит только
+# после этого: nginx принимает тело до PHP), заголовки ответа (сайт и модель). Только время, без содержимого.
+_ROAD = {"connection.connect_tcp.complete": "t_conn", "connection.start_tls.complete": "t_tls",
+         "http11.send_request_body.complete": "t_sent", "http2.send_request_body.complete": "t_sent"}
+
+
+def _road_trace(st):
+    def trace(name, info):
+        k = _ROAD.get(name)
+        if k:
+            st.setdefault(k, time.monotonic())
+    return trace
+
+
+def _skip_echo(events, told):
+    """Поток после обрыва: модель иногда начинает ответ заново — уже показанное (told) второй раз не отдаём. Копим текст,
+    пока его не станет больше показанного; начало совпало (пробелы не в счёт) — отдаём только продолжение (№1044)."""
+    words = told.split()
+    rx = re.compile(r"\s*" + r"\s+".join(map(re.escape, words))) if words else None
+    want = len(" ".join(words))
+
+    def cut(buf):                                  # -> текст для показа
+        m = rx.match(buf) if rx else None
+        if m is None:
+            return buf
+        log.info("✂ Модель начала ответ заново — повтор показанного убрал")
+        return buf[m.end():]
+
+    buf, open_ = "", rx is not None
+    for kind, val in events:
+        if open_ and kind == "text":
+            buf += val
+            if len(buf.strip()) <= want + 20:
+                continue
+        if open_:
+            open_ = False
+            out = cut(buf)
+            if out:
+                yield "text", out
+            if kind == "text":
+                continue
+        yield kind, val
+    if open_ and buf:
+        out = cut(buf)
+        if out.strip():
+            yield "text", out
 
 
 _NO_GZ = set()                       # хосты облака Dewiar, которые сжатый запрос не приняли (сайт старше 1.0.67)
@@ -795,6 +852,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 body["tools"] = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
                                  for t in tools]
                 body["tools"][-1] = dict(body["tools"][-1], cache_control={"type": "ephemeral"})
+                if p.get("_force_call") and base not in _no_force:
+                    body["tool_choice"] = {"type": "any"}          # Опыт 9: обещала и не сделала — этот шаг только действием
         elif native:
             url = _root(base) + "/api/chat"
             body = {"model": model, "stream": True, "messages": with_tail(p, _to_ollama([{"role": "system", "content": system}] + messages), p.get("_tail")),
@@ -824,7 +883,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 body["chat_template_kwargs"] = {"enable_thinking": False}
             if tools:
                 body["tools"] = [{"type": "function", "function": t} for t in tools]
-                body["tool_choice"] = "auto"
+                # Опыт 9 (аудит Fable 25.11, llm.force_call): после «пообещала и не сделала» повторный шаг — обязательно с действием
+                body["tool_choice"] = "required" if p.get("_force_call") and base not in _no_force else "auto"
             # «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — в журнал и в пульс
             if body["stream"] and _usage_ok(p, base):
                 body["stream_options"] = {"include_usage": True}
@@ -846,6 +906,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         bare = BareCallCatcher(known_names if prompt_tools_mode(p) or native else [])
         got_text = False
         send, hdrs, gz = _gz_send(p, url, body)
+        if st is not None:
+            send = dict(send, extensions={"trace": _road_trace(st)})
         with _stream_retry("POST", url, **send, headers=hdrs, timeout=timeout) as r:
             if r.status_code >= 400:
                 r.read()
@@ -915,6 +977,11 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                     return
                 if "image" in err and any(isinstance(m.get("content"), list) for m in messages):
                     raise LLMError("эта модель не принимает изображения — выберите в «Мозге» модель со зрением")
+                if r.status_code in (400, 422) and p.get("_force_call") and "tool_choice" in err and base not in _no_force:
+                    log.info("Сервер %s не принял обязательное действие (tool_choice) — повторяю без него", base)
+                    _no_force.add(base)
+                    yield from stream_events(dict(p, _force_call=False), system, messages, cancel, tools, _retry)
+                    return
                 if r.status_code in (400, 422) and _has_tool_history(messages) and not p.get("_flat") \
                         and base not in _flat and p.get("kind") != "anthropic" and not native:
                     log.info("Сервер %s не принял историю вызовов (%s) — пишу её текстом", base, r.status_code)
@@ -1023,11 +1090,22 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         if (got_text and _retry == 0 and col.finish in ("length", "max_tokens") and not p.get("_bg")
                 and not (cancel is not None and cancel.is_set())):
             told = "".join(_said)
+            if col.calls or len(told.strip()) < 120:
+                # №1044 (владелец 24.11, итог дня: «по два раза рассказывает одно и то же»): оборвалось на 27-м знаке —
+                # лимит съел вызов действия (или размышления), а не длинный ответ. «Продолжи» без действий начинало ответ
+                # заново, потом звучал ответ после действия — два раза. Тут — тот же запрос целиком, с действиями и бо́льшим
+                # лимитом; уже показанное начало, если модель его повторит, второй раз не показываем
+                log.info("✂ Лимит длины на %d знаках%s — спрашиваю целиком с бо́льшим лимитом", len(told),
+                         " (обрезан вызов действия)" if col.calls else "")
+                yield from _skip_echo(stream_events(dict(p, max_tokens=max(4 * max_tokens, 4096)), system, messages,
+                                                    cancel, tools, _retry + 1), told)
+                return
             log.info("✂ Ответ оборвался на лимите длины (%d знаков) — прошу продолжить", len(told))
             more = list(messages) + [{"role": "assistant", "content": told},
                                      {"role": "user", "content": "(Ответ оборвался на полуслове из-за лимита длины. Продолжи ровно с "
                                       "того места, где оборвалось, — без повторов, без вступления и без вызова действий.)"}]
-            yield from stream_events(dict(p, max_tokens=max(2 * max_tokens, 4096)), system, more, cancel, None, _retry + 1)
+            yield from _skip_echo(stream_events(dict(p, max_tokens=max(2 * max_tokens, 4096)), system, more, cancel, None,
+                                                _retry + 1), told)
             return
         if not got_text and not (cancel is not None and cancel.is_set()):
             log.warning("Пустой ответ: модель %s, формат %s, причина %s, размышлений %d симв., начало ответа: %r",

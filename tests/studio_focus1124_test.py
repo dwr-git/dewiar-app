@@ -60,54 +60,7 @@ gsrc = src[src.index("def keep_above_guard"):src.index("def keep_above_guard") +
 ok("if STUDIO_FRONT[0]:" in gsrc, "сторож «поверх окон» не поднимает Лиру над активной студией")
 ok(re.search(r"win\.events\.shown \+= lift", src) is not None, "Linux: подключение при показе студии")
 
-# Windows: то же по событиям формы студии — TopMost у самой студии, окна Лиры не трогаем
-i = src.index("    def _studio_focus_win(self, win):"); j = src.index("\n    def _studio_focus_hook(self):", i)
-
-
-class Ev:
-    def __init__(self):
-        self.fns = []
-
-    def __iadd__(self, fn):
-        self.fns.append(fn)
-        return self
-
-    def fire(self):
-        for fn in self.fns:
-            fn(None, None)
-
-
-form = types.SimpleNamespace(Activated=Ev(), Deactivate=Ev())
-wfmod = types.ModuleType("webview.platforms.winforms")
-wfmod.BrowserView = type("BV", (), {"instances": {"st": form}})
-sys.modules["webview.platforms.winforms"] = wfmod
-top = {}
-
-
-class T:
-    def __init__(self, target, args, daemon):
-        self.f, self.a = target, args
-
-    def start(self):
-        self.f(*self.a)
-
-
-import threading  # noqa: E402
-threading.Thread = T
-ON_TOP[0] = True
-ns2 = {"ON_TOP": ON_TOP, "STUDIO_FRONT": FRONT, "_ui_log": print, "_topmost_ui": lambda w, on: top.__setitem__(w.uid, on)}
-exec("class B:\n" + src[i:j] + "\n", ns2)
-b = ns2["B"](); st = types.SimpleNamespace(uid="st")
-b.wins = {"mini": types.SimpleNamespace(uid="a")}
-b._studio_focus_win(st)
-ok(top == {"st": True}, f"Windows: студия открылась — сама TopMost, виджет не трогаем: {top}")
-form.Deactivate.fire()
-ok(top == {"st": False}, "Windows: ушли из студии — обычное окно")
-form.Activated.fire()
-ok(top["st"] is True, "Windows: вернулись в студию — она впереди")
-b._studio_focus_win(st)
-ok(len(form.Activated.fns) == 1, "Windows: к одной форме подключаемся один раз")
-ON_TOP[0] = False; top.clear(); form.Activated.fire()
-ok(top == {}, "Windows: «поверх всех» выключено — не трогаем")
+# Windows: «студия впереди» убрана (25.11: №1059, №1093, №1096, №1060 — зависания, виджет не нажимается и пропадает)
+ok("def _studio_focus_win" not in src and "self._studio_focus_win(" not in src, "Windows: студия не делается «поверх всех» — окна живут как обычно")
 print("ИТОГ: " + ("всё прошло" if not fails else f"провалов {len(fails)}"))
 sys.exit(1 if fails else 0)

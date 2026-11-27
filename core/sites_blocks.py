@@ -264,17 +264,21 @@ def b_contacts(b, c, v):
 
 
 def pd_consent(c):
-    """152-ФЗ: задана политика обработки ПД — в форме заявки галочка «Даю согласие…» со ссылками (обязательная);
-    pd_need — серверу (sites.php), чтобы без галочки заявку не принять и без браузера."""
+    """152-ФЗ: задана политика обработки ПД — в форме заявки галочки со ссылками (обязательные). С 01.09.2025 согласие на
+    обработку ПД оформляется отдельно от других документов (№1100, 26.11: «нужен модуль с 3 чекбоксами: согласие, политика,
+    оферта»): своя галочка — согласие, своя — «ознакомлен с политикой», своя — с офертой, если оферта на сайте есть.
+    pd_need — серверу (sites.php), чтобы без галочки согласия заявку не принять и без браузера."""
     pol = legal_href(c.site, "privacy")
     if not pol:
         return ""
-    con = legal_href(c.site, "consent")
-    lk = lambda h, t: f'<a href="{E(h)}" target="_blank" rel="noopener">{t}</a>'
-    txt = (f'Даю {lk(con, "согласие на обработку персональных данных")} в соответствии с {lk(pol, "политикой конфиденциальности")}' if con
-           else f'Даю согласие на обработку персональных данных в соответствии с {lk(pol, "политикой конфиденциальности")}')
-    return (f'<input type="hidden" name="pd_need" value="1"><label class="pdc"><input type="checkbox" name="pd_ok" value="1" required>'
-            f'<span>{txt}</span></label>')
+    con, of = legal_href(c.site, "consent"), legal_href(c.site, "oferta")
+    lk = lambda h, t: f'<a href="{E(h)}" target="_blank" rel="noopener">{t}</a>' if h else t
+    box = lambda name, txt: (f'<label class="pdc"><input type="checkbox" name="{name}" value="1" required>'
+                             f'<span>{txt}</span></label>')
+    return ('<input type="hidden" name="pd_need" value="1">'
+            + box("pd_ok", f'Даю {lk(con, "согласие на обработку персональных данных")}')
+            + box("pd_pol", f'Ознакомлен(а) с {lk(pol, "политикой обработки персональных данных")}')
+            + (box("pd_of", f'Ознакомлен(а) с {lk(of, "публичной офертой")}') if of else ""))
 
 
 def lead_form(b, c):

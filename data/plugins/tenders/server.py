@@ -91,6 +91,12 @@ def phrase_hit(ps, textset):
     return hit / len(ps)
 
 
+def feed_hit(q, t):
+    """Заказ из ленты — про этот запрос: совпали хотя бы два слова запроса (или одно, если оно в запросе одно)."""
+    ps, ts = stems(q), set(stems(t.get("title", "") + " " + t.get("summary", "")))   # у ленты RSS — и описание заказа
+    return bool(ps) and round(phrase_hit(ps, ts) * len(ps)) >= min(2, len(ps))
+
+
 def score(t, queries, plus, minus):
     """-> (балл 0–10, признаки, минус-слово?)"""
     ts = set(stems(f"{t.get('title', '')} {t.get('procedure_type', '')}"))
@@ -380,22 +386,61 @@ def is_open(t, today=None):
     return not m or f"{m[3]}{m[2]}{m[1]}" >= (today or datetime.now().strftime("%Y%m%d"))
 
 
-def is_tender(t):
+def is_tender(t, feed=False):
     if not t or ui_noise(t["title"]):
         return False
     sig = bool(t["number"]) + bool(t["deadline"]) + bool(t["price"])
+    if feed:                     # лента заказов (биржа, свой сайт): у заказа часто только название, ссылка и бюджет
+        return bool(t.get("url")) and len(t["title"]) >= 12
     return bool(t["number"]) or sig >= 2 or (bool(t["deadline"]) and len(t["title"]) >= 30)
 
 
+def parse_feed(text, base):
+    """RSS 2.0 или Atom -> заказы, или None — это не лента. Биржи отдают ленты для читалок (Freelancer.com, Freelancehunt,
+    fl.ru): это их честный машинный вход, он не меняется вместе с вёрсткой и не требует входа (владелец 25.11: «список всех
+    популярных досок»)."""
+    head = text.lstrip()[:2000].lower()
+    if not re.search(r"<rss[\s>]|<feed[\s>]|<rdf:rdf", head):
+        return None
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(text.lstrip().encode("utf-8"))
+    except ET.ParseError:
+        return []
+    tag = lambda e: e.tag.rsplit("}", 1)[-1].lower()           # noqa: E731
+    out = []
+    for it in root.iter():
+        if tag(it) not in ("item", "entry"):
+            continue
+        f = {}
+        for c in it:
+            f.setdefault(tag(c), c)
+        title = html.unescape((f["title"].text or "") if "title" in f else "").strip()
+        link = ""
+        if "link" in f:
+            link = (f["link"].text or "").strip() or f["link"].get("href", "")
+        d = f.get("description") if f.get("description") is not None else f.get("summary") if f.get("summary") is not None else f.get("content")
+        summary = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape((d.text or "") if d is not None else ""))).strip()[:400]
+        if len(title) < 6 or not link:
+            continue
+        m = PRICE_RE.search(title + " " + summary)
+        out.append({"number": "", "title": title[:600], "organization": "", "procedure_type": "", "status": "", "deadline": "",
+                    "price": fmt_price(m) if m else "", "summary": summary, "url": urljoin(base + "/", link)})
+    return out
+
+
 def parse_page(text, src, recipe=None):
-    """-> (тендеры, способ, новый рецепт или None). Способ: recipe | auto | empty | none."""
+    """-> (тендеры, способ, новый рецепт или None). Способ: rss | recipe | auto | empty | none."""
+    fd = parse_feed(text, src["base"])
+    if fd is not None:
+        return fd, "rss", None
     root = parse_html(text)
     if recipe:
         nodes = [e for e in root.els() if e.tag in ("tr", "li", "div", "article", "section", "dl")
                  and ((e.parent.path() if e.parent else "") + "|" + e.sig()) == recipe.get("key")]
         if nodes:
             cols = table_cols(nodes[0])
-            out = [t for t in (extract_row(n, src["base"], cols) for n in nodes) if is_tender(t)]
+            out = [t for t in (extract_row(n, src["base"], cols) for n in nodes) if is_tender(t, src.get("feed"))]
             if out:
                 return out, "recipe", None
     if page_empty(root.text()):
@@ -405,7 +450,7 @@ def parse_page(text, src, recipe=None):
             if g["score"] < 2.0:
                 break
             cols = table_cols(g["nodes"][0])
-            out = [t for t in (extract_row(n, src["base"], cols) for n in g["nodes"]) if is_tender(t)]
+            out = [t for t in (extract_row(n, src["base"], cols) for n in g["nodes"]) if is_tender(t, src.get("feed"))]
             if len(out) >= max(1, int(g["n"] * 0.4)):
                 return out, "auto", {"key": g["key"], "at": int(time.time())} if mr == 3 else None
     return [], "none", None
@@ -547,12 +592,16 @@ def thash(t, src):
 
 
 def own_sites(s):
-    """Свои площадки: адреса поиска с {QUERY} — по одному в строке (или через пробел). Первая — id «own», как раньше."""
+    """Свои площадки — по одному адресу в строке (или через пробел). Первая — id «own», как раньше.
+    С {QUERY} — страница поиска: ищется по каждому запросу. Без {QUERY} — «лента» (владелец 25.11: вставил страницу биржи
+    фриланса — «добавил источник, и ничего не происходит»: адрес без {QUERY} молча отбрасывался): страница читается целиком
+    один раз, из неё берётся то, что совпало с запросами."""
     out = []
     for u in re.split(r"\s+", str(s.get("own_url") or "").strip()):
-        if u.startswith(("http://", "https://")) and "{QUERY}" in u and not any(x["url"] == u for x in out):
+        if u.startswith(("http://", "https://")) and not any(x["url"] == u for x in out):
             m = re.match(r"(https?://[^/?#]+)", u)
-            out.append({"id": "own" if not out else f"own{len(out) + 1}", "name": m[1].split("//")[1], "base": m[1], "url": u})
+            out.append({"id": "own" if not out else f"own{len(out) + 1}", "name": m[1].split("//")[1], "base": m[1], "url": u,
+                        **({} if "{QUERY}" in u else {"feed": True})})
     return out
 
 
@@ -570,9 +619,12 @@ def scan(query=""):
     store, recipes = load(STORE, {"items": {}, "gone": []}), load(RECIPES, {})
     items, gone = store["items"], set(store.get("gone") or [])
     found, report = {}, []
+    if not sources(s):
+        return {"error": "Нет площадок: включите goszakupki.by или icetrade.by во вкладке «Мои запросы» или добавьте свою — "
+                         "адрес страницы со списком заказов."}
     for src in sources(s):
-        n_src, why = set(), ""
-        for q in queries:
+        n_src, why, seen_rows = set(), "", 0
+        for q in ([""] if src.get("feed") else queries):            # лента — одна страница на все запросы
             try:
                 page = fetch(src, q)
             except Exception as e:  # noqa: BLE001
@@ -582,21 +634,29 @@ def scan(query=""):
             if learn:
                 recipes[src["id"]] = learn
             if how == "none" and page.strip():
-                why = "выдача не распознана"
+                why = ("на странице не нашлось списка заказов — нужна страница со списком (например, «Все проекты»), "
+                       "а не одна карточка; или площадка показывает список только после входа") if src.get("feed") else "выдача не распознана"
+            seen_rows += len(rows)
             for t in rows:
                 if not is_open(t):
                     continue
+                hits = [x for x in queries if feed_hit(x, t)] if src.get("feed") else [q]
+                if not hits:
+                    continue                                  # лента: только то, что про ваши запросы
                 h = thash(t, src["id"])
                 if h in gone:
                     continue
                 cur = found.get(h) or dict(t, id=h, source=src["name"], found_by=[])
-                if q not in cur["found_by"]:
-                    cur["found_by"].append(q)
+                for x in hits:
+                    if x not in cur["found_by"]:
+                        cur["found_by"].append(x)
                 found[h] = cur
                 n_src.add(h)
             if not os.environ.get("DEWIAR_TENDERS_FIXTURES"):
                 time.sleep(0.7)                              # вежливо: не чаще запроса в 0,7 с к площадке
-        report.append({"source": src["name"], "found": len(n_src), **({"problem": why} if why else {})})
+        if src.get("feed") and seen_rows and not n_src and not why:
+            why = f"заказов на странице: {seen_rows}, но ни одного по вашим запросам — поправьте «Что искать»"
+        report.append({"source": src["name"] + (" · лента" if src.get("feed") else ""), "found": len(n_src), **({"problem": why} if why else {})})
     for c in _CL.values():
         c.close()
     _CL.clear()

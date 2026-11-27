@@ -365,7 +365,7 @@ async function ask(text, opts = {}) {
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }
     if (turnAbort === ctl) frameAnswer(sink.text() || final);
-    netRecovered(); fsMark("answer"); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
+    netRecovered(); fsMark("answer"); hCount("turns"); hCount("net_ok"); pauseOk(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
     if (isRefused(sink.text() || final)) hCount("refused");
     if (S.llm.cloud) setTimeout(() => cloudBalance(false).catch(() => {}), 1500);
   } catch (e) {

@@ -150,6 +150,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self._chatter = collections.deque(maxlen=20)        # когда слышали фразы «не мне» — вокруг разговор
         self.vosk_wake_check, self._vosk_wake_word = -1, ""
         self.reminders = Reminders(self._on_reminder)
+        # кто ставил — в уведомлении телефона (№980, 25.11). Вопрос, переданный специалисту команды (Патрику, Джарвису…), —
+        # от главного: человек говорил с Лирой (№980 в четвёртый раз, 26.11: «опять от Патрика»)
+        self.reminders.who = lambda: getattr(getattr(self, "turn", None), "back_to", None) or self.s.get("persona")
         try:
             n = self.reminders.dedupe_jobs()               # два одинаковых дела по расписанию выполнялись оба (30.10) — оставить одно
             if n:
@@ -426,6 +429,25 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
 
     # ---------- жизненный цикл ----------
 
+    def _plugin_watch_start(self):
+        """«Пульт»: события установленных плагинов (Jira: кто завёл, перевёл, закрыл) — раз в несколько минут, без модели."""
+        from plugin_pages import shape
+        from plugin_watch import Watch
+
+        def call(pid, tool, args):
+            r = shape(self.mcp.plugin_call(pid, tool, args, wait=20, timeout=90))
+            return next((x["data"] for x in r["parts"] if x["type"] == "data" and isinstance(x["data"], dict)), {})
+        def on_new(p, new):                               # «Пульт»: свежее — карточкой сверху и строкой на вкладке
+            last = sorted(new, key=lambda x: x["ts"])[-1]
+            self.emit("plugin_events", plugin=p["id"], n=len(new), t=last["t"], src=p["name"], go="plg:" + p["id"])
+
+        def push(title, head, body, open_):                # тихая карточка в виджете: без звука и всплывающего окна
+            self.push(title, head, quiet=True, telegram=False, open=open_, head=head, body=body)
+        self.plugwatch = Watch(self.plugins, call, announce=None if self.server else self.announce, on_new=on_new,
+                               push=None if self.server else push)
+        if not self.wav_input:
+            self.plugwatch.start()
+
     def start(self):
         """Студия и настройки доступны сразу; слух запускается, как только готова модель Vosk."""
         if self.server:
@@ -466,7 +488,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self._diary_loop, name="diary", daemon=True).start()
         threading.Thread(target=self._pay_loop, name="payments", daemon=True).start()
         threading.Thread(target=self._welcome_loop, name="welcome", daemon=True).start()
-        threading.Thread(target=self._look_loop, name="looks", daemon=True).start()     # «Сама — по времени дня»: образ раз в час
+        threading.Thread(target=self._look_loop, name="looks", daemon=True).start()
+        self._plugin_watch_start()                         # события плагинов — на «Пульт», важные вслух (core/plugin_watch.py)     # «Сама — по времени дня»: образ раз в час
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()
         threading.Thread(target=lambda: self.stopping.wait(20) or self.mailing.resume(), name="mailing-resume", daemon=True).start()
@@ -879,8 +902,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
     # ---------- события наружу ----------
 
     def emit(self, type_, **kw):
-        if type_ in ("tool", "answer"):
-            xray.event(type_, kw)                          # «Рентген»: действия и итог хода; к итогу — номер рентгена
+        if type_ in ("tool", "answer", "quick"):
+            xray.event(type_, kw)                          # «Рентген»: действия (и быстрые команды) и итог хода; к итогу — номер рентгена
         if type_ == "wake":
             self._ui_wake()                                # имя услышано, а виджета нет (закрыт, упал) — открыть
         if type_ == "answer" and not kw.pop("model", False) and kw.get("text"):

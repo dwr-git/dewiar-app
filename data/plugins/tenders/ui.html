@@ -111,6 +111,8 @@
   .msg { font-size: 13px; color: var(--muted); margin: 0 0 10px; } .msg:empty { display: none; } .msg.bad { color: var(--no); } .msg.ok { color: var(--ok); }
   @media (max-width: 900px) { .top { grid-template-columns: 1fr 1fr; } .scanbox { grid-column: 1 / -1; } .layout { grid-template-columns: 1fr; } .detail { position: static; }
     .rows { max-height: none; } .board { grid-template-columns: repeat(4, 240px); } .facts { grid-template-columns: 1fr; } }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+  .presets .btn small { margin-left: 4px; font-weight: 400; }
 </style>
 </head>
 <body>
@@ -181,7 +183,7 @@
       <button class="stat" data-go="watching"><small>Интересно</small><b>${by("watching")}</b><em>наблюдаю</em></button>
       <button class="stat" data-go="applied"><small>Подали заявку</small><b>${by("applied")}</b><em>участвую</em></button>
       <button class="stat" data-go="due"><small>Ближайший срок</small><b>${live ? (live.days_left === 0 ? "сегодня" : live.days_left + " " + plural(live.days_left, "д.", "д.", "дн.")) : "—"}</b><em>${live ? esc(live.title) : "нет открытых"}</em></button>
-      <div class="scanbox"><button class="btn primary" id="scan">Найти новые тендеры</button><small>${st.b.last_scan ? "Последний поиск: " + esc(when(st.b.last_scan)) : "Поиска ещё не было"}</small></div>`;
+      <div class="scanbox"><button class="btn primary" id="scan">Найти новые заказы</button><small>${st.b.last_scan ? "Последний поиск: " + esc(when(st.b.last_scan)) : "Поиска ещё не было"}</small></div>`;
     $$("#top [data-go]").forEach(b => b.onclick = () => { setTab("feed"); if (b.dataset.go === "due") { st.f.sort = "due"; $("#f-sort").value = "due"; st.f.mark = "all"; } else st.f.mark = b.dataset.go; renderMarks(); renderRows(); });
     $("#scan").onclick = scan;
   }
@@ -189,10 +191,10 @@
     const b = $("#scan"); b.disabled = true; b.innerHTML = `<span class="spin"></span> Ищу на площадках…`; msg("");
     try {
       const d = await run("tenders_scan");
-      msg(d.new ? `Новых тендеров: ${d.new}${d.new_good && d.new_good.length ? `, подходящих: ${d.new_good.length}` : ""}.` : "Новых тендеров нет — всё уже в ленте.", d.new ? "ok" : "");
+      msg(d.new ? `Новых заказов: ${d.new}${d.new_good && d.new_good.length ? `, подходящих: ${d.new_good.length}` : ""}.` : "Новых заказов нет — всё уже в ленте.", d.new ? "ok" : "");
       st.f.mark = d.new ? "new" : st.f.mark; await load();
     } catch (e) { msg(e.message, "bad"); if (/запрос/i.test(e.message)) setTab("q"); }
-    if ($("#scan")) { $("#scan").disabled = false; $("#scan").textContent = "Найти новые тендеры"; }
+    if ($("#scan")) { $("#scan").disabled = false; $("#scan").textContent = "Найти новые заказы"; }
   }
 
   /* ---------- лента ---------- */
@@ -226,10 +228,10 @@
         <div class="side">${due(t)}<span class="mk ${esc(t.mark)}" title="${esc(ACT[t.mark])}"></span></div></div>`;
     });
     $("#rows").innerHTML = h || (st.b.items.length ? `<div class="empty"><b>Ничего не нашлось</b>Ослабьте фильтры — например, снимите «Только открытые».</div>`
-      : `<div class="empty"><b>Тендеров пока нет</b>${st.b.queries.length ? "Нажмите «Найти новые тендеры» — Лира пройдёт по площадкам." : "Сначала впишите, что искать, во вкладке «Мои запросы»."}</div>`);
+      : `<div class="empty"><b>Заказов пока нет</b>${st.b.queries.length ? "Нажмите «Найти новые заказы» — Лира пройдёт по площадкам." : "Сначала впишите, что искать, во вкладке «Мои запросы»."}</div>`);
     $$("#rows .trow").forEach(r => { r.onclick = () => open(r.dataset.id); r.onkeydown = (e) => { if (e.key === "Enter") open(r.dataset.id); }; });
   }
-  function renderEmptyDetail() { $("#detail").innerHTML = `<div class="empty" style="background:none"><b>Выберите тендер</b>Слева — лента: свежие сверху, балл — насколько тендер про ваши запросы.</div>`; }
+  function renderEmptyDetail() { $("#detail").innerHTML = `<div class="empty" style="background:none"><b>Выберите заказ</b>Слева — лента: свежие сверху, балл — насколько заказ про ваши запросы.</div>`; }
   async function open(id) {
     st.cur = id; $$("#rows .trow").forEach(r => r.classList.toggle("cur", r.dataset.id === id));
     const t = st.b.items.find(x => x.id === id); if (!t) return;
@@ -243,7 +245,7 @@
       <h2>${esc(t.title)}</h2>
       <div class="acts"><div class="seg" role="radiogroup" aria-label="Отметка">${Object.entries(ACT).map(([k, l]) => `<button data-mark="${k}" class="${t.mark === k ? "on" : ""}" role="radio" aria-checked="${t.mark === k}">${l}</button>`).join("")}</div>
         <button class="star ${t.star ? "on" : ""}" id="d-star" title="В избранное" aria-label="В избранное">${t.star ? "★" : "☆"}</button></div>
-      <div class="acts">${t.url ? `<button class="btn primary" id="d-url">Открыть на площадке</button>` : ""}<button class="btn" id="d-ask" title="Лира откроет страницу и расскажет: что нужно, сроки, обеспечение, подходит ли вам">Разобрать с Лирой</button><button class="btn ghost" id="d-del">Убрать из учёта</button></div>
+      <div class="acts">${t.url ? `<button class="btn primary" id="d-url">Открыть на площадке</button>` : ""}<button class="btn" id="d-ask" title="Лира откроет страницу и расскажет: что нужно, сроки, обеспечение, подходит ли вам">Разобрать с Лирой</button><button class="btn" id="d-reply" title="Лира прочитает заказ и напишет отклик от вашего имени — отправите вы сами">Написать отклик</button><button class="btn ghost" id="d-del">Убрать из учёта</button></div>
       <dl class="facts"><div class="wide"><dt>Что закупают</dt><dd>${esc(t.title)}</dd></div>
         <div class="wide"><dt>Заказчик</dt><dd>${esc(t.organization || "—")}</dd></div>
         <div><dt>Срок подачи</dt><dd>${due(t, true)}</dd></div><div><dt>Сумма</dt><dd class="money">${esc(t.price ? money(t.price_value, t.price) : "—")}</dd></div>
@@ -258,6 +260,8 @@
     $("#d-star").onclick = async () => { t.star = !t.star; try { await run("tenders_set", { ids: [t.id], star: t.star }); renderDetail(t.id); renderRows(); } catch (e) { msg(e.message, "bad"); } };
     if ($("#d-url")) $("#d-url").onclick = () => dewiar.openUrl(t.url).catch(e => msg(e.message, "bad"));
     $("#d-ask").onclick = () => dewiar.ask(`Разбери тендер${t.number ? " № " + t.number : ""} «${t.title.slice(0, 160)}»${t.url ? " (" + t.url + ")" : ""} — что нужно, сроки, обеспечение, стоит ли участвовать?`).catch(e => msg(e.message, "bad"));
+    // владелец 25.11: «чтобы Лира могла откликаться на заказы» — пишет отклик, отправляет человек (на биржах авто-отклики запрещены)
+    $("#d-reply").onclick = () => dewiar.ask(`Напиши отклик на заказ «${t.title.slice(0, 160)}»${t.url ? " (" + t.url + ")" : ""} — от моего имени, я отправлю сам`).catch(e => msg(e.message, "bad"));
     let sure = false;
     $("#d-del").onclick = async () => { if (!sure) { sure = true; $("#d-del").textContent = "Точно убрать? Не вернётся при поиске"; return; }
       try { await run("tenders_mark", { ids: [t.id], how: "delete" }); st.cur = ""; msg("Тендер убран из учёта", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
@@ -287,12 +291,20 @@
     $$("#board .kc").forEach(c => { c.onclick = () => { setTab("feed"); st.f.mark = "all"; renderMarks(); renderRows(); open(c.dataset.id); }; c.onkeydown = (e) => { if (e.key === "Enter") c.click(); }; });
   }
 
+  /* Готовые площадки (владелец 25.11: «список всех популярных досок для разных стран»). Только те, что отдают заказы
+     без входа, — их ленты RSS: это честный машинный вход бирж, он не ломается от смены вёрстки. */
+  const PRESETS = [
+    { name: "Freelancer.com", where: "весь мир", url: "https://www.freelancer.com/rss.xml" },
+    { name: "Freelancehunt", where: "Украина, Казахстан", url: "https://freelancehunt.com/projects.rss" },
+    { name: "FL.ru", where: "Россия", url: "https://www.fl.ru/rss/all.xml" },
+  ];
   /* ---------- мои запросы (настройки плагина) ---------- */
   async function renderQ() {
     try { st.settings = await dewiar.settings(); } catch (e) { msg(e.message, "bad"); return; }
     const v = st.settings.values || {}, list = (k) => String(v[k] || "").split(/[;\n,]+/).map(x => x.trim()).filter(x => x.length >= 2);
     /* свои площадки (владелец 12.11: «как их править, добавлять новые или удалять?») — адреса поиска с {QUERY}, по строке */
-    const ownList = () => String(v.own_url || "").split(/\s+/).filter(u => /^https?:\/\//.test(u) && u.includes("{QUERY}"));
+    // владелец 25.11: адрес без {QUERY} (страница биржи) молча пропадал — теперь это «лента»: страница со списком заказов
+    const ownList = () => String(v.own_url || "").split(/\s+/).filter(u => /^https?:\/\//.test(u));
     const hostOf = (u) => { try { return new URL(u.replace("{QUERY}", "q")).host; } catch (e) { return u; } };
     const withQuery = (u) => {
       if (u.includes("{QUERY}")) return u;
@@ -307,13 +319,14 @@
     };
     const card = (k, title, hint, cls, ph) => `<div class="card qcard"><h3>${title}</h3><p>${hint}</p><div class="chips">${list(k).map((x, i) => `<span class="qchip ${cls}">${esc(x)}<button data-del="${k}" data-i="${i}" title="Убрать" aria-label="Убрать «${esc(x)}»">✕</button></span>`).join("") || `<span class="dim" style="font-size:13px">Пусто</span>`}</div>
       <div class="qadd"><input type="text" data-add="${k}" placeholder="${ph}"><button class="btn small" data-addb="${k}">Добавить</button></div></div>`;
-    $("#qgrid").innerHTML = card("queries", "Что искать", "Каждый запрос ищется на всех площадках. Тот же тендер из двух запросов — одна запись.", "", "например, видеонаблюдение")
+    $("#qgrid").innerHTML = card("queries", "Что искать", "Каждый запрос ищется на всех площадках. Тот же заказ из двух запросов — одна запись.", "", "например, видеонаблюдение")
       + card("plus", "Плюс-слова", "Если есть в названии — балл выше (+4).", "plus", "например, монтаж")
-      + card("minus", "Минус-слова", "Если есть в названии — тендер в конце списка (балл не выше 1).", "minus", "например, продукты питания")
+      + card("minus", "Минус-слова", "Если есть в названии — заказ в конце списка (балл не выше 1).", "minus", "например, продукты питания")
       + `<div class="card qcard"><h3>Площадки</h3><p>Где искать. Встроенная не нужна — снимите галочку. Свою — добавьте ниже.</p><div class="srcs">${(st.b.sources || []).filter(s => !s.own && !/^own/.test(s.id)).map(s => `<label><input type="checkbox" data-src="${esc(s.id)}" ${s.on ? "checked" : ""}>${esc(s.name)}</label>`).join("")}</div>
-        <div class="chips" style="margin-top:8px">${ownList().map((u, i) => `<span class="qchip" title="${esc(u)}">${esc(hostOf(u))}<button data-owndel="${i}" title="Убрать" aria-label="Убрать площадку ${esc(hostOf(u))}">✕</button></span>`).join("")}</div>
-        <div class="qadd"><input type="url" id="own-add" placeholder="адрес страницы поиска с площадки"><button class="btn small" id="own-addb">Добавить</button></div>
-        <p class="dim" style="font-size:12px;margin-top:6px">Как добавить: откройте на сайте площадки поиск, найдите любое слово из «Что искать», скопируйте адрес из строки браузера и вставьте сюда — слово само заменится на {QUERY}.</p>
+        <div class="chips" style="margin-top:8px">${ownList().map((u, i) => `<span class="qchip" title="${esc(u)}">${esc(hostOf(u))}${u.includes("{QUERY}") ? "" : " · лента"}<button data-owndel="${i}" title="Убрать" aria-label="Убрать площадку ${esc(hostOf(u))}">✕</button></span>`).join("")}</div>
+        <div class="presets"><span class="dim" style="font-size:12px">Готовые:</span>${PRESETS.map((x, i) => `<button class="btn small ghost" data-preset="${i}" title="${esc(x.url)}"${ownList().includes(x.url) ? " disabled" : ""}>${esc(x.name)} <small class="dim">${esc(x.where)}</small></button>`).join("")}</div>
+        <div class="qadd"><input type="url" id="own-add" placeholder="адрес страницы со списком заказов, поиска или ленты RSS"><button class="btn small" id="own-addb">Добавить</button></div>
+        <p class="dim" style="font-size:12px;margin-top:6px">Upwork, Kwork и Fiverr показывают заказы только после входа — их Лира не читает. Подойдёт любая площадка: биржа фриланса, сайт заказчика, госзакупки. Вставьте адрес страницы, где виден список заказов (например, «Все проекты» на бирже), — Лира будет читать её и брать то, что про ваши запросы. Если на площадке есть поиск — найдите там слово из «Что искать» и вставьте адрес результатов: слово само заменится на {QUERY}, и поиск пойдёт по каждому запросу.</p>
         <p style="margin-top:10px">Присылать от балла: <select id="q-min" style="width:auto;display:inline-block;margin-left:6px">${[0, 2, 3, 4, 5, 6, 8].map(n => `<option ${+v.min_score === n ? "selected" : ""}>${n}</option>`).join("")}</select></p></div>`;
     const save = async (patch, done) => { try { const nv = await dewiar.saveSettings(patch); st.settings.values = nv; msg(done + " — балл в ленте уже пересчитан.", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
     const add = (k) => { const i = $(`[data-add="${k}"]`); const x = i.value.trim().replace(/[;]/g, " "); if (x.length < 2) { i.focus(); return; }
@@ -325,11 +338,14 @@
     $("#q-min").onchange = (e) => save({ min_score: +e.target.value }, "Порог сохранён");
     const ownAdd = () => { const i = $("#own-add"), raw = i.value.trim();
       if (!/^https?:\/\//.test(raw)) { msg("Вставьте адрес страницы поиска целиком — он начинается с https://", "bad"); i.focus(); return; }
-      const u = withQuery(raw);
-      if (!u) { msg("В адресе нет слова из «Что искать». Найдите на площадке одно из них и вставьте адрес страницы с результатами — или впишите {QUERY} на место слова сами.", "bad"); i.focus(); return; }
+      const u = withQuery(raw) || raw;                         // нет слова из запросов — страница-лента
       const cur = ownList(); if (!cur.includes(u)) cur.push(u);
-      save({ own_url: cur.join("\n") }, `Площадка ${hostOf(u)} добавлена`); };
+      save({ own_url: cur.join("\n") }, u.includes("{QUERY}") ? `Площадка ${hostOf(u)} добавлена — поиск по каждому запросу`
+        : `Площадка ${hostOf(u)} добавлена как лента — нажмите «Найти новые», и под кнопкой будет видно, сколько нашлось`); };
     $("#own-addb").onclick = ownAdd;
+    $$("[data-preset]").forEach(b => b.onclick = () => { const x = PRESETS[+b.dataset.preset], cur = ownList();
+      if (!cur.includes(x.url)) cur.push(x.url);
+      save({ own_url: cur.join("\n") }, `${x.name} добавлена — нажмите «Найти новые заказы»`); });
     $("#own-add").onkeydown = (e) => { if (e.key === "Enter") ownAdd(); };
     $$("[data-owndel]").forEach(b => b.onclick = () => { const cur = ownList(), x = cur.splice(+b.dataset.owndel, 1)[0]; save({ own_url: cur.join("\n") }, `Площадка ${hostOf(x)} убрана`); });
   }

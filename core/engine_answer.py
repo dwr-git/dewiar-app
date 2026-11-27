@@ -12,8 +12,8 @@ from answer_rules import (
     JOB_ASK_RX, LAW_CODE_RX, LAW_REF_RX, law_unsourced, model_label, _MONTH_NOM, _MONTH_RX, month_year_wrong,
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
     PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, ack_again, REPEAT_RX, shown_q, SONGS_ASK_RX,
-    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT)  # noqa: F401 — прежние имена на месте
-from answer_prompt import PromptMixin, prompt_parts
+    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT, hist_calls)  # noqa: F401 — прежние имена на месте
+from answer_prompt import PromptMixin, prompt_parts, spec_names
 from xray import current as xray_current, turned as xray_turned
 from answer_models import ModelsMixin
 from answer_report import ReportMixin
@@ -115,18 +115,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             return
         if not raw and not quiet and not images and not K and self._speed_cmd(text, via):
             return
-        if not raw and not quiet and not images and not K and DISK_ASK_RX.match((text or "").strip()):
-            import shutil
-            try:
-                du = shutil.disk_usage(str(Path.home()))
-                free, total = du.free / 1e9, du.total / 1e9
-                msg = (f"На диске свободно {free:.0f} ГБ из {total:.0f}." + (" Маловато — могу помочь найти, что занимает место."
-                                                                            if free < max(10, total * 0.08) else ""))
-                log.info("💽 «%s» → %s", text, msg)
-                self._say_quick(msg, text, via)
-                return
-            except Exception:  # noqa: BLE001
-                log.debug("диск: быстрый ответ не вышел", exc_info=True)
+        if not raw and not quiet and not images and not K and self._disk_cmd(text, via):
+            return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._vault_cmd(text, via):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._home_cmd(text, via):
@@ -169,6 +159,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._clock_cmd(text, via):
             return                                       # «сколько времени?», «какое сегодня число?» — по часам, без модели
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._open_link_cmd(text, via):
+            return                                       # «открой в браузере» сразу после ответа с одной ссылкой — её и открываем
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._youtube_cmd(text, via):
             return                                       # «включи смешное видео на YouTube» — сразу, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._send_cmd(text, via):
@@ -274,6 +266,79 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
 
 
     # ---------- для фоновых задач (TaskManager.host) ----------
+
+    def _disk_cmd(self, text, via=None):
+        """«Сколько места на диске?» — настоящие числа сразу, без модели. Методом-командой (а не строками в ask): так ответ
+        попадает в журнал хода как сделанное дело — рентген, ворота ответа и экзамен его видят (стенд Б 26.11,
+        disk_free_real_call: судья 0 из 10 — «ничего не вызвал, выдумал цифры», а цифры были настоящие)."""
+        if not DISK_ASK_RX.match((text or "").strip()):
+            return False
+        import shutil
+        try:
+            du = shutil.disk_usage(str(Path.home()))
+        except Exception:  # noqa: BLE001
+            log.debug("диск: быстрый ответ не вышел", exc_info=True)
+            return False
+        free, total = du.free / 1e9, du.total / 1e9
+        msg = (f"На диске свободно {free:.0f} ГБ из {total:.0f}." + (" Маловато — могу помочь найти, что занимает место."
+                                                                    if free < max(10, total * 0.08) else ""))
+        log.info("💽 «%s» → %s", text, msg)
+        self._say_quick(msg, text, via)
+        return True
+
+    def _mail_prefetch(self, text, turn):
+        """№1122 (26.11, Ollama gemma4:e2b): «Проверь почту» — «Вызываю инструмент read_emails», а в «Рентгене» «Без
+        действий», и так после двух переспросов: малая модель среди 44–50 действий не вызывает нужное. Гарантия — в
+        программе: просьбу проверить почту или прочитать последнее письмо программа выполняет сама до модели (read_emails,
+        для последнего письма — и read_email), действие видно в ходе и «Рентгене», а модель пересказывает полученное. Почта
+        не ответила — причина честно. Отправить, ответить, удалить — по-прежнему модель и только с подтверждением."""
+        from quality_answer import _MAIL_CHECK
+        t = (text or "").strip()
+        if (len(t) > 90 or not _MAIL_CHECK.search(t) or not self._mail_on()
+                or re.search(r"(?i)ответ|перешл|удал|отправ|напиши|спам|таблиц|excel|выгруз|статистик", t)):
+            return ""
+        last = bool(re.search(r"(?i)последн\w*\s+(?:\w+\s+)?письм|(?:прочита|прочти|открой)\w*\s+(?:\w+\s+)?письм", t))
+        unread = bool(re.search(r"(?i)нов\w*|непрочитан", t))
+        box = (re.search(r"(?i)\b([\w.-]+\.(?:ru|com|net|org|by|kz|ua))\b", t) or [None, None])[1]
+        args = {"limit": 1 if last else 8, **({"unread_only": True} if unread and not last else {}), **({"box": box} if box else {})}
+
+        def run(name, a, title):
+            try:
+                res = self.toolbox.run(name, a)
+            except Exception as e:  # noqa: BLE001 — почта не ответила: честно
+                self.emit("tool", name=name, title=title, status="error", args=a, error=str(e)[:300])
+                raise
+            res = str(res)
+            self.emit("tool", name=name, title=title, status="done", args=a, result=res[:2000], detail="программа выполнила сама")
+            turn.mail_fetched = set(getattr(turn, "mail_fetched", ()) or ()) | {name}
+            return res
+        try:
+            try:
+                got = run("read_emails", args, "Проверить почту")
+            except Exception as e:  # noqa: BLE001 — «List.ru», а такого ящика нет: смотрим все
+                if not (box and "нет ящика" in str(e)):
+                    raise
+                args.pop("box", None)
+                got = run("read_emails", args, "Проверить почту")
+            if last and got.startswith("[") and "]" in got:
+                uid = got[1:got.index("]")]
+                got = run("read_email", {"uid": uid}, "Прочитать письмо")
+        except Exception as e:  # noqa: BLE001
+            log.info("📬 почта не ответила: %s", e)
+            return (f"[Почту программа проверить не смогла: {str(e)[:300]}. Скажи это честно одной фразой: проверка не "
+                    "выполнена и почему. Письма из прошлых разговоров за свежие не выдавай.]")
+        log.info("📬 Почту программа проверила сама до модели (%s)", "последнее письмо" if last else "список")
+        return ("[Почту только что проверила программа (" + ("read_email — последнее письмо целиком" if last else "read_emails")
+                + "). Это свежие данные; отвечай только по ним, письма из прошлых разговоров не подмешивай. Вызывать почту "
+                "ещё раз не нужно.]\n" + got[:6000])
+
+    def _mail_on(self):
+        """Почта подключена? Не узнать (нет почты в сборке, сбой) — считаем, что да: проверка «с почтой не работаю» молчит."""
+        try:
+            m = getattr(self, "mail", None)
+            return True if m is None else bool(m.configured())
+        except Exception:  # noqa: BLE001
+            return True
 
     def confirm(self, question, timeout=120, cancel=None, always=False, quiet=False):
         """Спросить «да/нет» вне разговора (для фоновой задачи): голосом и кнопками в виджете.
@@ -444,6 +509,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             # Иначе каждая такая добавка ломала кэш начала запроса и для всех инструментов после подсказки (tools/prefix_audit.py)
             pmsg = self._profile_in_msgs(prof)
             full_ = bool(specs) and not turn.lean       # «Чистый разговор» — подсказка как без действий, плюс короткое правило
+            self._rule_names = spec_names(specs)        # Опыт 2 (llm.rules_with_tools): правила — только к действиям этого хода
             system = self._system(full_, personal=not pmsg, talk=turn.lean)
             if turn.lean:
                 import talk_lean
@@ -533,6 +599,9 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             kb = self._persona_knowledge(text, turn)
             if kb:
                 ctx.append(kb.strip())
+            mailed = self._mail_prefetch(text, turn) if specs and not images else ""
+            if mailed:
+                ctx.append(mailed)
             if images:
                 ctx.append(VISION_HINT)                      # фото: перевод, документ, еда (идеи пользователей 24.10)
             elif len(text) < 400:
@@ -642,7 +711,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, mail_claim, mail_fresh_missing, CAN_ASK_RX, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -683,6 +752,16 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         turn.full = turn.full[:-len(step_text)]
             seen_calls = {}                              # одинаковый вызов в одном ходе — не повторяем (результат уже есть)
             done_calls, checked = [], False                  # что вызвано с результатами — сверить числа ответа (number_mismatch)
+            import ledger as _ledger
+            # Опыт 4 (аудит Fable 25.11, llm.gate_only): при «Каркасе хода» — одни ворота по журналу вместо каскада проверок
+            # «сказала сделано без действия» (*_claim) и их честных замен после хода: журнал сверяет ответ один раз, в конце
+            gate_only = self.s.get("llm", "gate_only") is True and _ledger.on(self.s.get("llm", "ledger"), prof)
+            # стенд Г 26.11 (pc_can «Что ты умеешь на компьютере?»): «Открываю сайты, ищу в интернете…» — рассказ об умениях
+            # принимали за обещание и просили «сделай» — в ответ утекало «Проверка ошибочна… Инструменты не нужны». На вопрос
+            # об умениях («что ты умеешь?») проверки «обещала / сказала сделано» не нужны: рассказ — не обещание. Только этот
+            # вопрос: на «какая погода?» короткое «сейчас посмотрю» без дела — по-прежнему обещание
+            info_q = bool(CAN_ASK_RX.search(text or ""))
+            turn.done_calls = done_calls                     # и в историю — родным форматом (Опыт 1, llm.history_native)
             drew = 0                                         # просили схему, а её нет — попросили нарисовать (до двух раз за ход)
             saved_checked = False                            # «записала» без единого действия — попросили записать (раз за ход)
             style_saved = False                              # №651: просьба о том, как говорить, — правило записано программой (раз за ход)
@@ -703,6 +782,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     # уже с полной подсказкой и всеми действиями: налегке их нет (полный прогон 22.11: «полнолуние» — плагин «Луна»)
                     turn.lean = False
                     specs = self.toolbox.specs(slim_text, keep=set(getattr(turn, "packs", None) or ()))
+                    self._rule_names = spec_names(specs)
                     system = self._system(True, personal=not pmsg)
                     log.info("🧰 Проверка просит переделать — дальше с полной подсказкой и действиями")
                 if step == 5 and specs:                  # последний шаг — только слова: ответить тем, что уже узнал
@@ -724,10 +804,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                 try:
                     # с картинкой ответ сначала собираем целиком: если модель её не примет — повторим без неё;
                     # без картинки ждём только первое событие — ошибка сервера всплывёт здесь, до первого слова
+                    # Опыт 9 (llm.force_call): после просьбы «сделай, а не обещай» этот шаг — только действием (tool_choice)
+                    sprof = dict(prof, _force_call=True) if getattr(turn, "force_call", False) and specs else prof
+                    turn.force_call = False
                     try:
-                        events = list(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
+                        events = list(stream_events(sprof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
                             if _has_images(msgs) else _first_then_stream(
-                                stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
+                                stream_events(sprof, system, msgs, cancel=turn.cancel, tools=specs or None))
                     except LLMError as e0:
                         if econ_main is None or step or turn.full or turn.cancel.is_set():
                             raise
@@ -825,7 +908,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             # ответа и первая строка потока (сеть и посредники) отдельно от первого события (модель)
                             from llm_hints import wait_info
                             wi = wait_info(turn.cancel) or {}
-                            for k_ in ("t_hdr", "t_line"):
+                            for k_ in ("t_conn", "t_tls", "t_sent", "t_hdr", "t_line"):   # 1.0.70: и дорога по шагам
                                 if wi.get(k_):
                                     self.lat.mark(k_[2:], wi[k_])
                     if turn.cancel.is_set():
@@ -919,7 +1002,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     # №461 (ПК 0.76): «сейчас посмотрю» — просьба — и снова «сейчас посмотрю», и ход кончился: просим дважды,
                     # второй раз жёстче и с действиями плагина; не взялась и тогда — честно говорим это (ниже, PROMISE_GIVEUP)
                     faked = "" if want_task else fake_call(step_text, names0)       # №522: «[run_command: …] Жду вывод»
-                    promised = not want_task and (bool(faked) or looks_like_promise(step_text, text))
+                    promised = not want_task and (bool(faked) or (not info_q and looks_like_promise(step_text, text)))
                     if (faked or promised) and last_net() and not getattr(turn, "net_redo", False):
                         # рецензия 04.11, третья: ответ узла сети — не FAKE_NUDGE главному мозгу с текстом узла, а тот же
                         # вопрос главному мозгу заново, без текста узла и без заголовка сети
@@ -936,6 +1019,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                         log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else
                                  f"написала вызов «{faked}» текстом" if faked else "только пообещала", " (ещё раз)" if nudged > 1 else "")
                         retract(drop=bool(faked))                    # текст с выдуманным вызовом — не в ответ
+                        turn.force_call = self.s.get("llm", "force_call") is True
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"},
                                        {"role": "user", "content": FAKE_NUDGE if faked else promise_nudge(want_task, again=nudged > 1,
                                                                                  hint=getattr(turn, "plugin_hint", ""))}]
@@ -974,11 +1058,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             log.info("💬 Правило, как говорить, — записала сама: «%s»", rule[:80])
                         except Exception:  # noqa: BLE001
                             log.debug("правило общения", exc_info=True)
-                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
+                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked and not gate_only and not info_q:
                     fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
                         or saved_claim(text, step_text, called) \
                         or (note_claim(text, step_text, called) if "save_note" in {x.get("name") for x in specs or []} else "") \
                         or call_claim(text, step_text, called) \
+                        or mail_claim(text, step_text, self._mail_on(), called) \
+                        or (mail_fresh_missing(text, step_text, self._mail_on(), set(called) | set(getattr(turn, "mail_fetched", ()) or ()))
+                            if "read_emails" in {x.get("name") for x in specs or []} else "") \
                         or found_pics_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
                         or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")
@@ -991,7 +1078,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             turn.full += " "
                         self.set_state("thinking")
                         continue
-                if not calls and not turn.cancel.is_set() and step < 6 and specs and not failed_checked and getattr(turn, "tools_err", None):
+                if not calls and not turn.cancel.is_set() and step < 6 and specs and not failed_checked and getattr(turn, "tools_err", None) \
+                        and not gate_only:
                     from quality import failed_claim
                     fix = failed_claim(step_text, turn.tools_err, getattr(turn, "tools_ok", None) or [])
                     if fix:                                  # №573: «нет такого пути», а ответ — «открыла папку»
@@ -1137,11 +1225,18 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     turn.lean = False
                     turn.packs = set(getattr(turn, "packs", None) or ()) | (set(more) - {"core"})
                     specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    self._rule_names = spec_names(specs)
                     system = self._system(True, personal=not pmsg)
                     log.info("🧰 Из разговора — к делу: полная подсказка и действия (%s)", ", ".join(sorted(more)))
                 elif more and specs:                    # модель попросила группу действий — следующий шаг уже с ними
                     turn.packs = set(getattr(turn, "packs", None) or ()) | set(more)
                     specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    if self.s.get("llm", "rules_with_tools") is True:   # Опыт 2: пришла группа — с ней её правила (на месте прежних)
+                        old_r = self._tool_rules()
+                        self._rule_names = spec_names(specs)
+                        new_r = self._tool_rules()
+                        if new_r != old_r and old_r in system:
+                            system = system.replace(old_r, new_r, 1)
                     log.info("🧰 Модель попросила действия: %s", ", ".join(sorted(turn.packs)))
                 if any(c.get("name") == "start_task" and not str(r).startswith(("Ошибка", "Инструмент")) for c, r in zip(calls, results)):
                     specs = []                          # задача запущена — делает она; в разговоре только сказать, что взялся
@@ -1245,11 +1340,16 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     log.warning("Действие с ошибкой так и выдано за сделанное — говорю правду")
                     turn.full = (turn.full.rstrip() + " " + note).strip()
                     sentences.put(note)
-            if self.s.get("llm", "ledger") and not turn.cancel.is_set() and turn.full.strip():
+            from quality import strip_meta
+            meta_ = strip_meta(turn.full)
+            if meta_ != turn.full:
+                log.warning("✋ В ответ попал спор с проверкой — убираю: %s", turn.full[:160])
+                turn.full = meta_
+            import ledger
+            if ledger.on(self.s.get("llm", "ledger"), prof) and not turn.cancel.is_set() and turn.full.strip():
                 # «Каркас хода» (план «Качество», шаг 3; отзыв Alex 21.11: «сказала, что сделала, а на самом деле нет»): ответ
                 # сверяется с журналом хода — что программа сделала на самом деле (рентген: действия и итог); утверждает
                 # сделанное без основания — правдой из журнала. Решает модель коротким вопросом, не словарь фраз (core/ledger.py)
-                import ledger
                 xr_ = xray_current()
                 acts_ = list((xr_ or {}).get("acts") or [])
 
@@ -1403,12 +1503,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
             said = text + (" [к сообщению была приложена картинка]" if images else "")
             acts = list(dict.fromkeys(getattr(turn, "tools_ok", None) or []))
             facts = list(getattr(turn, "facts", None) or [])
+            calls = hist_calls(getattr(turn, "done_calls", None)) if self.s.get("llm", "history_native") is True else []
             # передал слово явно (call_persona) или специалист, позванный на вопрос, возвращает слово главному — тому
             # его разговор справкой; просто переключились — нет
             hand = getattr(turn, "switch_to", None) or getattr(turn, "back_to", None)
             self.history += [{"role": "user", "content": said},
                              {"role": "assistant", "content": turn.full.strip(), "who": self.s.get("persona"),
                               **({"acts": acts} if acts else {}), **({"facts": facts} if facts else {}), **({"handoff": hand} if hand else {}),
+                              **({"calls": calls} if calls else {}),
                               **({"model": turn.model} if getattr(turn, "model", "") else {}),
                               **({"net": True} if getattr(turn, "net", False) else {})}]
             self.last_turn_time = time.monotonic()

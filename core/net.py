@@ -459,8 +459,9 @@ def _px_other(px):
 class _Lazy(httpx.BaseTransport):
     """Транспорт через прокси, который создаётся только при первом запросе (обычные запросы не платят за него)."""
 
-    def __init__(self, proxy, verify, cert):
+    def __init__(self, proxy, verify, cert, strict=False):
         self.proxy, self.verify, self.cert, self.t, self.d = proxy, verify, cert, None, None
+        self.strict = strict
 
     def _direct(self, request):
         if self.d is None:
@@ -469,7 +470,17 @@ class _Lazy(httpx.BaseTransport):
 
     def handle_request(self, request):
         """Прокси не пускает к серверу Dewiar (403, обрыв TLS, молчит), а напрямую сервер доступен — идём напрямую и
-        помним это DIRECT_SEC: прокси нужен только там, где dewiar.pro заблокирован, а не чтобы ломать связь там, где нет."""
+        помним это DIRECT_SEC: прокси нужен только там, где dewiar.pro заблокирован, а не чтобы ломать связь там, где нет.
+        strict — свой прокси профиля модели: только через него. Владелец 26.11 (судья стенда — Gemini через купленный прокси —
+        «давал отказы»): прокси перегружен, запрос шёл напрямую, и 15 минут все запросы — мимо прокси, а напрямую Google
+        отвечает «страна не поддерживается» (соединение-то есть). Сервер модели за таким прокси напрямую недоступен
+        по смыслу — да и свой адрес человек ему не показывает."""
+        if self.strict:
+            try:
+                return self._via_proxy(request)
+            except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout) as e:
+                raise httpx.ProxyError(f"прокси не ответил ({e or type(e).__name__}) — запрос к {request.url.host} "
+                                       "напрямую не отправлен", request=request) from None
         if time.time() < _direct_ok.get(request.url.host, 0):
             try:
                 return self._direct(request)
@@ -643,7 +654,7 @@ def _patched_init(self, *a, **kw):
             m[f"all://{h}"] = t
             m[f"all://*.{h}"] = t
     for h, hp in (_host_proxies().items() if not off else ()):      # свой прокси у профиля модели — к его серверу
-        m[f"all://{h}"] = _Lazy(hp, kw.get("verify", True), kw.get("cert"))
+        m[f"all://{h}"] = _Lazy(hp, kw.get("verify", True), kw.get("cert"), strict=True)   # только через него (26.11)
     lh = host_of(_lan["public"] if _lan["base"] else _ssh["public"]) if (_lan["base"] or _ssh["base"]) and not off else ""
     if lh:                                            # дома — к папке сайта напрямую (остальное — как выше)
         inner = m.get(f"all://{lh}") or _Plain(kw.get("verify", True), kw.get("cert"), kw.get("trust_env", True))

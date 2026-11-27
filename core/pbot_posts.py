@@ -153,10 +153,16 @@ class Posts:
         text = str(text or "").strip()[:4096]
         if poll:
             q = str(poll.get("question") or "").strip()[:300]
-            opts = [str(o).strip()[:100] for o in poll.get("options") or [] if str(o).strip()][:10]
+            opts = [str(o).strip() for o in poll.get("options") or [] if str(o).strip().lstrip("+").strip()][:10]
+            # №1134 (27.11): «участник при выборе ответа должен увидеть, правильно ли он ответил». Правильный вариант —
+            # с «+» в начале: опрос уходит викториной Telegram (type=quiz), ответившему сразу видно, верно ли
+            right = [i for i, o in enumerate(opts) if o.startswith("+")]
+            opts = [o.lstrip("+").strip()[:100] for o in opts]
             if not q or len(opts) < 2:
                 raise PostError("в опросе нужны вопрос и хотя бы два варианта")
-            poll = {"question": q, "options": opts}
+            if len(right) > 1:
+                raise PostError("в викторине правильный ответ один — оставьте «+» у одного варианта")
+            poll = {"question": q, "options": opts, **({"correct": right[0]} if right else {})}
         elif not text:
             raise PostError("пустой пост — напишите текст")
         if isinstance(at, str):
@@ -229,7 +235,8 @@ class Posts:
                 if p.get("poll"):
                     if p["text"]:
                         self.bot._call("sendMessage", chat_id=cid, text=p["text"][:4096])
-                    r = self.bot._call("sendPoll", chat_id=cid, question=p["poll"]["question"], options=p["poll"]["options"], is_anonymous=True)
+                    quiz = {"type": "quiz", "correct_option_id": p["poll"]["correct"]} if isinstance(p["poll"].get("correct"), int) else {}
+                    r = self.bot._call("sendPoll", chat_id=cid, question=p["poll"]["question"], options=p["poll"]["options"], is_anonymous=True, **quiz)
                 else:
                     r = None
                     for part in chunks(p["text"]):

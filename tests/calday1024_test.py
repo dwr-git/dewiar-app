@@ -74,6 +74,10 @@ with sync_playwright() as p:
     ok(w1 > w0 + 100 and saved == round(w1), f"столбец справа шире ({w0:.0f} → {w1:.0f}), ширина запомнена: {saved}")
     pg.mouse.move(g["x"] - 150, g["y"] + 40); pg.mouse.down(); pg.mouse.move(g["x"] - 900, g["y"] + 40, steps=8); pg.mouse.up(); pg.wait_for_timeout(300)
     ok(pg.evaluate("$('#cal-side').getBoundingClientRect().width") <= 561, "но не шире 560 — месяц остаётся читаемым")
+    # №1052 (25.11): «кнопка „Записать расход“ — не понятен функционал» — деньги в столбце свёрнуты под понятной строкой
+    ok(not pg.is_visible("#cs-money") and pg.is_visible(".qmoney > summary"), "деньги в столбце свёрнуты — видна одна строка")
+    pg.click(".qmoney > summary"); pg.wait_for_timeout(200)
+    ok(pg.is_visible("#cs-money") and "«Деньги»" in pg.inner_text("#cs-money"), "раскрыли — кнопка говорит, куда запишет")
     pg.screenshot(path="/tmp/claude-0/calside.png")
     pg.click("#cs-open"); pg.wait_for_timeout(300)
     ok(pg.evaluate("$('#day-dlg').open"), "заголовок дня в столбце тоже открывает день крупно")

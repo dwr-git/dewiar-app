@@ -282,7 +282,12 @@ async function dwProxyFetch(force) {
     S.net.dewiar_secret = normProxy(d.proxy || ""); S.net.dewiar_at = Date.now(); saveS();
     console.log("прокси Dewiar получен: " + hideProxy(S.net.dewiar_secret));
     return "";
-  } catch (e) { console.log("прокси Dewiar не получен: " + e.message); return e.message; }
+  } catch (e) {
+    // №1113: сайт ответил, что прокси не раздаётся (выключен администратором, а не сбой связи), — старый адрес больше не
+    // годится: с ним все запросы к Dewiar шли в мёртвый прокси, и обновить его было некому (запрос шёл туда же)
+    if (!e.net && S.net.dewiar_secret) { S.net.dewiar_secret = ""; S.net.dewiar_at = 0; saveS(); }
+    console.log("прокси Dewiar не получен: " + e.message); return e.message;
+  }
 }
 setTimeout(() => dwProxyFetch(false).catch(() => {}), 4000);
 /* socks5://user:pass@host:1080, http://host:3128, host:port, ссылка t.me/socks?… → адрес; MTProto — отказ (как на компьютере). */

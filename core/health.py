@@ -179,6 +179,47 @@ def _bug_pub(lst):
     return [{"id": b["id"], "preview": b["preview"]} for b in lst]
 
 
+# «Рентген дороги» (1.0.70): дорога до dewiar.pro из России, Беларуси и других стран разная (ТСПУ, №977). Страна — только
+# двухбуквенный код, из настроек системы (Windows — «Страна или регион»; Linux и Mac — часовой пояс), не по адресу.
+_TZ_CC = {"Europe/Minsk": "BY", "Europe/Kiev": "UA", "Europe/Kyiv": "UA", "Asia/Almaty": "KZ", "Asia/Qostanay": "KZ",
+          "Asia/Aqtobe": "KZ", "Asia/Aqtau": "KZ", "Asia/Atyrau": "KZ", "Asia/Oral": "KZ", "Asia/Qyzylorda": "KZ",
+          "Asia/Tashkent": "UZ", "Asia/Samarkand": "UZ", "Asia/Bishkek": "KG", "Asia/Tbilisi": "GE", "Asia/Yerevan": "AM",
+          "Asia/Baku": "AZ", "Europe/Chisinau": "MD", "Asia/Dushanbe": "TJ", "Asia/Ashgabat": "TM", "Europe/Riga": "LV",
+          "Europe/Vilnius": "LT", "Europe/Tallinn": "EE", "Asia/Jerusalem": "IL", "Europe/Berlin": "DE", "America/New_York": "US"}
+_TZ_RU = re.compile(r"^(Europe/(Moscow|Kaliningrad|Samara|Volgograd|Saratov|Ulyanovsk|Astrakhan|Kirov)|Asia/(Yekaterinburg|Omsk|"
+                    r"Novosibirsk|Barnaul|Tomsk|Novokuznetsk|Krasnoyarsk|Irkutsk|Chita|Yakutsk|Khandyga|Vladivostok|Ust-Nera|"
+                    r"Magadan|Sakhalin|Srednekolymsk|Kamchatka|Anadyr))$")
+_CC = [None]
+
+
+def device_country():
+    """Двухбуквенный код страны этого компьютера или "" (не знаем) — один раз за запуск."""
+    if _CC[0] is not None:
+        return _CC[0]
+    cc = ""
+    try:
+        if os.name == "nt":
+            import ctypes
+            k = ctypes.windll.kernel32
+            gid = k.GetUserGeoID(16)                                    # GEOCLASS_NATION
+            buf = ctypes.create_unicode_buffer(8)
+            if gid != -1 and k.GetGeoInfoW(gid, 4, buf, 8, 0):          # GEO_ISO2
+                cc = buf.value
+        else:
+            tz = os.environ.get("TZ") or ""
+            if not tz:
+                try:
+                    tz = os.path.realpath("/etc/localtime").split("zoneinfo/", 1)[1]
+                except (IndexError, OSError):
+                    tz = ""
+            tz = tz.lstrip(":")
+            cc = "RU" if _TZ_RU.match(tz) else _TZ_CC.get(tz, "")
+    except Exception:  # noqa: BLE001
+        cc = ""
+    _CC[0] = cc.upper() if re.fullmatch(r"[A-Za-z]{2}", cc or "") else ""
+    return _CC[0]
+
+
 class HealthMixin:
     _health_lock = None
 
@@ -518,7 +559,10 @@ class HealthMixin:
                 net.setdefault(x.get("how") or "?", []).append(x)
         if net:
             out["net_by"] = {k: [len(v), Latency.summary([{"total": 0, "hdr": y.get("hdr", 0), "line": y["line"]} for y in v]).get("hdr"),
-                                 Latency.summary([{"total": 0, "line": y["line"]} for y in v]).get("line")] for k, v in list(net.items())[:6]}
+                                 Latency.summary([{"total": 0, "line": y["line"]} for y in v]).get("line"),
+                                 Latency.summary([{"total": 0, "sent": y["sent"]} for y in v if "sent" in y]).get("sent")]
+                             for k, v in list(net.items())[:6]}
+        out["cc"] = device_country()                     # «Рентген дороги» (1.0.70): дорога — по странам
         out["_n"] = len(xs)
         return out
 

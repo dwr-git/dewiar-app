@@ -202,7 +202,7 @@ class TalkCommands:
             miss = missing_words(self.vosk_dir, p.get("wake", [])) if self.vosk_dir else []   # слух ещё не готов — проверим потом
             self.build_spotter()
             self.emit("personas", personas=self.personas.public())
-            if any(b.get("kind") == "folder" for b in p.get("knowledge") or []) and getattr(self, "knowledge", None) is not None:
+            if any(b.get("kind") == "folder" and b.get("path") for b in p.get("knowledge") or []) and getattr(self, "knowledge", None) is not None:
                 self.knowledge.kick.set()                  # папку со знаниями персонажа — прочитать сразу
             return {"id": pid, "missing": miss}
         if cmd == "gallery":

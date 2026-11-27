@@ -90,7 +90,22 @@ ok(not any("Бюджет задачи" in last_text(r) for r in mock.of(C)), "б
 kid = tm.create("Часть", "часть", start=False, parent=t.id, budget_tokens=5000)
 ok("budget" not in kid.data, "у части бюджета задачи нет (у неё limits выпуска 6)")
 src = (TK.Path(TK.__file__)).read_text(encoding="utf-8")
-ok('"budget_tokens": 0' in (TK.Path(TK.__file__).parent / "settings.py").read_text(encoding="utf-8"), "настройка tasks.budget_tokens (0 — без предела)")
+ok('"budget_tokens": 0' in (TK.Path(TK.__file__).parent / "settings.py").read_text(encoding="utf-8"), "настройка tasks.budget_tokens (0 — сам)")
+
+# ---------- №1123: платный ключ сервиса — «сам» = 1,5 млн; своя модель — без предела; явное «без предела» (-1) ----------
+_prof = dict(host.prof)
+host.prof = dict(_prof, base_url="https://ai.api.cloud.yandex.net/v1")
+tp = tm.create("Бюджет: ключ сервиса", "Переделай КП в красивый Word", start=False)
+ok(tp.data.get("budget") == {"tokens": TK.TaskManager.PAID_BUDGET, "base": TK.TaskManager.PAID_BUDGET},
+   f"№1123 (11 млн токенов за документ на 2 страницы): у платного ключа задача сама с бюджетом 1,5 млн: {tp.data.get('budget')}")
+tn = tm.create("Бюджет: явно без предела", "То же", start=False, budget_tokens=-1)
+ok(not tn.data.get("budget"), "«Без предела», выбранное явно, — без предела")
+host.prof = dict(_prof, base_url="http://127.0.0.1:11434/v1")
+tl = tm.create("Бюджет: своя модель", "То же", start=False)
+ok(not tl.data.get("budget"), "своя модель на компьютере — без предела (не платно)")
+host.prof = _prof
+html = (TK.Path(TK.__file__).parent.parent / "ui/settings.html").read_text(encoding="utf-8")
+ok('<option value="0">Сам: платный ключ — 1,5 млн' in html and '<option value="-1">Без предела</option>' in html, "в студии: «Сам» и «Без предела» — разные")
 
 host.stopping.set()
 done()

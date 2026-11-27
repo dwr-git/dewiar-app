@@ -73,7 +73,16 @@ class Reminders:
                     "text": (text or "Напоминание").strip(), "repeat": repeat or None, "kind": kind,
                     "created": datetime.now().isoformat(timespec="seconds")}
             item.update({k: v for k, v in (extra or {}).items() if k in ("deliver", "brief", "preset", "note", "note_id", "title",
-                         "care", "care_n", "care_of", "care_root", "care_at") and v not in (None, "")})   # care — лекарство (senior.py)
+                         "care", "care_n", "care_of", "care_root", "care_at", "who") and v not in (None, "")})   # care — лекарство (senior.py)
+            # владелец 25.11 (третий раз, №980): «активная Лира, напоминание ставил через неё — в уведомлении Патрик». Кто
+            # ставил — с записью, и через синхронизацию на телефон (там его лицо и имя в уведомлении), а не «текущий» телефона
+            if "who" not in item and callable(getattr(self, "who", None)):
+                try:
+                    w = str(self.who() or "")[:40]
+                    if w:
+                        item["who"] = w
+                except Exception:  # noqa: BLE001
+                    pass
             self.items.append(item)
             self._save()
             return dict(item)
@@ -124,8 +133,8 @@ class Reminders:
             if cur is None:
                 cur = {"id": item["id"], "created": datetime.now().isoformat(timespec="seconds")}
                 self.items.append(cur)
-            for k in ("at", "text", "repeat", "kind", "paused", "note_id"):
-                if k in item:
+            for k in ("at", "text", "repeat", "kind", "paused", "note_id", "who"):
+                if k in item and (k != "who" or item[k]):        # кто ставил — не стираем пустым
                     cur[k] = item[k]
             if not cur.get("note_id"):
                 cur.pop("note_id", None)

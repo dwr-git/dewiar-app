@@ -180,6 +180,28 @@ def front(win, activate=False):
     _main(run)
 
 
+def _where(win, why):
+    """№1049 (25.11, Mac, третий раз: «после „Лира!“ виджет открывается где-то за экраном, виден с 4–5-й попытки»):
+    положение уже проверяется, а причины мы не видим. Запись в журнал окна после показа: где окно, на каком экране, на
+    этом ли рабочем столе (Spaces), видно ли его на самом деле (occlusionState) и уровень — по ней и будет исправление."""
+    def run():
+        try:
+            import AppKit
+            nw = getattr(win, "native", None)
+            if nw is None:
+                return
+            f = nw.frame()
+            scr = nw.screen()
+            occ = int(nw.occlusionState())
+            log(f"виджет ({why}): окно {int(f.origin.x)},{int(f.origin.y)} {int(f.size.width)}×{int(f.size.height)}; "
+                f"экран {'нет' if scr is None else f'{int(scr.frame().size.width)}×{int(scr.frame().size.height)}'} из "
+                f"{len(AppKit.NSScreen.screens())}; показано {bool(nw.isVisible())}; на этом столе {bool(nw.isOnActiveSpace())}; "
+                f"видно {bool(occ & 2)}; уровень {int(nw.level())}; прозрачность {round(float(nw.alphaValue()), 2)}")
+        except Exception as e:  # noqa: BLE001
+            log(f"виджет ({why}): не узнать, где окно: {e}")
+    _main(run)
+
+
 def everywhere(win):
     """Виджет — на всех рабочих столах (Spaces) и поверх программ во весь экран, без места в «Окне» и Cmd+`."""
     def run():
@@ -603,6 +625,7 @@ class MacWindows:
             log(f"виджет: положение не проверить: {e}")
         front(win)
         threading.Timer(0.35, lambda: front(win)).start()
+        threading.Timer(0.8, lambda: _where(win, "показ на имя")).start()
 
     def _hide_now(self):
         self.wins[self.mode].hide()

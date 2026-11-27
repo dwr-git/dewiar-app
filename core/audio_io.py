@@ -400,6 +400,77 @@ class EchoCancel:
         self.module_id, self.active = None, False
 
 
+class _Resample:
+    """Кадры int16 любой частоты и числа каналов → 16 кГц моно, кусками по FRAME сэмплов (№1132: микрофон, который
+    открывается только в родном формате). Сглаживание (скользящее среднее на шаг) перед прореживанием — чтобы высокие
+    частоты не подмешивались в речь; линейная интерполяция с переносом дробной позиции между кусками."""
+
+    def __init__(self, rate, channels):
+        self.r, self.ch = float(rate) / RATE, max(1, int(channels))
+        self.k = max(1, int(round(self.r)))
+        self.buf = np.zeros(0, np.float32)
+        self.tail = np.zeros(self.k - 1, np.float32)
+        self.pos = 0.0
+        self.out = b""
+
+    def feed(self, data):
+        x = np.frombuffer(data, np.int16).astype(np.float32)
+        if self.ch > 1:
+            x = x[: len(x) // self.ch * self.ch].reshape(-1, self.ch).mean(axis=1)
+        if self.k > 1:
+            y = np.concatenate([self.tail, x])
+            self.tail = y[-(self.k - 1):]
+            x = np.convolve(y, np.ones(self.k, np.float32) / self.k, "valid")
+        self.buf = np.concatenate([self.buf, x])
+        n = int((len(self.buf) - 1 - self.pos) // self.r) + 1 if len(self.buf) > self.pos + 1 else 0
+        if n > 0:
+            idx = self.pos + np.arange(n) * self.r
+            y = np.interp(idx, np.arange(len(self.buf)), self.buf)
+            nxt = self.pos + n * self.r
+            drop = min(int(nxt), len(self.buf))
+            self.buf, self.pos = self.buf[drop:], nxt - drop
+            self.out += np.clip(np.round(y), -32768, 32767).astype(np.int16).tobytes()
+        need, chunks = FRAME * 2, []
+        while len(self.out) >= need:
+            chunks.append(self.out[:need])
+            self.out = self.out[need:]
+        return chunks
+
+
+def _sd_native(name, put):
+    """Windows: тот же микрофон через WASAPI (или DirectSound) в его родном формате -> (поток, подпись) или None.
+    name — имя из списка MME («» — микрофон по умолчанию этого API); put(bytes) — куда отдавать кадры 16 кГц."""
+    import sounddevice as sd
+    try:
+        apis, devs = sd.query_hostapis(), sd.query_devices()
+    except Exception:  # noqa: BLE001
+        return None
+    base = (name or "").strip()
+    for want in ("wasapi", "directsound"):
+        for ai, api in enumerate(apis):
+            if want not in str(api.get("name", "")).lower():
+                continue
+            cands = [i for i, d in enumerate(devs) if d.get("hostapi") == ai and d.get("max_input_channels", 0) > 0
+                     and (d["name"].strip().startswith(base) or base.startswith(d["name"].strip()) if base
+                          else i == api.get("default_input_device"))]
+            for i in cands:
+                d = devs[i]
+                rate = int(d.get("default_samplerate") or 48000)
+                for ch in dict.fromkeys((1, min(2, int(d["max_input_channels"])), int(d["max_input_channels"]))):
+                    rs = _Resample(rate, ch)
+
+                    def cb(data, *_, rs=rs):
+                        for c in rs.feed(bytes(data)):
+                            put(c)
+                    try:
+                        st = sd.RawInputStream(samplerate=rate, blocksize=0, channels=ch, dtype="int16", callback=cb, device=i)
+                    except Exception:  # noqa: BLE001 — другой формат или устройство
+                        continue
+                    log.info("Микрофон «%s» открыт через %s: %d Гц, каналов %d — привожу к 16 кГц", d["name"], api["name"], rate, ch)
+                    return st, d["name"].strip() + f" ({api['name']})"
+    return None
+
+
 class Capture:
     """Поток кадров int16 по 512 сэмплов 16 кГц. Источник — libpulse напрямую, запасные —
     parec и sounddevice, для тестов — WAV-файл."""
@@ -468,15 +539,30 @@ class Capture:
                 try:
                     self.stream = mk(idx)
                 except sd.PortAudioError:
-                    if idx is None:
-                        raise
+                    if idx is None:                     # по умолчанию тоже не открылся — тот же микрофон в родном формате
+                        got = _sd_native(self.device, cb)
+                        if not got:
+                            raise
+                        self.stream, label = got
+                        self.stream.start()
+                        _sd_open(1)
+                        return label
                     # №520 (04.11): гарнитура выключена — и эта строка шла каждые 5 с: раз в 10 минут; взамен — настоящий
                     # микрофон, а не виртуальный Steam Streaming, если он стоит в Windows по умолчанию
                     alt = _sd_fallback()
                     warn_rare("fallback:" + str(self.device), "«%s» недоступен — беру %s", self.device,
                               "другой настоящий микрофон" if alt is not None else "микрофон по умолчанию")
-                    self.stream = mk(alt)
-                    label = "микрофон по умолчанию (выбранный недоступен)"
+                    try:
+                        self.stream = mk(alt)
+                        label = "микрофон по умолчанию (выбранный недоступен)"
+                    except sd.PortAudioError:
+                        # №1132 (27.11, Windows 11, Logitech C525): MME не открывает микрофон веб-камеры с 16 кГц
+                        # («MME error 11» — неверный параметр), а Chrome его слышит — через WASAPI в родном формате
+                        # устройства. Так же: WASAPI, родная частота и каналы, к 16 кГц моно приводим сами (_Resample)
+                        got = _sd_native(self.device, cb)
+                        if not got:
+                            raise
+                        self.stream, label = got
             self.stream.start()
             _sd_open(1)
         return label

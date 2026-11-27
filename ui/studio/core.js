@@ -230,6 +230,27 @@ function liteProbe() {
   requestAnimationFrame(step);
 }
 setTimeout(liteProbe, 4000);
+/* №1130 (27.11, CachyOS, NVIDIA, 16 ядер: «прокрутка и курсор в окнах приложения — пункт меню всплывает с сильной задержкой,
+   фризы при вводе; процессор не загружен»). В простое кадры быстрые — замер выше молчит, а тяжело как раз при прокрутке:
+   программная отрисовка перерисовывает фон и «стекло» на каждом шаге. Замер по делу — кадры первые 1,2 с прокрутки;
+   медленно два раза подряд — облегчённый вид (одна заминка — не повод) */
+const LITE_SCROLL = { busy: false, bad: 0, runs: 0 };
+function liteScrollProbe() {
+  if (LITE.auto || LITE_SCROLL.busy || LITE_SCROLL.runs >= 6 || document.hidden || liteMode() !== "auto") return;
+  LITE_SCROLL.busy = true; LITE_SCROLL.runs++;
+  let t0 = 0, last = 0, n = 0, slow = 0;
+  const step = (t) => {
+    if (!t0) t0 = t;
+    if (last) { n++; if (t - last > 50) slow++; }
+    last = t;
+    if (t - t0 < 1200) return requestAnimationFrame(step);
+    LITE_SCROLL.busy = false;
+    if (n < 8 || slow / n > 0.3) { if (++LITE_SCROLL.bad >= 2) liteAuto("прокрутка рисуется медленно"); }
+    else LITE_SCROLL.bad = 0;
+  };
+  requestAnimationFrame(step);
+}
+addEventListener("wheel", liteScrollProbe, { passive: true, capture: true });
 
 /* навигация */
 /* Вкладки вместо пунктов меню. «Душа» (дневник, душа, конституция, «Обо мне») была одним пунктом с вкладками; 19.11

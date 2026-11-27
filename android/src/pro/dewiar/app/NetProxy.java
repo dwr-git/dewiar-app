@@ -95,8 +95,45 @@ public final class NetProxy {
         return false;
     }
 
+    /** №1113 (26.11): «Не проверилось: unexpected end of stream on null» — с 0.9.81 по 0.9.93 на одном телефоне, на
+     *  мобильной связи и в Wi-Fi, а сайт в браузере открывается. «…on null» Android пишет, только когда прокси на пути
+     *  (свой, прокси Dewiar или прокси из настроек Wi-Fi/VPN) молча закрыл связь на CONNECT. Такой отказ — признак
+     *  прокси, а не сервера: следующий раз — напрямую, мимо любых прокси (Net.request), и, если так открылось, DIRECT_MS
+     *  все запросы к этому адресу — напрямую. Повтор безопасен: до сервера запрос не дошёл. */
+    static final long DIRECT_MS = 15 * 60 * 1000L;
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> DIRECT = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Отказ похож на отказ прокси (а не сервера): EOF на CONNECT, ответ прокси вместо туннеля, SOCKS. */
+    public static boolean proxyFail(Throwable e) {
+        String m = String.valueOf(e == null ? "" : e.getMessage());
+        return m.contains("end of stream on null") || m.contains("response code for CONNECT") || m.contains("authenticate with proxy")
+            || m.contains("SOCKS") || m.contains("Proxy Authentication");
+    }
+
+    /** Пошёл бы этот адрес через какой-нибудь прокси: свой/Dewiar (uses) или системный (настройки Wi-Fi, VPN). */
+    public static boolean viaAnyProxy(URL u) {
+        if (uses(u)) return true;
+        try {
+            for (Proxy x : java.net.ProxySelector.getDefault().select(u.toURI())) if (x.type() != Proxy.Type.DIRECT) return true;
+        } catch (Throwable ignored) { }
+        return false;
+    }
+
+    /** Напрямую, мимо любых прокси. */
+    public static URLConnection openDirect(URL u) throws IOException { return u.openConnection(Proxy.NO_PROXY); }
+
+    /** Напрямую открылось, когда через прокси — нет: DIRECT_MS к этому адресу ходим напрямую. */
+    public static void directOk(URL u) { if (u != null && u.getHost() != null) DIRECT.put(u.getHost().toLowerCase(Locale.ROOT), System.currentTimeMillis() + DIRECT_MS); }
+
+    static boolean directNow(URL u) {
+        if (u == null || u.getHost() == null) return false;
+        Long t = DIRECT.get(u.getHost().toLowerCase(Locale.ROOT));
+        return t != null && System.currentTimeMillis() < t;
+    }
+
     /** Открыть соединение: адреса Dewiar — через прокси (если задан), остальное — напрямую. */
     public static URLConnection open(URL u) throws IOException {
+        if (directNow(u)) return openDirect(u);
         Proxy p = proxy;
         if (p != null && uses(u) && p.type() == Proxy.Type.HTTP && "https".equalsIgnoreCase(u.getProtocol())) {
             // HTTPS через HTTP-прокси. Android (OkHttp) шлёт CONNECT без логина и ждёт ответа 407, а платные

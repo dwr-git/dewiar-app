@@ -250,7 +250,9 @@ class Recall:
         parts, used = [], 0
         for r in res:
             piece = r["snippet"][: max(200, budget - used)]
-            parts.append(f"[{r['path']}] {piece}")
+            # №1117 (26.11): архив разговора — то, что было раньше, а не свежие данные (письма из прошлой проверки почты)
+            m = re.match(r"(?:.*/)?Память/Разговоры/(\d{4})-(\d\d)-(\d\d)", r["path"])
+            parts.append(f"[{r['path']}] " + (f"(прошлый разговор {m.group(3)}.{m.group(2)} — что было тогда, не свежие данные) " if m else "") + piece)
             used += len(piece)
             if used >= budget:
                 break

@@ -27,6 +27,9 @@ public final class Speech {
     private final Handler main = new Handler(Looper.getMainLooper());
     private SpeechRecognizer rec;
     private boolean renew = false;                   // распознаватель сломался (5, 8, 11) — в следующий раз создать новый
+    // №1128 (realme, Android 16): первая фраза после запуска слушается, а на второй распознаватель молчит — ни «готов», ни
+    // ошибки (после ответа Лиры голосом). Прежний сеанс так и не дождался «готов» — этот распознаватель завис: новый
+    private boolean noReady = false;
     private boolean active = false;                  // идёт сеанс распознавания (startListening без итога)
     private volatile boolean recording;              // идёт запись для сервера; false — отменено (cancel): без распознавания
     private volatile boolean finish;                 // stop(): закончить запись и распознать то, что успели записать
@@ -137,15 +140,16 @@ public final class Speech {
                     // получал ERROR_SERVER_DISCONNECTED (11): «распознавание ещё занято (11) — пробую снова» почти на
                     // каждой фразе, у 50 телефонов из 178 (пакет здоровья 20.10), лишние полсекунды до «слушаю».
                     // Пересоздаём, только если он сам сломался (ошибки 5, 8, 11 — отпускаем сразу; не запустился — флаг renew).
-                    if (rec != null && renew) { try { rec.destroy(); } catch (Throwable ignored) { } rec = null; }
+                    if (rec != null && (renew || noReady)) { try { rec.destroy(); } catch (Throwable ignored) { } rec = null; }
                     if (rec == null) { rec = SpeechRecognizer.createSpeechRecognizer(ctx); renew = false; }   // первый раз или после поломки
                     else if (active) { try { rec.cancel(); } catch (Throwable ignored) { } }   // прежний сеанс ещё идёт — прервать
                     final long t0 = android.os.SystemClock.elapsedRealtime();
                     final boolean[] ready = {false};
                     final boolean sw = lang2 != null && !lang2.isEmpty() && !noLangSwitch;   // просим распознаватель выбирать язык
                     active = true;
+                    noReady = true;
                     rec.setRecognitionListener(new RecognitionListener() {
-                        @Override public void onReadyForSpeech(Bundle b) { ready[0] = true; ev(g, "stt_start", o()); }
+                        @Override public void onReadyForSpeech(Bundle b) { ready[0] = true; noReady = false; ev(g, "stt_start", o()); }
                         @Override public void onBeginningOfSpeech() { }
                         @Override public void onRmsChanged(float v) {
                             // v — дБ примерно от −2 до 10: переводим в 0..1 для анимации облика
@@ -156,7 +160,7 @@ public final class Speech {
                         @Override public void onError(int code) {
                             // «прервано» от прерванного прежнего сеанса прилетает уже сюда, до готовности нового — не наше
                             if (code == SpeechRecognizer.ERROR_CLIENT && !ready[0] && android.os.SystemClock.elapsedRealtime() - t0 < 600) return;
-                            active = false;
+                            active = false; noReady = false;                // ответил ошибкой — жив
                             // №974 (realme, Android 16): 12/13 — «язык не поддерживается / недоступен». Распознаватель не
                             // умеет выбирать между двумя языками (второй язык в настройках) — слушаем только на основном,
                             // до конца работы, сразу же ещё раз (человек ничего не заметит)
@@ -175,7 +179,7 @@ public final class Speech {
                             try { ev(g, "stt_error", o().put("code", code).put("msg", errText(code))); } catch (Exception ignored) { }
                         }
                         @Override public void onResults(Bundle b) {
-                            active = false;
+                            active = false; noReady = false;
                             BtMic.stopSoon();
                             ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                             try { ev(g, "stt_result", o().put("text", r != null && !r.isEmpty() ? r.get(0) : "")); } catch (Exception ignored) { }

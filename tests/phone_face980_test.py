@@ -31,6 +31,6 @@ console.log(JSON.stringify(saved));
 r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=30)
 ok(r.returncode == 0 and r.stdout.strip() == '["lira"]', f"дорисованный позже облик Патрика не становится текущим: {r.stdout.strip() or r.stderr[:300]}")
 sy = (ROOT / "android/www-src/app/16-sync.js").read_text(encoding="utf-8")
-ok("was && was.who ? { who: was.who } : {}" in sy, "правка напоминания с компьютера не теряет, кто его ставил")
+ok("[d.who, was && was.who, S.persona].find(" in sy, "правка напоминания с компьютера не теряет, кто его ставил (25.11: и приходит с компьютера)")
 print("ИТОГ: " + ("всё прошло" if not fails else f"провалов {len(fails)}"))
 sys.exit(1 if fails else 0)

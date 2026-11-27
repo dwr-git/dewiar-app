@@ -89,7 +89,7 @@ TRANSPARENT = [False]                   # Linux с композитором: о�
 
 
 ABOVE_TITLES = None          # заголовки окон, которые должны быть «поверх всех» (виджет, значок, блокнот) — см. keep_above_guard
-ON_TOP = [True]              # виджет поверх всех окон (ui.on_top; идея №48 — можно выключить в «Оформлении»)
+ON_TOP = [False]             # виджет поверх всех окон (ui.on_top; идея №48 — «Оформление»; с 1.0.71 по умолчанию выключено)
 STUDIO_FRONT = [False]       # студия в фокусе и сама «поверх» (_studio_focus_hook) — сторож окна Лиры не переподнимает
 
 
@@ -1825,12 +1825,38 @@ class Api:
                 _ui_log(f"поверх окон: {e}")
         return ON_TOP[0]
 
+    def _file_dialog(self, kind, **kw):
+        """Окно выбора файла или папки. Письмо 25.11 (Windows): «окно выбора папки зависает, ничего не сделать — только
+        закрыть программу в трее; и после перезапуска не работает». pywebview в Windows открывает диалог прямо из потока
+        вызова со страницы, а владелец диалога — окно студии в своём потоке; так же висло окно с «поверх всех» (№438).
+        Теперь в Windows диалог открывается в потоке окна (Invoke) — он принадлежит студии и всегда поверх неё.
+        -> путь(и) или None (отказались, не открылся)."""
+        w = self._studio or self._hud
+        if WIN:
+            try:
+                from webview.platforms.winforms import BrowserView
+                from System import Action                 # noqa: PLC0415 — pythonnet есть только в Windows
+                f = BrowserView.instances.get(getattr(w, "uid", None))
+                if f is not None and f.InvokeRequired:
+                    out = []
+
+                    def run():
+                        if f.TopMost:                     # окно «поверх» — не заслонять им диалог
+                            f.TopMost = False
+                        out.append(w.create_file_dialog(kind, **kw))
+                    f.Invoke(Action(run))
+                    return out[0] if out else None
+            except Exception as e:  # noqa: BLE001
+                _ui_log(f"окно выбора файла: {e}")
+                return None
+        return w.create_file_dialog(kind, **kw)
+
     def pick_folder(self):
         """Выбор папки проекта (для задач по коду). -> путь или "" (отказались)."""
         import webview
         # новые pywebview — webview.FileDialog.*, старые — webview.*_DIALOG (так же в pick_file и save_file*)
         kind = getattr(getattr(webview, "FileDialog", None), "FOLDER", None) or webview.FOLDER_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()))
+        res = self._file_dialog(kind, directory=str(Path.home()))
         if not res:
             return ""
         return res if isinstance(res, str) else res[0]
@@ -1845,7 +1871,7 @@ class Api:
             start = str(default_dir()) if default_dir().is_dir() else str(Path.home())
         except Exception:  # noqa: BLE001
             start = str(Path.home())
-        res = (self._studio or self._hud).create_file_dialog(k, directory=start, file_types=types)
+        res = self._file_dialog(k, directory=start, file_types=types)
         if not res:
             return ""
         return res if isinstance(res, str) else res[0]
@@ -2120,7 +2146,7 @@ class Api:
         """Сохранение через системный диалог (в окне pywebview обычные загрузки не работают)."""
         import webview
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()), save_filename=filename,
+        res = self._file_dialog(kind, directory=str(Path.home()), save_filename=filename,
                                                             file_types=("Настройки Dewiar (*.dewiar)", "Все файлы (*.*)"))
         if not res:
             return ""
@@ -2134,7 +2160,7 @@ class Api:
         import base64
         import webview
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()), save_filename=filename)
+        res = self._file_dialog(kind, directory=str(Path.home()), save_filename=filename)
         if not res:
             return ""
         path = res if isinstance(res, str) else res[0]
@@ -2154,7 +2180,7 @@ class Api:
             raise ValueError("скачать можно только файл из облака Лиры")      # мост окна — не копировщик любых файлов
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
         start = Path.home() / "Downloads" if (Path.home() / "Downloads").is_dir() else Path.home()
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(start), save_filename=filename or p.name)
+        res = self._file_dialog(kind, directory=str(start), save_filename=filename or p.name)
         if not res:
             return ""
         path = res if isinstance(res, str) else res[0]
@@ -2244,8 +2270,9 @@ class Api:
                 win.events.loaded += drop
                 lift = lambda *a: __import__("threading").Thread(target=self._gtk, args=(self._studio_focus_hook,), daemon=True).start()  # noqa: E731
                 win.events.shown += lift
-        else:                                              # Windows — то же по событиям формы (_studio_focus_win)
-            win.events.shown += lambda *a: self._studio_focus_win(win)
+        # Windows: «студия впереди» (TopMost у студии, 1.0.67–1.0.77) убрана — №1059, №1093, №1096, №1060, письмо 25.11:
+        # с ней зависали окна и окна выбора файла, кнопки виджета не нажимались, виджет пропадал при открытой студии.
+        # Её просили на Ubuntu; в Windows щелчок и так поднимает окно, а виджет — маленький и «поверх всех» по выбору.
         if own:
             import threading
             hook = lambda *a: threading.Thread(target=self._gtk, args=(self._studio_frame,), daemon=True).start()  # noqa: E731
@@ -2519,34 +2546,6 @@ class Api:
         wv.connect("button-release-event", on_release)
         reshape()
 
-    def _studio_focus_win(self, win):
-        """Windows — как _studio_focus_hook: пока студия активна, она сама TopMost и выше окон Лиры; ушли из неё — обычное
-        окно. Окна Лиры не трогаем. TopMost — через _topmost_ui в отдельном потоке (Invoke в поток формы)."""
-        import threading
-        try:
-            from webview.platforms.winforms import BrowserView
-            f = BrowserView.instances.get(getattr(win, "uid", None))
-        except Exception:  # noqa: BLE001
-            return
-        if f is None or getattr(self, "_studio_focus_form", None) is f:
-            return
-        self._studio_focus_form = f
-
-        def put(front):
-            if ON_TOP[0]:
-                STUDIO_FRONT[0] = front
-                _topmost_ui(win, front)
-
-        def on(front):
-            return lambda *_: threading.Thread(target=put, args=(front,), daemon=True).start()
-        try:
-            f.Activated += on(True)
-            f.Deactivate += on(False)
-        except Exception as e:  # noqa: BLE001
-            _ui_log(f"студия впереди: {e}")
-            return
-        on(True)()
-
     def _studio_focus_hook(self):
         """Владелец 24.11 (Ubuntu): «виджет всегда выше всех — открываю студию, она под виджетом… на чём фокус, то и
         выше». 1.0.67 (владелец 16:49: «стало только хуже» — студия выходит и тут же прячется, виджет мигает, блокнот
@@ -2584,6 +2583,23 @@ class Api:
     def _studio_gw(self):
         from gi.repository import Gtk
         return next((g for g in Gtk.Window.list_toplevels() if g.get_title() == STUDIO_TITLE), None)
+
+    def _pad_attach(self, gw):
+        """Linux, главный поток GTK. Владелец 24.11 (Ubuntu, «поверх всех» выключено): «фокус на виджете — он поднялся над
+        браузером, а блокнот, который с ним работает, под браузером; нажал на блокнот — он поднялся, а виджет спрятан».
+        Блокнот и виджет — два отдельных окна, каждое поднималось само по себе. Блокнот — подчинённое окно виджета
+        (transient_for): оконный менеджер держит его над виджетом и поднимает их вместе — нажали на любое из двух, оба
+        впереди. Проверено в настоящем Mutter: без этого — «виджет, браузер, блокнот», с ним — «браузер, виджет, блокнот»."""
+        try:
+            from gi.repository import Gtk
+            title = TITLES.get(getattr(self, "mode", "card"), TITLES["card"])
+            parent = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == title), None)
+            if parent is None or gw is None or gw.get_transient_for() is parent:
+                return
+            gw.set_transient_for(parent)
+            _ui_log("блокнот: подчинённое окно виджета — поднимаются вместе")
+        except Exception as e:  # noqa: BLE001
+            _ui_log(f"блокнот рядом с виджетом: {e}")
 
     def _raise_studio(self):
         """Linux: поднять студию наверх и дать ей фокус. GNOME не пускает вперёд окна фоновой программы (защита от
@@ -3550,6 +3566,7 @@ class Api:
                         gw = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == PAD_TITLE), None)
                         if gw is None:
                             return False
+                        self._pad_attach(gw)
                         gw.show_all()
                         gw.present()
                         if gw.get_window() is not None:
@@ -3605,6 +3622,7 @@ class Api:
                         r = int(round(PAD_RADIUS * (ZOOM[0] or 1.0)))
                         shape_window(gw, "pad", rects=pad_rects(g["side"], g["w"] * k, g["h"] * k, g["gap"] * k,
                                                                 [(y * k, c * k) for y, c in g["clips"]], r * k))
+                        self._pad_attach(gw)
                         gw.show_all()
                         gw.get_window().move(g["x"], g["y"])
                         return True
@@ -4429,7 +4447,7 @@ def main():
         extra = ("&address=" + quote(t, safe="")) if t.startswith("dewiar:") else ("&import=" + quote(str(Path(t).resolve()), safe=""))
         args.settings = True
 
-    ON_TOP[0] = ui_settings().get("on_top", True) is not False
+    ON_TOP[0] = ui_settings().get("on_top", False) is True        # 1.0.71: нет в настройках (новая установка) — не поверх
     if WIN:
         return main_win(args, extra)
     if MAC:

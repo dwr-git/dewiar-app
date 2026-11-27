@@ -35,43 +35,62 @@ public final class Update {
         return new File(d, "Dewiar.apk");
     }
 
+    /** №1057 (25.11, Huawei): «Не скачалось: файл пришёл повреждённым» раз за разом — у других та же версия ставилась.
+     *  Значит, файл портит дорога: оборванная связь без ошибки или кэш по пути (у провайдера, в прокси) отдаёт старый
+     *  кусок. Теперь: оборвалось раньше заявленного размера — это обрыв, а не порча; до трёх попыток, со второй — мимо
+     *  кэшей (свой адрес и Cache-Control: no-cache). */
     static void download(final MainActivity a, final String url, final String sha256) {
         if (job != null && job.isAlive()) return;
         job = new Thread(new Runnable() { @Override public void run() {
             File part = new File(apk(a).getParentFile(), "Dewiar.apk.part");
-            try {
-                URLConnection uc = NetProxy.open(new URL(url));
-                uc.setConnectTimeout(15000); uc.setReadTimeout(60000);
-                if (uc instanceof HttpURLConnection && ((HttpURLConnection) uc).getResponseCode() >= 400)
-                    throw new Exception("сервер ответил " + ((HttpURLConnection) uc).getResponseCode());
-                long total = uc.getContentLength(), got = 0;
-                MessageDigest md = MessageDigest.getInstance("SHA-256");
-                InputStream in = uc.getInputStream();
-                FileOutputStream out = new FileOutputStream(part);
-                byte[] buf = new byte[65536];
-                int n, last = -1;
-                while ((n = in.read(buf)) > 0) {
-                    out.write(buf, 0, n); md.update(buf, 0, n); got += n;
-                    int pct = total > 0 ? (int) (got * 100 / total) : -1;
-                    if (pct != last && (pct % 5 == 0 || pct < 0)) { last = pct; a.event("upd_progress", new JSONObject().put("pct", pct)); }
+            String err = "";
+            for (int t = 1; t <= 3; t++) {
+                try {
+                    long got = fetch(a, t == 1 ? url : url + (url.contains("?") ? "&" : "?") + "nc=" + System.currentTimeMillis(), sha256, part, t > 1);
+                    File f = apk(a);
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                    if (!part.renameTo(f)) throw new Exception("не удалось сохранить файл");
+                    a.event("upd_ready", new JSONObject().put("size", got).put("tries", t));
+                    return;
+                } catch (Exception e) {
+                    //noinspection ResultOfMethodCallIgnored
+                    part.delete();
+                    err = String.valueOf(e.getMessage());
+                    try { a.event("upd_retry", new JSONObject().put("try", t).put("error", err)); } catch (Exception ignored) { }
                 }
-                out.close(); in.close();
-                StringBuilder hex = new StringBuilder();
-                for (byte b : md.digest()) hex.append(String.format("%02x", b));
-                if (sha256 != null && !sha256.isEmpty() && !sha256.equalsIgnoreCase(hex.toString()))
-                    throw new Exception("файл пришёл повреждённым — попробуйте ещё раз");
-                File f = apk(a);
-                //noinspection ResultOfMethodCallIgnored
-                f.delete();
-                if (!part.renameTo(f)) throw new Exception("не удалось сохранить файл");
-                a.event("upd_ready", new JSONObject().put("size", got));
-            } catch (Exception e) {
-                //noinspection ResultOfMethodCallIgnored
-                part.delete();
-                try { a.event("upd_error", new JSONObject().put("error", String.valueOf(e.getMessage()))); } catch (Exception ignored) { }
             }
+            try { a.event("upd_error", new JSONObject().put("error", err)); } catch (Exception ignored) { }
         } });
         job.start();
+    }
+
+    private static long fetch(MainActivity a, String url, String sha256, File part, boolean fresh) throws Exception {
+        URLConnection uc = NetProxy.open(new URL(url));
+        uc.setConnectTimeout(15000); uc.setReadTimeout(60000);
+        if (fresh) { uc.setUseCaches(false); uc.setRequestProperty("Cache-Control", "no-cache"); uc.setRequestProperty("Pragma", "no-cache"); }
+        if (uc instanceof HttpURLConnection && ((HttpURLConnection) uc).getResponseCode() >= 400)
+            throw new Exception("сервер ответил " + ((HttpURLConnection) uc).getResponseCode());
+        long total = uc.getContentLength(), got = 0;
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        InputStream in = uc.getInputStream();
+        FileOutputStream out = new FileOutputStream(part);
+        try {
+            byte[] buf = new byte[65536];
+            int n, last = -1;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n); md.update(buf, 0, n); got += n;
+                int pct = total > 0 ? (int) (got * 100 / total) : -1;
+                if (pct != last && (pct % 5 == 0 || pct < 0)) { last = pct; a.event("upd_progress", new JSONObject().put("pct", pct)); }
+            }
+        } finally { out.close(); in.close(); }
+        if (total > 0 && got < total)
+            throw new Exception("связь оборвалась на " + (got * 100 / total) + "% — попробуйте ещё раз");
+        StringBuilder hex = new StringBuilder();
+        for (byte b : md.digest()) hex.append(String.format("%02x", b));
+        if (sha256 != null && !sha256.isEmpty() && !sha256.equalsIgnoreCase(hex.toString()))
+            throw new Exception("файл пришёл повреждённым (" + (got / 1024) + " КБ)");
+        return got;
     }
 
     /** Можно ли Dewiar открывать установщик (Android 8+: «Установка неизвестных приложений»). Сборка — против API 23,

@@ -111,7 +111,9 @@ class MusicMixin:
             except Exception:  # noqa: BLE001
                 log.debug("утро: город из памяти", exc_info=True)
         self._morning_last = d
-        lines = [f"Сегодня {now:%d.%m.%Y}, {morning.WD[now.weekday()]}, сейчас {now:%H:%M}."]
+        # №1056 (телефон, 25.11): «Среда началась. Сегодня четверг» — завтрашний день недели называем прямо
+        lines = [f"Сегодня {now:%d.%m.%Y}, {morning.WD[now.weekday()]} (завтра — {morning.WD[(now.weekday() + 1) % 7]}), "
+                 f"сейчас {now:%H:%M}."]
         if not d.get("weather"):
             lines.append("Погода: данных нет" + ("" if d.get("city") else " (город не задан)") + " — о погоде, температуре и городе "
                          "не говори ничего, не угадывай.")

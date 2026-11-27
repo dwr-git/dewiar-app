@@ -431,7 +431,11 @@ function netErr(e, url) {
   // веб-версия (пакет 30.10, iPhone: «связь с мозгом: Load failed») — так Safari называет любой обрыв запроса
   if (/^(?:TypeError:\s*)?(?:Load failed|Failed to fetch|NetworkError.*)$/i.test(e.trim()))
     return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась — слабая связь или страница была свёрнута";
-  if (/ECONNREFUSED|Connection refused|failed to connect|reset|closed|EOF|connection abort/i.test(e)) return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась";
+  // №1113 (26.11): «Не проверилось: unexpected end of stream on null» — так Android называет прокси, молча закрывший связь
+  // (свой, прокси Dewiar, прокси из настроек Wi-Fi или VPN). Телефон уже попробовал и напрямую — не вышло и так
+  if (/end of stream on null|response code for CONNECT|authenticate with proxy|SOCKS/i.test(e))
+    return "прокси на пути к серверу оборвал связь. Проверьте прокси в настройках Wi-Fi телефона (должно быть «Нет»), VPN-приложение и прокси в Dewiar: Настройки → Мозг → «Сеть»";
+  if (/ECONNREFUSED|Connection refused|failed to connect|reset|closed|EOF|end of stream|connection abort/i.test(e)) return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась";
   return e;
 }
 
@@ -1002,7 +1006,12 @@ async function dwProxyFetch(force) {
     S.net.dewiar_secret = normProxy(d.proxy || ""); S.net.dewiar_at = Date.now(); saveS();
     console.log("прокси Dewiar получен: " + hideProxy(S.net.dewiar_secret));
     return "";
-  } catch (e) { console.log("прокси Dewiar не получен: " + e.message); return e.message; }
+  } catch (e) {
+    // №1113: сайт ответил, что прокси не раздаётся (выключен администратором, а не сбой связи), — старый адрес больше не
+    // годится: с ним все запросы к Dewiar шли в мёртвый прокси, и обновить его было некому (запрос шёл туда же)
+    if (!e.net && S.net.dewiar_secret) { S.net.dewiar_secret = ""; S.net.dewiar_at = 0; saveS(); }
+    console.log("прокси Dewiar не получен: " + e.message); return e.message;
+  }
 }
 setTimeout(() => dwProxyFetch(false).catch(() => {}), 4000);
 /* socks5://user:pass@host:1080, http://host:3128, host:port, ссылка t.me/socks?… → адрес; MTProto — отказ (как на компьютере). */
@@ -1647,7 +1656,7 @@ function needPerm(name) {
    Сторож sttGuard: распознаватель телефона бывает «есть, но молчит» (планшеты без сервисов Google — Huawei и др.):
    не начал слушать за 4 с — переходим на сервер Dewiar насовсем (S.stt.auto) или честно говорим, что слуха нет;
    замолчал посреди (нет событий 15 с) или не отпускает после нажатия «стоп» — сами заканчиваем, кнопка не залипает. */
-let sttActive = false, heardPartial = "", sttWatch = null, sttStarted = false, sttVia = "", sttGen = 0, sttOnce = null;
+let sttActive = false, heardPartial = "", sttWatch = null, sttStarted = false, sttVia = "", sttGen = 0, sttOnce = null, sttStartAgain = false;
 function sttGuard(ms, why) { clearTimeout(sttWatch); sttWatch = ms ? setTimeout(() => sttStall(why), ms) : null; }
 /* Событие слуха из прежнего сеанса (поле g от Speech.java; после cancel ещё приходит «отменено») — не наше: иначе оно
    сбило бы новый сеанс, и кнопка осталась бы «слушаю». В браузере-заглушке поля g нет — принимаем всё. */
@@ -1688,7 +1697,7 @@ async function listen() {
   if (!server && !D.recognizer() && D.recognizerAny && D.recognizerAny()) D.useAnyRecognizer();   // №712: iPhone без входа — распознавание Safari
   if (!server && !D.recognizer()) {
     sttActive = false; setState("idle");
-    showBot("В этом устройстве нет распознавания речи. Войдите аккаунтом dewiar.pro (Настройки → Мозг) — слушать будет сервер Dewiar. Или напишите текстом.", "err"); return;
+    showBot("В этом устройстве нет распознавания речи. Войдите аккаунтом dewiar.pro (Настройки → Мозг): слушать будет сервер Dewiar, а ваша модель останется. Или напишите текстом.", "err"); return;
   }
   sttVia = server ? "server" : "system"; sttT0 = Date.now();
   plog("info", "слушаю: " + (server ? "сервер " + server.url.replace(/\?.*$/, "") : "распознавание телефона"));
@@ -1730,6 +1739,9 @@ function sttStall(why) {
   sttActive = false; D.cancelListen(); sttGen++;
   plog("warn", "распознавание: нет ответа (" + why + ", " + sttVia + ")");
   if (why === "start" && sttVia === "system" && !sttStarted) {
+    // №1128 (26.11, realme, Android 16: «первое сообщение уходит, на втором сразу ошибка»): распознаватель телефона завис —
+    // ни «готов», ни ошибки. Один раз сразу заново: Speech.java берёт новый распознаватель (прежний не дождался «готов»)
+    if (!sttStartAgain) { sttStartAgain = true; return listen(); }        // в журнале — «нет ответа» и сразу «слушаю»
     const c = Date.now() < sttSysUntil ? null : cloudEars();     // сервер сейчас не пускает — не ходим по кругу
     if (c) {
       // Первый раз — только этот вопрос слушает сервер (распознаватель мог просто долго подключаться к сети);
@@ -1743,14 +1755,14 @@ function sttStall(why) {
       return listen();
     }
     setState("idle"); showYou("");
-    showBot("Распознавание речи этого устройства не отвечает. Войдите аккаунтом dewiar.pro (Настройки → Мозг) — слушать будет сервер Dewiar. Или напишите текстом.", "err");
+    showBot("Распознавание речи этого устройства не отвечает. Войдите аккаунтом dewiar.pro (Настройки → Мозг): слушать будет сервер Dewiar, а ваша модель останется. Или напишите текстом.", "err");
     return;
   }
   if (holdTalk) { dictMore(heardPartial, true); return; }
   if (heardPartial || dict) { if (dictMore(heardPartial, false)) return; askHeard(dictTake(heardPartial)); return; }
   setState("idle"); showYou("");
 }
-const sttAlive = () => { sttStarted = true; sttRetry = 0; if (sttVia === "system" && S.stt.sysFails) { S.stt.sysFails = 0; saveS(); } if (sttActive) sttGuard(15000, "silent"); };
+const sttAlive = () => { sttStarted = true; sttRetry = 0; sttStartAgain = false; if (sttVia === "system" && S.stt.sysFails) { S.stt.sysFails = 0; saveS(); } if (sttActive) sttGuard(15000, "silent"); };
 N.on("stt_start", e => { if (sttMine(e)) sttAlive(); });
 N.on("stt_end", e => {
   if (!sttMine(e) || !sttActive) return;
@@ -1831,7 +1843,7 @@ N.on("stt_error", e => {
   }
   plog([6, 7, 5].includes(e.code) ? "info" : "warn", `распознавание (${sttVia}): ${e.code === 6 ? "речи не было" + (/громкость/.test(e.msg || "") ? " — " + String(e.msg).replace(/^[^(]*/, "") : "") : e.code === 7 ? "не расслышал" : "ошибка " + (e.code ?? "") + " " + (e.msg || "")}`);
   // распознаватель телефона сломался, не начав слушать (не запустился, нет сервиса, сеть) — слушает сервер Dewiar
-  if (sttVia === "system" && !sttStarted && ![6, 7].includes(e.code) && cloudEars() && Date.now() >= sttSysUntil) { sttActive = true; sttStall("start"); return; }
+  if (sttVia === "system" && !sttStarted && ![6, 7].includes(e.code) && cloudEars() && Date.now() >= sttSysUntil) { sttActive = true; sttStartAgain = true; sttStall("start"); return; }   // ответил ошибкой — не завис: сразу сервер (№1128 — только для молчания)
   // сервер не пустил (кончились талеры, лимит, ключ) — слушает сам телефон; сказанное пропало, просим повторить
   if (sttVia === "server" && STT_DENIED.test(String(e.msg || ""))) {
     const why = String(e.msg).replace(/^[^:]*:?\s*/, "").trim();
@@ -3406,7 +3418,7 @@ async function ask(text, opts = {}) {
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }
     if (turnAbort === ctl) frameAnswer(sink.text() || final);
-    netRecovered(); fsMark("answer"); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
+    netRecovered(); fsMark("answer"); hCount("turns"); hCount("net_ok"); pauseOk(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
     if (isRefused(sink.text() || final)) hCount("refused");
     if (S.llm.cloud) setTimeout(() => cloudBalance(false).catch(() => {}), 1500);
   } catch (e) {
@@ -3930,7 +3942,6 @@ function tmrDraw() {
     $(".fg", r).style.strokeDashoffset = String(Math.min(100, Math.max(0, 100 - left / all * 100))); });
   if (TMRS.every(x => +x.at < now - 1500)) tmrShow();
 }
-
 /* ---------- быстрые команды без модели (работают и без интернета) ---------- */
 /* -> {say, card?, silent? (не озвучивать), switchTo?/question? (передать другому персонажу)} или null — тогда решает модель.
    Фразы — только целиком (^…$): похожая, но длиннее просьба уходит модели, а не исполняется наполовину. */
@@ -9025,7 +9036,7 @@ function mindPrompt() {
 function syncSnapshot(st) {
   const out = {};
   JSON.parse(D.alarms() || "[]").forEach(x => { out["reminder:" + x.id] = Object.assign({ text: x.title || "", at: +x.at, kind: x.kind || "reminder", repeat: repToDict(x.repeat, x.at), paused: false },
-    x.note ? { note: x.note } : {}); });                // note — id заметки с фото и файлами (то же, что note:<id>)
+    x.note ? { note: x.note } : {}, x.who ? { who: x.who } : {}); });   // note — id заметки с фото и файлами; who — кто ставил
   notes().forEach(x => { out["note:" + x.id] = { title: x.title || "", text: x.text || "", folder: x.folder || "" };
     if (+x.time) Object.defineProperty(out["note:" + x.id], "t", { value: +x.time, enumerable: false }); });   // когда написана: старая копия не перебьёт новую
   money().forEach(x => { out["money:" + x.id] = { date: x.date, kind: x.kind, amount: +x.amount, currency: x.currency, category: x.category || "", note: x.note || "" }; });
@@ -9073,7 +9084,10 @@ function syncApply(it) {
     if (!d.repeat && +d.at < Date.now() - 300000 && !exists) return false;
     if (d.paused) { if (exists) D.alarmCancel(it.id); return true; }
     const was = exists ? JSON.parse(D.alarms() || "[]").find(x => x.id === it.id) : null, note = "note" in d ? d.note : was && was.note;
-    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) }, was && was.who ? { who: was.who } : {},   // №980: кто ставил — не теряем при правке с компьютера
+    // №980 (третий раз, 25.11): кто ставил — приходит с компьютера (d.who); нет — прежний; нет и его — тот, кто главный сейчас
+    // (S.persona), а не «текущий облик» уведомлений, который мог остаться от Патрика
+    const who = [d.who, was && was.who, S.persona].find(w => w && PERSONAS.some(p => p.id === w)) || "";
+    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) }, who ? { who } : {},
       note ? { note } : {})));
     if (d.kind === "timer") setTimeout(tmrShow, 0);
   } else if (it.kind === "note") {
@@ -9513,18 +9527,10 @@ function joinIds() {
 /* Автоподключение (0.69; владелец 29.10: «за наш счёт по умолчанию — важно, чтобы у пользователя всё работало сразу;
    взять хотя бы что-то для узнавания, контакт попросить позже»). Мозга нет, входа и заявки нет — заявка auto: модель
    телефона (или «веб-версия»), без контакта; сайт одобряет сам — ключ подключается сразу. Не чаще раза в час; нет сети —
-   при следующем вопросе. S.autoJoin === false — выключено. Контакт — позже, по желанию (contactAsk, «Мозг» → «Как к вам обращаться»). */
-/* После пяти удачных ответов на автоподключении — один раз (и ещё раз через 3 дня, если отложили) попросить контакт —
-   по желанию: «если что-то сломается — разработчик сможет ответить». Оставили — больше не спрашиваем. */
-function contactMaybe() {
-  if (!S.autoJoined || S.contactDone || !S.llm.cloud) return;
-  S.autoTurns = (S.autoTurns || 0) + 1;
-  if (S.autoTurns >= 5 && (S.contactAsks || 0) < 2 && Date.now() - (S.contactAsked || 0) > 3 * 864e5) {
-    S.contactAsked = Date.now(); S.contactAsks = (S.contactAsks || 0) + 1;
-    setTimeout(() => { if (!busy) showCard(contactCardHtml(true)); contactWire(); }, 6000);
-  }
-  saveS();
-}
+   при следующем вопросе. S.autoJoin === false — выключено. Контакт — только по желанию самого человека («Мозг» → «Как к вам обращаться»). */
+/* Контакт — только сам человек, когда захочет: «Мозг» → «Как к вам обращаться» и карточка пополнения. Сами не просим
+   (владелец 24.11: «первый вход в Лиру должен быть простой, лёгкий, приятный.. ничего от пользователей просить и требовать
+   не желательно»); до 1.0.69 после пяти ответов всплывало «Оставите контакт?». */
 function contactCardHtml(ask) {
   return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
     <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">
@@ -10639,7 +10645,13 @@ function updInstall() {
 }
 N.on("upd_progress", e => { const p = $("#upd-pct"); if (p) p.textContent = e.pct >= 0 ? e.pct + "%" : ""; });
 N.on("upd_ready", () => { plog("info", "⬇️ обновление скачано — открываю установку"); updInstall(); });
-N.on("upd_error", e => updRender(`Не скачалось: ${esc(e.error || "ошибка связи")}.<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"));
+// №1057: попытки и причина — в журнал (раньше отказ не оставлял следа в отчёте); три попытки не помогли — дорога портит
+// файл: путь в обход — скачать со страницы сайта в браузере
+N.on("upd_retry", e => plog("warn", `⬇️ обновление: попытка ${e.try} — ${e.error}`));
+N.on("upd_error", e => { plog("warn", `⬇️ обновление не скачалось: ${e.error}`);
+  updRender(`Не скачалось три раза: ${esc(e.error || "ошибка связи")}. Похоже, файл портит сеть — VPN, прокси или экономия трафика. `
+    + `Выключите их и попробуйте ещё раз — или скачайте Dewiar со страницы <b>dewiar.pro</b> в браузере и установите поверх: всё сохранится.`
+    + `<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && updWantInstall && D.updateCanInstall && D.updateCanInstall()) { updWantInstall = false; updInstall(); } });
 const UPD_OLD = `<p class="hint" style="margin:8px 2px 0">Раньше обновления скачивал браузер — в «Загрузках» могли остаться старые Dewiar-….apk, их можно удалить.</p><button class="btn w" id="upd-dl" style="margin-top:6px">Открыть Загрузки</button>`;
 /* «обновись» голосом: есть новее — открываем «О приложении» и запускаем обновление; нет — говорим, какая стоит.
@@ -10669,8 +10681,11 @@ async function updateSay(install) {
    2–3 дня, вручную — сразу»): сама предлагаю не раньше чем через 2 дня после того, как встала нынешняя версия, плюс своя
    случайная добавка телефона до суток. «Важное исправление» (urgent в latest.json) и «Проверить» в «О приложении» — сразу. */
 const UPD_EVERY = 2 * 86400000, UPD_JIT = 86400000;
+/* 1.0.71 («Первая минута», пакет 25.11: из новых телефонов только 3 % начали со свежей версии — старые APK ходят по рукам):
+   самая первая версия на этом телефоне (first) — новая сразу, без ритма; после первого обновления — обычный ритм. */
 function updDue(cur) {
-  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now() }; saveS(); }
+  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now(), first: !S.updSince }; saveS(); }
+  if (S.updSince.first) return 0;
   if (typeof S.updJit !== "number") { S.updJit = Math.random() * UPD_JIT; saveS(); }
   return S.updSince.at + UPD_EVERY + S.updJit;
 }
@@ -11100,6 +11115,11 @@ function handleIntent(e) {
   }
   else if (e.action === "link") { const m = /server=([^&]+)/.exec(e.url || ""); if (m) { openSettings("brain"); setTimeout(() => { const d = $(".brainalt"); if (d) d.open = true; $('.tile[data-w="pc"]').click(); $("#w-addr").value = decodeURIComponent(m[1]); }, 300); } }
 }
+/* №980, третий раз (владелец 25.11: «активная Лира — в уведомлении Патрик»): напоминания, пришедшие с компьютера до 0.9.92,
+   лежат без «кто ставил», и уведомление подписывалось «текущим обликом», оставшимся от Патрика. Один раз при запуске
+   подписываем такие главным персонажем сейчас; новые приходят с who (sync). */
+setTimeout(() => { try { const pid = S.persona; if (!pid || !PERSONAS.some(p => p.id === pid)) return;
+  JSON.parse(D.alarms() || "[]").filter(a => a && a.id && !a.who).forEach(a => D.alarmSet(JSON.stringify(Object.assign({}, a, { who: pid })))); } catch (e) { } }, 4000);
 /* ---------- «Близкие»: переписка между помощниками разных людей (как core/close.py; сервер — cloud.php ?p=/close/…) ----------
    Ключи устройства X25519 — в настройках приложения (prefs close_key); сообщения и файлы шифруются здесь же
    (closecrypto.js — тот же формат, что у компьютера); сервер видит только, кому и когда. Состояние и переписка — файл
@@ -13179,9 +13199,12 @@ function welcomePlan(now, seen, lastGreet, tasks, alarms, dstat, eveSaid) {
   return facts.length ? { kind: "back", facts, gone: goneTxt } : null;
 }
 function welcomePrompt(p) {
-  const d = new Date(), wd = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"][d.getDay()];
+  const W = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"], d = new Date();
+  // №1056 (25.11): «Среда началась. Сегодня четверг — значит, завтра викторина» — в памяти «викторины по четвергам», и
+  // модель сама считала, какой день завтра. Завтрашний день недели теперь называем прямо
+  const wd = W[d.getDay()], wd2 = W[(d.getDay() + 1) % 7];
   if (p.kind === "eve") return p.facts.join("\n") + `\n\n[Вечер, пользователь вернулся в приложение, не было ${p.gone}] Подведи итог дня: скажи, сколько дел он сегодня сделал, похвали тепло и конкретно (назови одно-два дела своими словами); если есть другие новости отсюда — одной фразой. 2–3 коротких предложения, без списков, без вопросов в конце, без инструментов.`;
-  if (p.kind === "day") return `Сегодня ${d.toLocaleDateString("ru-RU")}, ${wd}, сейчас ${pad(d.getHours())}:${pad(d.getMinutes())}.\n` + p.facts.join("\n")
+  if (p.kind === "day") return `Сегодня ${d.toLocaleDateString("ru-RU")}, ${wd} (завтра — ${wd2}), сейчас ${pad(d.getHours())}:${pad(d.getMinutes())}.\n` + p.facts.join("\n")
     + `\n\n[Пользователь открыл приложение — первый раз за день, не было ${p.gone}] Поздоровайся первым (в своём роде), по имени, если знаешь, и коротко скажи главное на сегодня из этих данных: погода (если есть), напоминания, что ждёт от сотрудников и клиентов, важные письма от людей, одна интересная новость из Радара (если есть). Не всё подряд — самое нужное; дела, которые он и так видит, не пересказывай целиком. 2–4 коротких предложения, живо и тепло, без списков, без вопросов в конце, без инструментов.`;
   return p.facts.join("\n") + `\n\n[Пользователь вернулся в приложение, не было ${p.gone}] Коротко поприветствуй и скажи главное из этого — 1–2 коротких предложения, живо, без списков и без вопросов в конце, без инструментов.`;
 }

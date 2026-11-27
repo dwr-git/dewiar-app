@@ -318,3 +318,8 @@ html.st-neu :is(.pd-st, .pd-h, .pd-src li, .pd-steps li, .pd-player, .pd-speed) 
 html.st-neu :is(.pd-st.on, .pd-steps li.now) { box-shadow: var(--press), inset 0 0 0 1.5px var(--accent); }
 html.st-neu .pd-h select, html.st-neu .pd-h select:focus { background-color: transparent; box-shadow: none; }
 html.st-neu .pd-ln.now { background: color-mix(in srgb, var(--c) 18%, var(--sk-glass)); }
+
+/* №1110 (26.11): ползунок громкости после щелчка оставался в рамке (общая подсветка полей ввода при фокусе) — у ползунков,
+   флажков и переключателей её нет; с клавиатуры — тонкая обводка, чтобы было видно, где фокус */
+html :is(input[type=range], input[type=checkbox], input[type=radio]):focus { background-color: transparent; box-shadow: none; outline: none; }
+html :is(input[type=range], input[type=checkbox], input[type=radio]):focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #8B8CF7) 55%, transparent); outline-offset: 3px; }

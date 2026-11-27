@@ -221,7 +221,13 @@ function updInstall() {
 }
 N.on("upd_progress", e => { const p = $("#upd-pct"); if (p) p.textContent = e.pct >= 0 ? e.pct + "%" : ""; });
 N.on("upd_ready", () => { plog("info", "⬇️ обновление скачано — открываю установку"); updInstall(); });
-N.on("upd_error", e => updRender(`Не скачалось: ${esc(e.error || "ошибка связи")}.<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"));
+// №1057: попытки и причина — в журнал (раньше отказ не оставлял следа в отчёте); три попытки не помогли — дорога портит
+// файл: путь в обход — скачать со страницы сайта в браузере
+N.on("upd_retry", e => plog("warn", `⬇️ обновление: попытка ${e.try} — ${e.error}`));
+N.on("upd_error", e => { plog("warn", `⬇️ обновление не скачалось: ${e.error}`);
+  updRender(`Не скачалось три раза: ${esc(e.error || "ошибка связи")}. Похоже, файл портит сеть — VPN, прокси или экономия трафика. `
+    + `Выключите их и попробуйте ещё раз — или скачайте Dewiar со страницы <b>dewiar.pro</b> в браузере и установите поверх: всё сохранится.`
+    + `<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && updWantInstall && D.updateCanInstall && D.updateCanInstall()) { updWantInstall = false; updInstall(); } });
 const UPD_OLD = `<p class="hint" style="margin:8px 2px 0">Раньше обновления скачивал браузер — в «Загрузках» могли остаться старые Dewiar-….apk, их можно удалить.</p><button class="btn w" id="upd-dl" style="margin-top:6px">Открыть Загрузки</button>`;
 /* «обновись» голосом: есть новее — открываем «О приложении» и запускаем обновление; нет — говорим, какая стоит.
@@ -251,8 +257,11 @@ async function updateSay(install) {
    2–3 дня, вручную — сразу»): сама предлагаю не раньше чем через 2 дня после того, как встала нынешняя версия, плюс своя
    случайная добавка телефона до суток. «Важное исправление» (urgent в latest.json) и «Проверить» в «О приложении» — сразу. */
 const UPD_EVERY = 2 * 86400000, UPD_JIT = 86400000;
+/* 1.0.71 («Первая минута», пакет 25.11: из новых телефонов только 3 % начали со свежей версии — старые APK ходят по рукам):
+   самая первая версия на этом телефоне (first) — новая сразу, без ритма; после первого обновления — обычный ритм. */
 function updDue(cur) {
-  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now() }; saveS(); }
+  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now(), first: !S.updSince }; saveS(); }
+  if (S.updSince.first) return 0;
   if (typeof S.updJit !== "number") { S.updJit = Math.random() * UPD_JIT; saveS(); }
   return S.updSince.at + UPD_EVERY + S.updJit;
 }
@@ -682,3 +691,8 @@ function handleIntent(e) {
   }
   else if (e.action === "link") { const m = /server=([^&]+)/.exec(e.url || ""); if (m) { openSettings("brain"); setTimeout(() => { const d = $(".brainalt"); if (d) d.open = true; $('.tile[data-w="pc"]').click(); $("#w-addr").value = decodeURIComponent(m[1]); }, 300); } }
 }
+/* №980, третий раз (владелец 25.11: «активная Лира — в уведомлении Патрик»): напоминания, пришедшие с компьютера до 0.9.92,
+   лежат без «кто ставил», и уведомление подписывалось «текущим обликом», оставшимся от Патрика. Один раз при запуске
+   подписываем такие главным персонажем сейчас; новые приходят с who (sync). */
+setTimeout(() => { try { const pid = S.persona; if (!pid || !PERSONAS.some(p => p.id === pid)) return;
+  JSON.parse(D.alarms() || "[]").filter(a => a && a.id && !a.who).forEach(a => D.alarmSet(JSON.stringify(Object.assign({}, a, { who: pid })))); } catch (e) { } }, 4000);

@@ -39,9 +39,9 @@ STAGES = ("heard", "route", "prompt", "model", "acts", "checks", "answer")
 CMD_NAMES = {
     "_music_cmd": "Музыка и радио", "_mine_cmd": "Своя музыка", "_radio_url_cmd": "Радио по ссылке",
     "_weather_cmd": "Погода", "_clock_cmd": "Часы и дата", "_timer_cmd": "Таймер", "_money_cmd": "Деньги",
-    "_job_cmd": "Работа", "_vault_cmd": "Сейф", "_home_cmd": "Умный дом", "_pc_cmd": "Компьютер",
+    "_job_cmd": "Работа", "_disk_cmd": "Место на диске", "_vault_cmd": "Сейф", "_home_cmd": "Умный дом", "_pc_cmd": "Компьютер",
     "_window_cmd": "Окна", "_speed_cmd": "Скорость речи", "_bug_cmd": "Сообщить об ошибке", "_draft_cmd": "Черновик книги",
-    "_mail_table_cmd": "Таблица по почте", "_youtube_cmd": "YouTube", "_send_cmd": "Сообщение близкому",
+    "_mail_table_cmd": "Таблица по почте", "_youtube_cmd": "YouTube", "_open_link_cmd": "Ссылка из ответа", "_send_cmd": "Сообщение близкому",
     "_call_cmd": "Звонок близкому", "_plan_cmd": "План дня", "_task_del_cmd": "Удалить задачу", "_mark_cmd": "Отметка дела",
     "_direct_call": "Позвать персонажа", "_direct_update": "Обновление", "_direct_look": "Образ персонажа",
 }
@@ -138,6 +138,20 @@ def note_route(name):
         xr["route"] = {"kind": "cmd", "name": name, "label": CMD_NAMES.get(name, name.strip("_").replace("_", " "))}
 
 
+def quick_act(engine, name):
+    """Опыт 6 (аудит Fable 25.11): быстрая команда сделала дело без модели (дело по расписанию, диск, радио) — в журнал хода
+    та же запись, что у действия модели: рентген, ворота ответа (ledger), экзамен и история видят одно. Событие «quick»
+    (виджет и студия его не показывают). Команда сама вызвала действие (tool) — запись уже есть, второй не пишем."""
+    xr = current()
+    if engine is None or xr is None or xr["acts"]:
+        return
+    ans = (xr.get("answer") or {}).get("text") or ""
+    try:
+        engine.emit("quick", name=name, title=CMD_NAMES.get(name, name.strip("_").replace("_", " ")), result=ans[:300])
+    except Exception:  # noqa: BLE001
+        log.debug("рентген: быстрая команда", exc_info=True)
+
+
 def turned(xr):
     """Вопрос ушёл модели (ход turn-N)."""
     if xr is not None and not xr["route"]:
@@ -193,6 +207,10 @@ def event(type_, kw):
     try:
         if type_ == "tool" and kw.get("args") and kw.get("status") not in ("done", "error", "declined"):
             xr.setdefault("_args", {})[str(kw.get("name") or "")] = kw.get("args")      # с чем вызвано — из начала
+        if type_ == "quick" and len(xr["acts"]) < 40:   # быстрая команда (quick_act) — как действие, сделано программой
+            xr["acts"].append({"name": "cmd:" + str(kw.get("name") or "").strip("_"), "title": str(kw.get("title") or "")[:160],
+                               "ok": True, "quick": True, "args": "", "result": _short(kw.get("result")),
+                               "t": round(time.monotonic() - xr["_t0"], 2)})
         if type_ == "tool" and kw.get("status") in ("done", "error", "declined"):
             if len(xr["acts"]) < 40:
                 xr["acts"].append({"name": str(kw.get("name") or ""), "title": str(kw.get("title") or kw.get("name") or "")[:160],
@@ -312,10 +330,10 @@ def instrument(engine):
             continue
         if not ps or ps[0] not in ("text", "t", "q", "phrase"):
             continue
-        setattr(engine, name, _wrap(name, fn))
+        setattr(engine, name, _wrap(name, fn, engine))
 
 
-def _wrap(name, fn):
+def _wrap(name, fn, engine=None):
     def w(*a, **k):
         d = getattr(_tl, "depth", 0)
         _tl.depth = d + 1
@@ -325,6 +343,7 @@ def _wrap(name, fn):
             _tl.depth = d
         if r and d == 0:
             note_route(name)
+            quick_act(engine, name)
         elif r:
             xr = current()
             if xr is not None and name not in xr["path"]:

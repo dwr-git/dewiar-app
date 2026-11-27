@@ -319,43 +319,43 @@ with sync_playwright() as pw:
     except Exception:  # noqa: BLE001
         pass
     nav = lambda: st.evaluate("() => [...document.querySelectorAll('#nav-plugins .nav-plg')].filter(b => b.offsetParent).map(b => b.querySelector('span').textContent.trim())")
-    ok(st.is_visible("#nav-plg-h") and sorted(nav()) == sorted(["Художник", "Кухня", "Рекрутер", "Тендеры"]), f"в меню — группа «Плагины» с установленными: {nav()}")
+    ok(st.is_visible("#nav-plg-h") and sorted(nav()) == sorted(["Художник", "Кухня", "Рекрутер", "Заказы и тендеры"]), f"в меню — группа «Плагины» с установленными: {nav()}")
     st.evaluate("() => core.call('plugin_install', { id: 'travel', values: {} }).then(plgSet)"); st.wait_for_timeout(600)
     ok("Путешествие" in nav(), f"установили «Путешествие» — пункт меню появился сразу: {nav()}")
     # «Тендеры»: форма из inputSchema с человеческими подписями
     st.click('#nav-plugins [data-plg="tenders"]'); st.wait_for_timeout(1200)
-    ok(st.evaluate("document.querySelector('#p-plg').classList.contains('cur')") and "Тендеры" in st.inner_text("#plp-head h1")
+    ok(st.evaluate("document.querySelector('#p-plg').classList.contains('cur')") and "тендеры" in st.inner_text("#plp-head h1")
        and st.evaluate("document.querySelector('#nav-plugins [data-plg=\"tenders\"]').classList.contains('cur')"), "пункт меню открывает страницу плагина")
     head = st.inner_text("#plp-head")
     ok("Работает" in head and "Перезапустить" in head, f"шапка: состояние «Работает», «Перезапустить»: {head[:120]}")
-    ok(st.inner_text("#plp .plp-tabs").startswith("Лента тендеров"), "у «Тендеров» первой — своя страница (лента)")
+    ok(st.inner_text("#plp .plp-tabs").startswith("Лента заказов"), "у «Тендеров» первой — своя страница (лента)")
     st.click('#plp .plp-tabs [data-tab="do"]'); st.wait_for_timeout(300)
     body = st.inner_text("#plp-body")
-    ok("Найти новые тендеры" in body and "Найденные тендеры" in body and "Только непросмотренные" in body and "Балл не ниже" in body,
+    ok("Найти новые заказы" in body and "Найденные заказы" in body and "Только непросмотренные" in body and "Балл не ниже" in body,
        "карточки действий и поля — человеческими словами")
     ok(not re.search(r"\b(tenders_\w+|only_new|min_score|limit|query)\b", body), "нет сырых имён действий и полей")
     ok(st.evaluate("!!document.querySelector('[data-tool=\"tenders_list\"] input[type=checkbox][data-a=\"only_new\"]') && !!document.querySelector('[data-tool=\"tenders_list\"] input[type=number][data-a=\"limit\"]')"),
        "boolean — переключатель, integer — число")
     ok("Отметить тендеры" not in body, "действие только для помощницы (отметить по id) на странице не показано")
-    ok("Разобрать тендер" in body and "Есть новые тендеры?" in body, "«Попросить Лиру» и «Сказать Лире» — на месте")
+    ok("Разобрать заказ" in body and "Есть новые заказы?" in body, "«Попросить Лиру» и «Сказать Лире» — на месте")
     st.click('[data-tool="tenders_list"] [data-run]'); st.wait_for_timeout(1500)
     out = st.inner_text('[data-tool="tenders_list"] .plp-out')
     ok("Всего" in out and "0" in out, f"«Показать» — результат: {out[:100]!r}")
     ok(any(c[0] == "plugin_run" and c[1]["tool"] == "tenders_list" and c[1]["args"].get("only_new") is False for c in st.evaluate("calls")),
        "«Выполнить» — plugin_run напрямую, переключатель уходит явно")
-    st.click('[data-say="Есть новые тендеры?"]'); st.wait_for_timeout(200)
-    ok(st.evaluate("asked").count("Есть новые тендеры?") == 1, "фраза «Сказать Лире» — в «Чат»")
-    st.fill('.plp-ask [data-q="какой"]', "первый"); st.click(".plp-ask [data-askgo]"); st.wait_for_timeout(200)
-    ok("Разбери тендер первый — стоит ли участвовать?" in st.evaluate("asked"), "«Попросить Лиру» — фраза из формы в «Чат»")
+    st.click('[data-say="Есть новые заказы?"]'); st.wait_for_timeout(200)
+    ok(st.evaluate("asked").count("Есть новые заказы?") == 1, "фраза «Сказать Лире» — в «Чат»")
+    st.locator('.plp-ask [data-q="какой"]').first.fill("первый"); st.locator(".plp-ask [data-askgo]").first.click(); st.wait_for_timeout(200)
+    ok("Разбери заказ первый — стоит ли браться?" in st.evaluate("asked"), "«Попросить Лиру» — фраза из формы в «Чат»")
     # своя страница «Тендеров»: найти (сохранённые страницы площадок), лента с фильтрами, карточка, отметки, запросы
     st.evaluate("() => { window.opened = []; window.openExt = (u) => opened.push(u); }")
     st.click('#plp .plp-tabs [data-tab="page"]'); st.wait_for_timeout(2500)
     tf = st.query_selector("#plp-frame").content_frame()
     tfl = st.frame_locator("#plp-frame")
-    ok("Тендеров пока нет" in tfl.locator("#rows").text_content() or tfl.locator(".trow").count() > 0, "лента тендеров открылась")
+    ok("Заказов пока нет" in tfl.locator("#rows").text_content() or tfl.locator(".trow").count() > 0, "лента тендеров открылась")
     tfl.locator("#scan").click(); st.wait_for_timeout(4000)
     n_rows = tfl.locator(".trow").count()
-    ok(n_rows >= 3 and "Новых тендеров" in tfl.locator("#msg").text_content(), f"«Найти новые тендеры» — лента: {n_rows}, {tfl.locator('#msg').text_content()!r}")
+    ok(n_rows >= 3 and "Новых заказов" in tfl.locator("#msg").text_content(), f"«Найти новые тендеры» — лента: {n_rows}, {tfl.locator('#msg').text_content()!r}")
     tfl.locator(".trow").first.click(); st.wait_for_timeout(800)
     det = tfl.locator("#detail").text_content()
     ok("Что закупают" in det and "Заказчик" in det and "Срок подачи" in det and "Почему" in det, f"карточка тендера: {det[:200]!r}")
@@ -377,6 +377,8 @@ with sync_playwright() as pw:
     tfl.locator('.tabs [data-tab="board"]').click(); st.wait_for_timeout(500)
     ok("1" in tfl.locator('.col[data-col="watching"] h4').text_content() and tfl.locator('.col[data-col="watching"] .kc').count() == 1, "воронка: «Интересно» — отмеченный тендер")
     tfl.locator('.tabs [data-tab="q"]').click(); st.wait_for_timeout(800)
+    ok(tfl.locator("[data-preset]").count() >= 3, "«Мои запросы» → «Площадки»: готовые биржи одним нажатием (25.11)")
+    tfl.locator("#qgrid .qcard").last.screenshot(path="/tmp/claude-0/tenders_presets.png")
     tfl.locator('[data-add="plus"]').fill("монтаж"); tfl.locator('[data-addb="plus"]').click()
     for _ in range(80):                                   # сервер плагина перезапускается с новыми настройками
         st.wait_for_timeout(250)
@@ -514,7 +516,7 @@ with sync_playwright() as pw:
     st.evaluate("() => plgDrawer('tenders')"); st.wait_for_timeout(200)
     ok(st.is_visible("#pld-page"), "в панели плагина — «Открыть страницу плагина»")
     st.click("#pld-page"); st.wait_for_timeout(1000)
-    ok(st.evaluate("document.querySelector('#p-plg').classList.contains('cur')") and "Тендеры" in st.inner_text("#plp-head h1"), "— и она открывается")
+    ok(st.evaluate("document.querySelector('#p-plg').classList.contains('cur')") and "тендеры" in st.inner_text("#plp-head h1"), "— и она открывается")
     # не запустился — причина и «Перезапустить»
     keep = mgr.servers
     srv = M.Server("tenders-main", {"plugin": "tenders"}); srv.status, srv.error = "error", "сервер MCP завершился"

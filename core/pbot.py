@@ -101,6 +101,13 @@ class PersonaBot(Telegram):
             p = None
         return p or {}
 
+    def log_clear(self):
+        """«Что спрашивали» → «Очистить» (№1134, 27.11): только список; счётчики «сегодня» и «всего» остаются."""
+        with self._lock:
+            self.data["log"] = []
+            self._save()
+        return self.public()
+
     def public(self):
         d = self.data
         p = self.persona()
@@ -351,7 +358,7 @@ class PersonaBot(Telegram):
             self._save()
 
     # ---------- ответ ----------
-    def build(self, text, chat_id=None, group_title="", who=""):
+    def build(self, text, chat_id=None, group_title="", who="", info=None):
         """Системная подсказка и сообщения для модели -> (профиль, system, messages). Только характер, знания и этот чат."""
         p = self.persona()
         name = p.get("name") or "Ассистент"
@@ -364,10 +371,12 @@ class PersonaBot(Telegram):
         h = [x for x in self.hist.get(chat_id, ()) if now - x[0] < HIST_TTL]
         hist = [{"role": r, "content": t} for _, r, t in h]
         try:
-            kb = self.host._persona_knowledge(text, None, p=p, quiet=True, hist=hist[-4:])
+            kb = self.host._persona_knowledge(text, None, p=p, quiet=True, hist=hist[-4:], info=info)
         except Exception as e:  # noqa: BLE001
-            log.info("Бот персонажа: знания не ответили: %s", e)
+            log.warning("Бот персонажа: знания не ответили: %s", e)
             kb = ""
+            if info is not None:
+                info.setdefault("errs", []).append(f"знания не ответили: {e}")
         if kb:
             system += kb
         user = f"{who}: {text}" if group_title and who else text
@@ -436,9 +445,13 @@ class PersonaBot(Telegram):
             log.warning("Бот персонажа: не отправилось: %s", e)
             self.problem = str(e)
 
-    def test_answer(self, text):
-        """«Проверить» в студии: как персонаж ответит незнакомцу (без Telegram) -> текст."""
+    def test(self, text):
+        """«Проверить ответ» в студии: как персонаж ответит незнакомцу (без Telegram) и что нашлось в знаниях ->
+        {"answer", "kb": {"found", "empty", "errs"}}. Письмо 25.11: «в „Проверить ответ“ не видит Библию» — по вопросу
+        «Что ты знаешь?» в базе ничего не находится; строка под ответом теперь говорит это прямо."""
         from llm import stream_chat
-        prof, system, msgs = self.build(text)
-        return plain("".join(stream_chat(dict(prof, max_tokens=700, temperature=0.7), system, msgs))) or "(пустой ответ)"
+        info = {}
+        prof, system, msgs = self.build(text, info=info)
+        ans = plain("".join(stream_chat(dict(prof, max_tokens=700, temperature=0.7), system, msgs))) or "(пустой ответ)"
+        return {"answer": ans, "kb": info}
 

@@ -10,6 +10,14 @@
 /* Markdown -> HTML для текста, который пишет модель, пользователь или сайт. Безопасность: весь текст сначала проходит
    escH, разметка добавляется поверх; ссылки — только http(s), [[вики-ссылки]] — a.wl с href "wiki:…" (их ловит memory.js).
    Код и ссылки прячутся за метки \u0001n\u0001, чтобы *, _ и # внутри них не стали разметкой (mdInline). */
+/* Длинная ссылка — «сайт/начало/…/конец» (полностью — в подсказке и при копировании): в ответе она не разъезжается. */
+function shortUrl(u) {
+  const s = String(u).replace(/^https?:\/\/(www\.)?/i, "");
+  if (s.length <= 60) return s;
+  const [path] = s.split(/[?#]/), parts = path.split("/").filter(Boolean), host = parts.shift() || "";
+  let out = host + (parts.length ? "/" + parts[0] : "") + (parts.length > 2 ? "/…" : "") + (parts.length > 1 ? "/" + parts[parts.length - 1] : "") + (path !== s ? "?…" : "");
+  return out.length > 70 ? out.slice(0, 68) + "…" : out;
+}
 function mdInline(t) {
   /* Четвёртая рецензия: атрибуты — только из своего экранированного текста. Раньше код `…` раскрывался и внутри href
      (\u0000 из входа не вырезался), а **жирный** резал адрес ссылки тегом. Теперь, как в блокноте (assets/padmd.js):
@@ -24,6 +32,10 @@ function mdInline(t) {
   t = t.replace(/`([^`]+)`/g, (_, c) => put(`<code>${escH(c)}</code>`));
   t = t.replace(/\[\[([^\]|\u0001]+)(?:\|([^\]]+))?\]\]/g, (_, a, b) => put(`<a class="wl" href="wiki:${encodeURIComponent(a.trim())}">${open(emph(escH(b || a)))}</a>`));
   t = t.replace(/\[([^\]]+)\]\((https?:[^)\s\u0001]+)\)/g, (_, a, u) => put(`<a href="${escH(u)}" target="_blank">${open(emph(escH(a)))}</a>`));
+  // голая ссылка в ответе — тоже ссылка (26.11, владелец: «ссылка не нажимается в ответе Лиры»); длинная — короче, целиком — в подсказке
+  t = t.replace(/(^|[\s(«"'])(https?:\/\/[^\s<>«»"'`\u0001]*[^\s<>«»"'`\u0001.,;:!?)])/g,
+    (_, pre, u) => pre + put(u.length <= 60 ? `<a href="${escH(u)}" target="_blank">${escH(u)}</a>`
+      : `<a href="${escH(u)}" target="_blank" title="${escH(u)}">${escH(shortUrl(u))}</a>`));
   t = escH(t).replace(/(^|\s)#([\p{L}\p{N}_-]{2,40})/gu, '$1<span class="tag">#$2</span>');
   return open(emph(t));
 }

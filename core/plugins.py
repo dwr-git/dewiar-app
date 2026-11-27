@@ -41,7 +41,9 @@ log = logging.getLogger("dewiar.plugins")
 BUILTIN_DIR = DATA_DIR / "plugins"
 USER_DIR = CONFIG_DIR / "plugins"
 MAX_ZIP = 20 * 1024 * 1024
-SET_TYPES = ("text", "select", "number", "toggle", "folder")   # folder — путь с кнопкой «Выбрать папку…» (№461)
+SET_TYPES = ("text", "select", "number", "toggle", "folder", "secret", "list")   # list — по строке на пункт (26.11)   # folder — путь с кнопкой «Выбрать папку…» (№461)
+# secret — ключ или токен (25.11, плагин Jira): поле со звёздочками; уходит только серверу плагина (DEWIAR_PLUGIN_SETTINGS),
+# но не в текст навыка и не в поручения дел — модель его не видит
 # данные Лиры, которые странице плагина можно попросить (только с разрешения человека; core/plugin_bridge.py)
 DATA_SCOPES = {"notes": "заметки", "reminders": "напоминания и дела", "money": "расходы и доходы",
                "chat_stats": "статистику разговоров — сколько, когда, с кем, о чём (без текста)", "chat": "текст переписки с Лирой"}
@@ -168,6 +170,10 @@ def parse_plugin(d: Path, builtin: bool):
                       if isinstance(x, dict) and x.get("label") and x.get("path") and ".." not in str(x.get("path"))
                       and not str(x.get("path")).startswith(("/", "\\")) and ":" not in str(x.get("path"))][:3],
             "ui": parse_ui(m.get("ui")), "page": (d / "ui.html").is_file(),
+            # события на «Пульт» (26.11, core/plugin_watch.py): своё действие, которое ядро зовёт само раз в every минут
+            "watch": {"tool": str(m["watch"]["tool"]), "every": max(1, min(240, int(m["watch"].get("every") or 10)))}
+            if isinstance(m.get("watch"), dict) and re.fullmatch(r"[\w.-]{1,64}", str(m["watch"].get("tool") or ""))
+            and str(m["watch"].get("every") or "10").isdigit() else None,
             "data": [x for x in dict.fromkeys(str(s) for s in (m.get("data") or []) if isinstance(m.get("data"), list)) if x in DATA_SCOPES],
             "theme": m.get("theme") is True,
             # сделан Лирой по описанию (Creator, 03.11): только свой (не встроенный), код — только с согласия человека
@@ -402,7 +408,7 @@ class Plugins:
             return ""
         vals = self.values(pid)
         parts = [f"{s['label']} — {('да' if vals.get(s['key']) else 'нет') if s['type'] == 'toggle' else vals.get(s['key'])}"
-                 for s in p["settings"] if vals.get(s["key"]) not in ("", None) or s["type"] == "toggle"]
+                 for s in p["settings"] if s["type"] != "secret" and (vals.get(s["key"]) not in ("", None) or s["type"] == "toggle")]
         return f"\n\nНастройки плагина «{p['name']}»: " + "; ".join(parts) + "." if parts else ""
 
     def catalog(self):
@@ -480,6 +486,11 @@ class Plugins:
                     continue
             elif s["type"] == "select" and s["options"] and str(v) not in s["options"]:
                 continue
+            elif s["type"] == "secret":
+                out[s["key"]] = "".join(str(v).split())[:2000]
+            elif s["type"] == "list":
+                items = [x.strip() for x in re.split(r"\n", str(v)) if x.strip()]
+                out[s["key"]] = "\n".join(x[:600] for x in items[:30])
             else:
                 out[s["key"]] = " ".join(str(v).split())[:200]
         return out
@@ -502,7 +513,9 @@ class Plugins:
         j = next((x for x in (p or {}).get("jobs") or [] if x["id"] == jid), None)
         if not j:
             raise PluginError("нет такого дела у плагина")
-        vals, fb = self.values(pid), fallback or {}
+        secret = {s["key"] for s in p["settings"] if s["type"] == "secret"}
+        vals = {k: v for k, v in self.values(pid).items() if k not in secret}
+        fb = fallback or {}
         task = re.sub(r"\{(\w+)\}", lambda m: str(vals.get(m.group(1)) or fb.get(m.group(1)) or "…"), j["task"])
         return task, j["when"]
 

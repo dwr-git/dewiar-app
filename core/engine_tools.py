@@ -355,6 +355,8 @@ class ToolsMixin(ConfirmMixin, QuickMixin, AlarmMixin, DevicesMixin, DayMixin):
                  "понял", "поняла", "понятно", "хорошо", "ок", "окей", "ладно", "готово", "сделал", "сделала", "выключи",
                  "выключай", "отключи", "спасибо", "да", "встаю", "встал", "встала", "иду", "всё", "все"}
 
+    REMIND_ASK = re.compile(r"\b(?:напомни|напомина|напомнить|разбуди|будильник|таймер|засеки)", re.I)
+
     def _route(self, text):
         """Главный помощник передаёт вопрос специалисту команды (код — Кодеру, письмо — Лире, «включи» — Джарвису…).
         Только если сейчас говорит главный и в студии включено «Команда специалистов». → id или None."""
@@ -370,6 +372,10 @@ class ToolsMixin(ConfirmMixin, QuickMixin, AlarmMixin, DevicesMixin, DayMixin):
         if not own or len(own) > ROUTE_MAX or own.count("\n") > 6:
             return None
         low = _norm(own)
+        # №980, четвёртый раз (26.11): «напомни обсудить…», «напомни определиться…» уходили Патрику («обсуд», «определиться»),
+        # и напоминание приходило на телефон от него. Напоминание, будильник, таймер — дело главного, не тема для специалиста
+        if self.REMIND_ASK.search(low):
+            return None
         order = ["agent", "lira", "jarvis", "eva", "patrik"]
         others = sorted((p for p in self.personas.all() if p.get("route") and p["id"] != cur["id"]),
                         key=lambda p: order.index(p["id"]) if p["id"] in order else -1)   # свои и из галереи — первыми

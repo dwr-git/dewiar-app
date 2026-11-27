@@ -337,6 +337,8 @@ function openTopup() {
 }
 window.studioGo = (p) => {
   if (p === "topup") return openTopup();
+  // «plg:<id>» (26.11): событие плагина на «Пульте» или в виджете — сразу страница плагина
+  if (/^plg:[\w-]+$/.test(String(p || "")) && typeof hmOpen === "function") return hmOpen(String(p));
   // «insight:<id>» (12.11): весточка Радара в виджете — сразу материал в «читалке» Радара
   const m = /^insight:([\w-]+)$/.exec(String(p || "")); if (m) p = "insight";
   const sb = /^sites-blog:([\w-]+)$/.exec(String(p || "")); if (sb) p = "sites";      // 0.93: черновик статьи — сразу «Статьи» сайта
@@ -881,6 +883,7 @@ core.on("hello", d => {
   else if (q.get("address")) { $("#c-addr").value = q.get("address"); preview({ address: q.get("address") }); }
   else if (q.get("note") && !DW.noteShown) { DW.noteShown = true; ntGoto(q.get("note")); }    // заметка из окна напоминания
   else if (location.hash === "#topup") setTimeout(openTopup, 300);
+  else if (!DW.hashLoaded && /^#plg:[\w-]+$/.test(location.hash)) { DW.hashLoaded = true; setTimeout(() => window.studioGo(location.hash.slice(1)), 300); }
   else if (!S.llm.active && !location.hash) $('nav button[data-p="brain"]').click();
   // владелец 17.11: «из блокнота „Всё облако — в студии“ — „Мои файлы“ пустые, а через другой раздел — всё есть». Студию
   // открыли сразу на разделе (#docs): кнопку раздела нажали при загрузке, ещё до связи с ядром (S нет — данные раздела не
