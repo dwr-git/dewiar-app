@@ -94,6 +94,13 @@ function pbToKb() {
 
 function pbLog(d) {
   $("#bp-stat").textContent = d.connected ? `сегодня ${d.today} · всего ${d.total}` : "";
+  // №1134 (27.11): «раздел „Что спрашивали“ должен иметь вариант удаления» — очистить список (счётчики остаются)
+  const x = $("#bp-logx");
+  if (x) {
+    x.hidden = !(d.log || []).length;
+    x.onclick = async () => { if (!await ask("Очистить «Что спрашивали»? Вопросы и ответы пропадут из списка, бот продолжит отвечать.", { ok: "Очистить" })) return;
+      try { pbLog(await core.call("pbot_log_clear")); toast("Очищено"); } catch (e) { toast(e.message, 4500); } };
+  }
   $("#bp-chats").innerHTML = (d.chats || []).length ? `<span>Группы:</span>` + d.chats.map(c => `<em>${pbEsc(c.title)}</em>`).join("") : "";
   const when = (t) => new Date(t * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   $("#bp-log").innerHTML = (d.log || []).length ? d.log.map(x => `<li><div class="bp-lq"><b>${pbEsc(x.who)}</b>${x.chat ? `<span>в «${pbEsc(x.chat)}»</span>` : ""}<small>${when(x.t)}</small></div>`

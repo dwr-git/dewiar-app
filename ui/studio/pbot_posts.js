@@ -57,12 +57,16 @@ function ppRender() {
     const acts = st === "wait" ? `<button class="btn small primary" data-ok="${ppE(p.id)}">${p.at && new Date(p.at) > new Date() ? "Одобрить" : "Опубликовать"}</button><button class="btn small" data-ed="${ppE(p.id)}">Править</button><button class="btn small" data-del="${ppE(p.id)}">Убрать</button>`
       : st === "plan" ? `<button class="btn small" data-ed="${ppE(p.id)}">Править</button><button class="btn small" data-del="${ppE(p.id)}">Отменить</button>`
       : st === "failed" ? `<button class="btn small" data-ok="${ppE(p.id)}" data-again="1">Ещё раз</button><button class="btn small" data-del="${ppE(p.id)}">Убрать</button>`
-      : (link ? `<a class="btn small" href="${ppE(link.link)}" target="_blank" rel="noopener">Открыть</a>` : "");
-    return `<article class="pp-post st-${st}"><div class="pp-body">${p.poll ? `<b class="pp-poll">Опрос: ${ppE(p.poll.question)}</b><small>${p.poll.options.map(ppE).join(" · ")}</small>` : ""}`
+      // №1134 (27.11): «опубликованные должны иметь вариант удаления, чтобы не было их накопления» — убрать из списка
+      : (link ? `<a class="btn small" href="${ppE(link.link)}" target="_blank" rel="noopener">Открыть</a>` : "") + `<button class="btn small" data-del="${ppE(p.id)}" data-sent="1">Убрать</button>`;
+    return `<article class="pp-post st-${st}"><div class="pp-body">${p.poll ? `<b class="pp-poll">${Number.isInteger(p.poll.correct) ? "Викторина" : "Опрос"}: ${ppE(p.poll.question)}</b><small>${p.poll.options.map((o, i) => ppE(o) + (i === p.poll.correct ? " ✓" : "")).join(" · ")}</small>` : ""}`
       + (p.text ? `<p>${ppE(p.text)}</p>` : "") + `<small class="pp-meta">${meta}</small>${p.err ? `<small class="pp-err">${ppE(p.err)}</small>` : ""}</div><div class="pp-acts">${acts}</div></article>`;
   }).join("")).join("") || `<p class="co-tip">Постов пока нет.</p>`;
   $$("#pp-list [data-ok]").forEach(b => b.onclick = () => ppCall(b.dataset.again ? "pbot_post_retry" : "pbot_post_ok", { id: b.dataset.ok }, "Готово"));
-  $$("#pp-list [data-del]").forEach(b => b.onclick = async () => { if (await ask("Убрать этот пост? В Telegram он не уйдёт.", { ok: "Убрать" })) ppCall("pbot_post_del", { id: b.dataset.del }); });
+  $$("#pp-list [data-del]").forEach(b => b.onclick = async () => {
+    const q = b.dataset.sent ? "Убрать из списка? В Telegram пост останется — удалить его там можно в самом канале." : "Убрать этот пост? В Telegram он не уйдёт.";
+    if (await ask(q, { ok: "Убрать" })) ppCall("pbot_post_del", { id: b.dataset.del });
+  });
   $$("#pp-list [data-ed]").forEach(b => b.onclick = async () => {
     const p = d.posts.find(x => x.id === b.dataset.ed); if (!p) return;
     const t = await askText("Текст поста", p.text, { ok: "Сохранить", multi: true }); if (t !== null && t !== undefined && t.trim() !== p.text) ppCall("pbot_post_edit", { id: p.id, text: t }, "Сохранено");
@@ -76,7 +80,7 @@ function ppRender() {
 function ppComp() {
   $("#pp-comp").innerHTML = `<div class="pp-topic"><input type="text" id="pp-topic" maxlength="300" placeholder="О чём пост — например: как заваривать улун" aria-label="Тема поста"><button class="btn small" type="button" id="pp-write">Придумать</button></div>`
     + `<textarea id="pp-text" rows="5" maxlength="4096" placeholder="Текст поста — напишите сами или нажмите «Придумать»" aria-label="Текст поста"></textarea>`
-    + `<div class="pp-pollf" id="pp-pollf" hidden><input type="text" id="pp-pq" maxlength="300" placeholder="Вопрос опроса" aria-label="Вопрос опроса"><textarea id="pp-po" rows="3" placeholder="Варианты — каждый с новой строки" aria-label="Варианты ответа"></textarea></div>`
+    + `<div class="pp-pollf" id="pp-pollf" hidden><input type="text" id="pp-pq" maxlength="300" placeholder="Вопрос опроса" aria-label="Вопрос опроса"><textarea id="pp-po" rows="3" placeholder="Варианты — каждый с новой строки" aria-label="Варианты ответа" aria-describedby="pp-poh"></textarea><small class="pp-poh" id="pp-poh">Правильный ответ отметьте «+» в начале строки — будет викторина: ответившему сразу видно, верно ли.</small></div>`
     + `<div class="pp-row"><label class="pp-ck"><input type="checkbox" id="pp-isp"> Опрос</label><label class="pp-ck">Когда <input type="datetime-local" id="pp-at" aria-label="Когда опубликовать"></label><span style="flex:1"></span><button class="btn primary" type="button" id="pp-go">Опубликовать</button></div>`;
   $("#pp-isp").onchange = () => { $("#pp-pollf").hidden = !$("#pp-isp").checked; };
   $("#pp-at").oninput = () => { $("#pp-go").textContent = $("#pp-at").value ? "Запланировать" : "Опубликовать"; };

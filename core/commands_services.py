@@ -412,6 +412,8 @@ class ServicesCommands:
                     r = pb.set(a.get("patch") or {})
                 elif cmd == "pbot_forget":
                     r = pb.forget()
+                elif cmd == "pbot_log_clear":               # №1134: «Что спрашивали» → «Очистить»
+                    r = pb.log_clear()
                 elif cmd == "pbot_check":                   # №643: «Проверить снова» — режим приватности по getMe сейчас
                     pb.privacy(fresh=True)
                     r = pb.public()

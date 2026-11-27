@@ -323,6 +323,12 @@ class ExamJob(threading.Thread):
         rep_f.unlink(missing_ok=True)
         prof = {"name": "Dewiar Облако", "kind": "openai", "base_url": f"{URL}?p=", "api_key": _cred(j["grant"]),
                 "model": j.get("model") or MODEL, "cloud": True, "title": j.get("title") or j.get("model") or MODEL}
+        if j.get("model") == "ext":             # владелец 27.11: «наша модель против сильной» — внешняя (ключ и прокси судьи)
+            mx = j.get("model_ext") if isinstance(j.get("model_ext"), dict) else external_judge()
+            if not mx:
+                self.post("failed", note="Внешняя модель не настроена: кабинет → «Экзамен» → «Внешний судья».")
+                return
+            prof = dict(mx, name="Внешняя модель")
         env = {k: v for k, v in os.environ.items() if k not in ("DEWIAR_RUNNER_KEY",)}
         env.update(DEWIAR_EXAM_LLM=json.dumps(prof, ensure_ascii=False), PYTHONUNBUFFERED="1", HOME=str(self.home))
         if j.get("judge") == "ext":             # внешний судья (владелец 25.11) — из задания (кабинет → «Внешний судья»)

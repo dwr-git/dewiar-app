@@ -101,6 +101,13 @@ class PersonaBot(Telegram):
             p = None
         return p or {}
 
+    def log_clear(self):
+        """«Что спрашивали» → «Очистить» (№1134, 27.11): только список; счётчики «сегодня» и «всего» остаются."""
+        with self._lock:
+            self.data["log"] = []
+            self._save()
+        return self.public()
+
     def public(self):
         d = self.data
         p = self.persona()
