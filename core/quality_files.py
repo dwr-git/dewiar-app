@@ -266,16 +266,29 @@ def file_text(p, limit=2_000_000):
                 if zip_bomb(z):
                     return ""
         if ext == ".xlsx":
+            # №1106 (26.11): только значения (data_only) — у файла, который ещё не открывали в Excel, клетки с формулами
+            # пусты: openpyxl формул не считает, и проверяющая модель «не находила формул». Теперь клетка с формулой —
+            # «=ФОРМУЛА → значение» (значение — если Excel его уже посчитал)
             import openpyxl
-            wb = openpyxl.load_workbook(p, read_only=True, data_only=True)
+            wf = openpyxl.load_workbook(p, read_only=True, data_only=False)
+            wv = openpyxl.load_workbook(p, read_only=True, data_only=True)
             rows, n = [], 0
-            for ws in wb.worksheets:
-                for r in ws.iter_rows(values_only=True):
+            for sf, sv in zip(wf.worksheets, wv.worksheets):
+                if len(wf.worksheets) > 1:
+                    rows.append(f"# лист {sf.title}")
+                for rf, rv in zip(sf.iter_rows(values_only=True), sv.iter_rows(values_only=True)):
                     n += 1
                     if n > 20000:
                         break
-                    rows.append("\t".join("" if v is None else str(v) for v in r))
-            wb.close()
+                    cells = []
+                    for f, v in zip(rf, rv):
+                        if isinstance(f, str) and f.startswith("="):
+                            cells.append(f if v is None else f"{f} → {v}")
+                        else:
+                            cells.append("" if v is None else str(v))
+                    rows.append("\t".join(cells))
+            wf.close()
+            wv.close()
             return "\n".join(rows)[:limit]
         if ext in (".docx", ".pptx", ".odt"):
             with zipfile.ZipFile(p) as z:

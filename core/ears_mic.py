@@ -317,15 +317,17 @@ class MicMixin:
                 self.s.update({"audio": {"mic_hint_at": int(time.time())}})
             except Exception:  # noqa: BLE001
                 pass
-        if not real or (fake and not real):                 # №876: настоящего микрофона нет — может, он и не нужен
+        # №876: настоящего микрофона нет — может, он и не нужен. №1043 (24.11, Linux Mint): «у меня нет микрофона», а в списке
+        # аналоговый вход звуковой карты (гнездо пустое) — ровные нули; там тоже предлагаем «Текстовый режим»
+        if not real or exact:
             text += (" Микрофона нет и не будет? Включите «Текстовый режим» (студия → «Чат», внизу): Лира не будет его слушать "
                      "и не станет загружать распознавание — запуск быстрее.")
         self._mic_hint_at = time.monotonic()
         log.warning("🎤 %s от микрофона %s — %s (микрофоны: %s)", "15 с" if exact else "Минута", "полная тишина (нули)" if exact else "почти тишина (пик ≤ 3)",
                     text[:80], ", ".join(names) or "—")
         self.note(text)
-        if not exact and getattr(self, "_mic_alive", False):
-            return                                       # микрофон в этом запуске уже слышал — просто тихо: подсказка, без тревоги
+        if not exact and (getattr(self, "_mic_alive", False) or self.s.get("audio", "mic_heard")):
+            return                                       # микрофон уже слышал (в этом запуске или раньше) — просто тихо: подсказка, без тревоги
         body = re.sub(r"^Микрофон молчит\s*[—:]\s*", "", text)          # заголовок уже «Микрофон молчит» — без повтора
         self.push("Микрофон молчит", body[:1].upper() + body[1:], telegram=False)
         self.report_problem("mic_silent", "микрофон молчит: " + ("нули" if exact else "почти тишина") + f"; устройства: {', '.join(names)[:200]}")
@@ -350,7 +352,15 @@ class MicMixin:
         zeros = not frame.strip(b"\x00")
         peak = 0 if zeros else int(np.abs(np.frombuffer(frame, dtype=np.int16).astype(np.int32)).max())
         if peak > 3:
-            self._mic_alive = True                      # микрофон живой — «почти тишина» потом значит просто тихую комнату
+            if not getattr(self, "_mic_alive", False):
+                self._mic_alive = True                  # микрофон живой — «почти тишина» потом значит просто тихую комнату
+                # №1045 (24.11, Windows, QuadCast S): после каждого запуска через минуту тишины — тревога и автоотчёт, а
+                # микрофон работает (потом «снова слышно»). Запоминаем навсегда: этот компьютер микрофон уже слышал
+                try:
+                    if not self.s.get("audio", "mic_heard"):
+                        self.s.update({"audio": {"mic_heard": True}})
+                except Exception:  # noqa: BLE001
+                    pass
             if st["told"]:
                 self.note("")
                 log.info("🎤 Микрофон снова слышно")

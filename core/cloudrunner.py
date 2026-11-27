@@ -110,8 +110,10 @@ def _cred(grant):
     return f"{grant}.{KEY}"
 
 
-EXAM_PKGS = ["httpx", "websockets", "numpy", "Pillow"]
-EXAM_PROBE = "import httpx, websockets, numpy, PIL"
+# socksio — внешний судья через SOCKS-прокси (25.11, стенд 3: судья был настроен и «Готов.» в кабинете, а в экзамене без
+# socksio httpx не ходит через socks5 — ни одной оценки, все сценарии «сданы» одними проверками)
+EXAM_PKGS = ["httpx", "socksio", "websockets", "numpy", "Pillow"]
+EXAM_PROBE = "import httpx, socksio, websockets, numpy, PIL"
 # только для «Больших задач» и «по возможности» (рецензия 0.83: обычный экзамен из-за них не должен ломаться):
 # openpyxl — таблицы Б4, Б6; playwright — сайт Б5 в браузере на ширине телефона (сам Chromium — ExamJob.browser)
 BIG_PKGS = ["openpyxl", "playwright"]
@@ -121,6 +123,18 @@ BROWSER_RETRY_S = 7 * 86400                         # Chromium не скачал
 # ждёт модель или судью минутами (04.11: «Остановить» висело, пока сценарий не кончится)
 EXAM_BEAT = float(os.environ.get("DEWIAR_EXAM_BEAT") or 10)
 EXAM_CANCELLED = 3                                   # exam.py вышел сам: доступ к модели отозван (экзамен остановлен)
+
+
+def external_judge():
+    """Запасной путь для внешнего судьи — из окружения исполнителя (DEWIAR_JUDGE_URL/KEY/MODEL/PROXY), если задание его не
+    принесло. Обычно судью настраивают в кабинете («Экзамен» → «Внешний судья»)."""
+    url, key, model = (os.environ.get(k, "").strip() for k in ("DEWIAR_JUDGE_URL", "DEWIAR_JUDGE_KEY", "DEWIAR_JUDGE_MODEL"))
+    if not (url and key and model):
+        return None
+    p = {"name": "Судья", "kind": "openai", "base_url": url, "api_key": key, "model": model, "title": model}
+    if os.environ.get("DEWIAR_JUDGE_PROXY", "").strip():
+        p["proxy"] = os.environ["DEWIAR_JUDGE_PROXY"].strip()
+    return p
 
 
 class ExamJob(threading.Thread):
@@ -133,6 +147,25 @@ class ExamJob(threading.Thread):
         self.state = "preparing"                     # что слать весточкой «жив» (_beat): пока ставится окружение — preparing
         self.home = DIR / "_exam"
         self.where = {}
+
+    def progress(self, line):
+        """Строка exam.py -> ход в кабинет (self.where); True — сценарий сменился. «Стенд гипотез»: прогонов repeat × (до,
+        после), в каждом счёт сценариев с 1. Владелец 21.11: «экзамен ходит по кругу, завершается и снова начинается» — полоса
+        и «Сценарий 2 из 8» начинались заново. Счёт — сквозной по всем прогонам, в названии — какой прогон."""
+        j = self.job
+        two = 2 if j.get("sets") else 1
+        passes = int(j.get("repeat") or 1) * two
+        mp = re.match(r"^=== Прогон (\d+)/(\d+) · (до|после) ===$", line)
+        if mp:
+            self._pno = (int(mp[1]) - 1) * two + (2 if mp[3] == "после" and two == 2 else 1)
+            self._plabel = f"Прогон {self._pno} из {passes} ({mp[3]}): " if passes > 1 else ""
+            return False
+        m = re.match(r"^\[(\d+)/(\d+)\] (.+)$", line)
+        if not m:
+            return False
+        i, n, pno = int(m[1]), int(m[2]), getattr(self, "_pno", 1)
+        self.where = {"i": (pno - 1) * n + i, "n": passes * n, "title": (getattr(self, "_plabel", "") + m[3])[:160]}
+        return True
 
     def post(self, state, **kw):
         if state in ("preparing", "running"):
@@ -290,8 +323,23 @@ class ExamJob(threading.Thread):
         rep_f.unlink(missing_ok=True)
         prof = {"name": "Dewiar Облако", "kind": "openai", "base_url": f"{URL}?p=", "api_key": _cred(j["grant"]),
                 "model": j.get("model") or MODEL, "cloud": True, "title": j.get("title") or j.get("model") or MODEL}
+        if j.get("model") == "ext":             # владелец 27.11: «наша модель против сильной» — внешняя (ключ и прокси судьи)
+            mx = j.get("model_ext") if isinstance(j.get("model_ext"), dict) else external_judge()
+            if not mx:
+                self.post("failed", note="Внешняя модель не настроена: кабинет → «Экзамен» → «Внешний судья».")
+                return
+            prof = dict(mx, name="Внешняя модель")
         env = {k: v for k, v in os.environ.items() if k not in ("DEWIAR_RUNNER_KEY",)}
         env.update(DEWIAR_EXAM_LLM=json.dumps(prof, ensure_ascii=False), PYTHONUNBUFFERED="1", HOME=str(self.home))
+        if j.get("judge") == "ext":             # внешний судья (владелец 25.11) — из задания (кабинет → «Внешний судья»)
+            jx = j.get("judge_ext") if isinstance(j.get("judge_ext"), dict) else external_judge()
+            if not jx:
+                self.post("failed", note="Внешний судья не настроен: кабинет → «Экзамен» → «Внешний судья».")
+                return
+            env["DEWIAR_EXAM_JUDGE"] = json.dumps(jx, ensure_ascii=False)
+        elif j.get("judge"):                    # Опыт 0 (аудит 25.11): судья — другая модель облака (кабинет → «Судья»)
+            env["DEWIAR_EXAM_JUDGE"] = json.dumps(dict(prof, model=str(j["judge"]), title=str(j.get("judge_title") or j["judge"])),
+                                                  ensure_ascii=False)
         if j.get("big") and not os.environ.get("DEWIAR_EXAM_PYTHON") and self.big_pkgs(py) and not self.cancel:
             env["PLAYWRIGHT_BROWSERS_PATH"] = str(self.browser(py))   # большие задачи: Б5 — в браузере
         args = [str(py), str(Path(__file__).resolve().parent / "exam.py"), "--out", str(out), "--json-out", str(rep_f)]
@@ -301,8 +349,13 @@ class ExamJob(threading.Thread):
             args.append("--big")
         if j.get("lean"):                       # проба короткой инструкции (кабинет → «Экзамен» → галочка)
             args.append("--lean")
+        if j.get("scene"):                      # «Ум Лиры», шаг 1: сцена разговора (кабинет → «Экзамен» → галочка)
+            args.append("--scene")
         if j.get("only"):
             args += ["--only", ",".join(j["only"])]
+        if j.get("groups") or j.get("sets") or int(j.get("repeat") or 1) > 1:   # «Стенд гипотез» (core/stand.py)
+            args += (["--group", ",".join(j.get("groups") or [])] if j.get("groups") else []) \
+                + [x for s_ in (j.get("sets") or []) for x in ("--set", str(s_))] + ["--repeat", str(int(j.get("repeat") or 1))]
         args += ["--partial", str(part)] + (["--resume"] if resume else [])
         self.post("running", note="Продолжаю экзамен с места, где исполнитель перезапустился" if resume else "Экзамен идёт")
         if self.cancel:                              # остановили, пока готовились, — не начинаем
@@ -317,9 +370,7 @@ class ExamJob(threading.Thread):
         for line in self.proc.stdout:
             line = line.rstrip()
             tail = (tail + [line])[-40:]
-            m = re.match(r"^\[(\d+)/(\d+)\] (.+)$", line)
-            if m:
-                self.where = {"i": int(m[1]), "n": int(m[2]), "title": m[3][:160]}
+            if self.progress(line):
                 self.post("running")
         code = self.proc.wait()
         self.done.set()

@@ -123,7 +123,7 @@ def plural_form(lang, n):
         if 2 <= i % 10 <= 4 and not 12 <= i % 100 <= 14:
             return "few"
         return "many"
-    if lang in ("uk", "be"):
+    if lang in ("uk", "be", "bg"):
         return plural_form("ru", n)
     if lang == "pl":
         if not whole:

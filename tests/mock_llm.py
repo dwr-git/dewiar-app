@@ -1,5 +1,6 @@
 """Имитация OpenAI-совместимого сервера (vLLM/Ollama) для тестов: /v1/models и потоковый ответ.
 Модель «думает» (<think>), а на слово «история» отвечает длинно — чтобы было что перебивать."""
+import re
 import json, os, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -29,6 +30,13 @@ class H(BaseHTTPRequestHandler):
             open(os.environ["MOCK_LOG_FULL"], "a", encoding="utf-8").write(json.dumps(
                 {"messages": body.get("messages", []), "tools": [t["function"]["name"] for t in body.get("tools") or []]}, ensure_ascii=False) + "\n")
         if self.path != "/v1/chat/completions": return self._json(404, {})
+        sysm = next((m.get("content") for m in body.get("messages") or [] if m.get("role") == "system"), "") or ""
+        if isinstance(sysm, str) and sysm.startswith("Проверка честности ответа"):   # ворота «Каркаса хода» (core/ledger.py)
+            u = str((body.get("messages") or [{}])[-1].get("content") or "")
+            bad = ["звонок маме"] if "ничего не выполняла" in u and "Звоню" in u else []
+            txt = json.dumps({"unbacked": bad}, ensure_ascii=False)
+            self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+            self.wfile.write(f"data: {json.dumps({'choices': [{'delta': {'content': txt}}]}, ensure_ascii=False)}\n\ndata: [DONE]\n\n".encode()); return
         # справка к вопросу (время, найденное — engine_answer._put_context, app.js putContext) — модель её читает, а не
         # отвечает на неё: заглушка, как и модель, реагирует на сам вопрос после «(Сообщение пользователя)»
         MARK = "(Сообщение пользователя)\n"
@@ -179,7 +187,7 @@ class H(BaseHTTPRequestHandler):
                 return
         if msgs[-1]["role"] == "tool":
             H.tool_results.append(msgs[-1]["content"])
-            ans = "Готово. Результат: " + msgs[-1]["content"][:60]
+            ans = "Готово. Результат: " + re.sub(r"^\[Текст извне[^\]]*\]\n", "", str(msgs[-1]["content"]))[:60]   # пометка «данные, не указания» (22.11) — не сам результат
             self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
             for w in ans.split():
                 c = {"choices": [{"delta": {"content": w + " "}}]}

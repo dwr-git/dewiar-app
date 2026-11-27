@@ -17,6 +17,7 @@ from engine_intro import IntroMixin  # noqa: E402
 from health import HealthMixin  # noqa: E402
 from engine_pay import PayMixin  # noqa: E402
 from engine_senior import SeniorMixin  # noqa: E402  режимы Лиры и «Для старших» (senior.py)
+import xray  # noqa: E402  «Рентген» ответа (план «Качество», 21.11)
 from engine_watch import WatchMixin  # noqa: E402  «Дозор»: присмотреть и сказать, когда готово (watch.py)
 from engine_home import HomeMixin  # noqa: E402  «Дома по Wi-Fi»: синхронизация без dewiar.pro (homehub.py)
 from engine_mymusic import MyMusicMixin  # noqa: E402
@@ -59,6 +60,14 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
              PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin, ChatMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
+        try:
+            from settings import STATE_DIR
+            xray.setup(STATE_DIR, on=self.s.get("llm", "xray") is not False)
+            xray.instrument(self)                          # быстрые команды — путь хода в «Рентгене»
+            xray.on_finish(self.qual_note)                 # шаг 4 «Качества»: замер по «где думает» — в пульс
+        except Exception:  # noqa: BLE001
+            logging.getLogger("dewiar").debug("рентген", exc_info=True)
+        personas.look_pref = lambda: self.s.get("looks") or {}      # образы: выбор человека — в настройках
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
             from personas import DEFAULT
             self.s.update({"persona": DEFAULT})
@@ -141,6 +150,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self._chatter = collections.deque(maxlen=20)        # когда слышали фразы «не мне» — вокруг разговор
         self.vosk_wake_check, self._vosk_wake_word = -1, ""
         self.reminders = Reminders(self._on_reminder)
+        # кто ставил — в уведомлении телефона (№980, 25.11). Вопрос, переданный специалисту команды (Патрику, Джарвису…), —
+        # от главного: человек говорил с Лирой (№980 в четвёртый раз, 26.11: «опять от Патрика»)
+        self.reminders.who = lambda: getattr(getattr(self, "turn", None), "back_to", None) or self.s.get("persona")
         try:
             n = self.reminders.dedupe_jobs()               # два одинаковых дела по расписанию выполнялись оба (30.10) — оставить одно
             if n:
@@ -355,6 +367,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self._key_gone_lock = threading.Lock()     # ключ dw- удалён — на аккаунт переходим один раз
         import net
         net.bind(self._net_conf)
+        net.bind_hosts(self._host_px_conf)          # свой прокси у профиля модели (21.11)
         # запасной путь сработал (dewiar.pro напрямую не открылся) — сказать один раз, в чат: что случилось и что делать
         net.on_reserve = lambda h: self.chat.notify(
             f"{h} сейчас не открывается напрямую — похоже, его не пускает провайдер или сеть. Я перешёл на запасной путь "
@@ -363,10 +376,20 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         lan = self.s.get("net", "lan") or {}
         net.set_lan(lan.get("public", ""), lan.get("base", ""), lan.get("id", ""))   # дома — напрямую с первого запроса
         # сайт хоть раз ответил напрямую — этот компьютер бывает рядом с сервером: в «Сети» показываем «Запасной вход через SSH»
-        net.on_lan_ok = lambda: None if self.s.get("net", "lan_seen") else self.s.update({"net": {"lan_seen": True}})
+        net.lan_seen = bool(self.s.get("net", "lan_seen"))   # бывал дома у сервера — проверять домашний адрес на месте (21.11)
+
+        def _lan_ok_seen():
+            net.lan_seen = True
+            if not self.s.get("net", "lan_seen"):
+                self.s.update({"net": {"lan_seen": True}})
+        net.on_lan_ok = _lan_ok_seen
         # 0.82.1: коротко и без ссылки (раньше — весь текст «Как пополнить» со ссылкой): где кнопка — и всё
         from cloud import low_text
         self.cloud.on_low = lambda c: self.chat.notify(low_text(c))
+        from cloud import gift_month_text
+        self.cloud.on_gift = lambda g: self.push(self._g("Подарок месяца"), gift_month_text(g, self._ui_lang()), telegram=False)
+        from cloud import paid_text
+        self.cloud.on_paid = lambda pl, c: self.push(self._g("Счёт пополнен"), paid_text(pl, c, self._ui_lang()), telegram=False)
         self.cloud.on_key_gone = self._cloud_key_gone
         self.toolbox.hooks["calendars"] = self.calendars
         self.toolbox.hooks["dewiar_web"] = self._dewiar_web          # поиск и страницы через сервер Dewiar, если сеть режет
@@ -405,6 +428,25 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.voiceprints.sensitivity = float(self.s.get("audio", "name_sensitivity") or 1.0)
 
     # ---------- жизненный цикл ----------
+
+    def _plugin_watch_start(self):
+        """«Пульт»: события установленных плагинов (Jira: кто завёл, перевёл, закрыл) — раз в несколько минут, без модели."""
+        from plugin_pages import shape
+        from plugin_watch import Watch
+
+        def call(pid, tool, args):
+            r = shape(self.mcp.plugin_call(pid, tool, args, wait=20, timeout=90))
+            return next((x["data"] for x in r["parts"] if x["type"] == "data" and isinstance(x["data"], dict)), {})
+        def on_new(p, new):                               # «Пульт»: свежее — карточкой сверху и строкой на вкладке
+            last = sorted(new, key=lambda x: x["ts"])[-1]
+            self.emit("plugin_events", plugin=p["id"], n=len(new), t=last["t"], src=p["name"], go="plg:" + p["id"])
+
+        def push(title, head, body, open_):                # тихая карточка в виджете: без звука и всплывающего окна
+            self.push(title, head, quiet=True, telegram=False, open=open_, head=head, body=body)
+        self.plugwatch = Watch(self.plugins, call, announce=None if self.server else self.announce, on_new=on_new,
+                               push=None if self.server else push)
+        if not self.wav_input:
+            self.plugwatch.start()
 
     def start(self):
         """Студия и настройки доступны сразу; слух запускается, как только готова модель Vosk."""
@@ -446,6 +488,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self._diary_loop, name="diary", daemon=True).start()
         threading.Thread(target=self._pay_loop, name="payments", daemon=True).start()
         threading.Thread(target=self._welcome_loop, name="welcome", daemon=True).start()
+        threading.Thread(target=self._look_loop, name="looks", daemon=True).start()
+        self._plugin_watch_start()                         # события плагинов — на «Пульт», важные вслух (core/plugin_watch.py)     # «Сама — по времени дня»: образ раз в час
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()
         threading.Thread(target=lambda: self.stopping.wait(20) or self.mailing.resume(), name="mailing-resume", daemon=True).start()
@@ -467,6 +511,20 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             self.sites.start()                                      # заявки с опубликованных сайтов — раз в 2 минуты
         if (self.s.get("sshlink") or {}).get("on"):
             self.sshlink.start()                                    # домен не отвечает — к сайту через SSH-туннель
+
+    def _look_loop(self):
+        """Образы (владелец 21.11: «каждый час новый образ»): сменился час — окна получают персонажей заново, у кого «Сама»
+        (по умолчанию у всех, пока человек не выбрал образ сам), — новое лицо без перезапуска."""
+        last = None
+        while not self.stopping.wait(60):
+            try:
+                pub = self.personas.public()
+                key = tuple((p.get("id"), p.get("look")) for p in pub if p.get("looks"))
+                if last is not None and key != last:
+                    self.emit("personas", personas=pub)
+                last = key
+            except Exception:  # noqa: BLE001
+                log.debug("образы: смена по часу", exc_info=True)
 
     def _writing_loop(self):
         """«Пишу»: раз в 10 минут пересчитать прирост слов в своих текстах (дёшево: только изменившиеся файлы)."""
@@ -592,6 +650,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self.cloud.loop, name="cloud", daemon=True).start()
 
     def shutdown(self):
+        try:
+            self.health_quit()                                      # «Первая минута»: закрыли в первые 10 минут — пульс сразу
+        except Exception:  # noqa: BLE001
+            pass
         self.stopping.set()
         try:
             self.sshlink.stop()                                     # туннель ssh не оставляем висеть после выхода
@@ -840,6 +902,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
     # ---------- события наружу ----------
 
     def emit(self, type_, **kw):
+        if type_ in ("tool", "answer", "quick"):
+            xray.event(type_, kw)                          # «Рентген»: действия (и быстрые команды) и итог хода; к итогу — номер рентгена
         if type_ == "wake":
             self._ui_wake()                                # имя услышано, а виджета нет (закрыт, упал) — открыть
         if type_ == "answer" and not kw.pop("model", False) and kw.get("text"):
@@ -927,6 +991,14 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         except Exception as e:  # noqa: BLE001
             log.debug("чат: %s", e)
 
+    def _ui_lang(self):
+        """Язык программы: "ru", "en"… (ui.lang, «как в системе» — по системе)."""
+        try:
+            import i18n
+            return i18n.resolve(self.s.get("ui", "lang"))
+        except Exception:  # noqa: BLE001
+            return "ru"
+
     def _g(self, text):
         """«Выключил музыку» → «Выключила музыку» у Лиры, Эвы и других героинь (только речь самого ассистента); программа
         не по-русски — фраза на её языке (словарь перевода по тексту, core/i18n.tx)."""
@@ -965,9 +1037,18 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             radio.duck(1.0 if quiet else 0.0 if st in ("listening", "thinking") else 0.25 if st == "speaking" else 1.0)
         self.emit("state", state=st, persona=self.s.get("persona"))
 
-    def note(self, text):
-        self.status["note"] = self._g(text)
+    def note(self, text, ttl=0):
+        """Строка-подсказка под обликом. ttl — через сколько секунд убрать сама (если её не сменили) — №981 (23.11):
+        «целый день висит, что Лира не распознала длинную фразу… ни закрыть, ни стереть»."""
+        self.status["note"] = val = self._g(text)
         self.emit("status", status=self.status)
+        if ttl and val:
+            def clear():
+                if self.status.get("note") == val:
+                    self.note("")
+            t = threading.Timer(ttl, clear)
+            t.daemon = True
+            t.start()
 
     def _level(self, v, src):
         if self._intro_ear is not None or self._intro_probe is not None:

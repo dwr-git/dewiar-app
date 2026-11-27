@@ -5,7 +5,7 @@
    Сторож sttGuard: распознаватель телефона бывает «есть, но молчит» (планшеты без сервисов Google — Huawei и др.):
    не начал слушать за 4 с — переходим на сервер Dewiar насовсем (S.stt.auto) или честно говорим, что слуха нет;
    замолчал посреди (нет событий 15 с) или не отпускает после нажатия «стоп» — сами заканчиваем, кнопка не залипает. */
-let sttActive = false, heardPartial = "", sttWatch = null, sttStarted = false, sttVia = "", sttGen = 0, sttOnce = null;
+let sttActive = false, heardPartial = "", sttWatch = null, sttStarted = false, sttVia = "", sttGen = 0, sttOnce = null, sttStartAgain = false;
 function sttGuard(ms, why) { clearTimeout(sttWatch); sttWatch = ms ? setTimeout(() => sttStall(why), ms) : null; }
 /* Событие слуха из прежнего сеанса (поле g от Speech.java; после cancel ещё приходит «отменено») — не наше: иначе оно
    сбило бы новый сеанс, и кнопка осталась бы «слушаю». В браузере-заглушке поля g нет — принимаем всё. */
@@ -46,7 +46,7 @@ async function listen() {
   if (!server && !D.recognizer() && D.recognizerAny && D.recognizerAny()) D.useAnyRecognizer();   // №712: iPhone без входа — распознавание Safari
   if (!server && !D.recognizer()) {
     sttActive = false; setState("idle");
-    showBot("В этом устройстве нет распознавания речи. Войдите аккаунтом dewiar.pro (Настройки → Мозг) — слушать будет сервер Dewiar. Или напишите текстом.", "err"); return;
+    showBot("В этом устройстве нет распознавания речи. Войдите аккаунтом dewiar.pro (Настройки → Мозг): слушать будет сервер Dewiar, а ваша модель останется. Или напишите текстом.", "err"); return;
   }
   sttVia = server ? "server" : "system"; sttT0 = Date.now();
   plog("info", "слушаю: " + (server ? "сервер " + server.url.replace(/\?.*$/, "") : "распознавание телефона"));
@@ -80,13 +80,17 @@ function dictMore(t, cut) {
 }
 /* Сказанное голосом — с тем, что прикреплено в поле ввода (фото, файл): прикрепили скриншот и сказали «сохрани в
    заметки …» — он уходит вместе с фразой и попадает в заметку (отзыв 11.10: фото так и висело над полем). */
-function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : {}); }
+// voice — сказано голосом (1.0.53, владелец 20.11 «скорость голоса»): облако отдаёт простой вопрос лёгкому мозгу (X-Dewiar-Voice)
+function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : { voice: true }); }
 const dictTake = (t) => { const all = ((dict ? dict + " " : "") + (t || "")).trim(); dict = ""; return all; };
 function sttStall(why) {
   if (!sttActive) return;
   sttActive = false; D.cancelListen(); sttGen++;
   plog("warn", "распознавание: нет ответа (" + why + ", " + sttVia + ")");
   if (why === "start" && sttVia === "system" && !sttStarted) {
+    // №1128 (26.11, realme, Android 16: «первое сообщение уходит, на втором сразу ошибка»): распознаватель телефона завис —
+    // ни «готов», ни ошибки. Один раз сразу заново: Speech.java берёт новый распознаватель (прежний не дождался «готов»)
+    if (!sttStartAgain) { sttStartAgain = true; return listen(); }        // в журнале — «нет ответа» и сразу «слушаю»
     const c = Date.now() < sttSysUntil ? null : cloudEars();     // сервер сейчас не пускает — не ходим по кругу
     if (c) {
       // Первый раз — только этот вопрос слушает сервер (распознаватель мог просто долго подключаться к сети);
@@ -100,21 +104,24 @@ function sttStall(why) {
       return listen();
     }
     setState("idle"); showYou("");
-    showBot("Распознавание речи этого устройства не отвечает. Войдите аккаунтом dewiar.pro (Настройки → Мозг) — слушать будет сервер Dewiar. Или напишите текстом.", "err");
+    showBot("Распознавание речи этого устройства не отвечает. Войдите аккаунтом dewiar.pro (Настройки → Мозг): слушать будет сервер Dewiar, а ваша модель останется. Или напишите текстом.", "err");
     return;
   }
   if (holdTalk) { dictMore(heardPartial, true); return; }
   if (heardPartial || dict) { if (dictMore(heardPartial, false)) return; askHeard(dictTake(heardPartial)); return; }
   setState("idle"); showYou("");
 }
-const sttAlive = () => { sttStarted = true; sttRetry = 0; if (sttVia === "system" && S.stt.sysFails) { S.stt.sysFails = 0; saveS(); } if (sttActive) sttGuard(15000, "silent"); };
+const sttAlive = () => { sttStarted = true; sttRetry = 0; sttStartAgain = false; if (sttVia === "system" && S.stt.sysFails) { S.stt.sysFails = 0; saveS(); } if (sttActive) sttGuard(15000, "silent"); };
 N.on("stt_start", e => { if (sttMine(e)) sttAlive(); });
 N.on("stt_end", e => {
   if (!sttMine(e) || !sttActive) return;
   sttGuard(sttVia === "server" ? 60000 : 8000, "end");          // запись уходит на сервер — при слабом интернете это не мгновенно
   if (sttVia === "server" && !String($("#you").textContent || "").trim()) showYou(trL("распознаю…"));
 });
-N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); });
+/* №366 (20.11): запись для сервера (своя, Speech.listenServer) шлёт уровень каждые 50 мс, а частичного текста у неё нет —
+   сторож «нет событий 15 с» срабатывал посреди удержания кнопки: запись отменялась, голосовое пропадало целиком. Уровень от
+   своей записи — знак, что она жива: сторож заводится заново (у распознавания телефона — только частичный текст, как было). */
+N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); else if (sttVia === "server" && sttActive) sttGuard(15000, "silent"); });
 N.on("stt_partial", e => { if (!sttMine(e)) return; heardPartial = e.text; showYou((dict ? dict + " " : "") + e.text); sttAlive(); });
 N.on("stt_result", e => {
   if (!sttMine(e)) return;
@@ -172,7 +179,9 @@ N.on("stt_error", e => {
     setTimeout(() => { if (state === "listening") listen(); }, 450 * sttRetry); return;
   }
   sttRetry = 0;
-  if (sttVia === "system" && e.code === 13) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
+  // №974: 13 у Android — «язык распознавания недоступен» (Speech.java уже попробовал без выбора языка), а не веб-версия:
+  // ниже — как любой отказ распознавателя телефона (сервер Dewiar, если есть), с понятной причиной
+  if (sttVia === "system" && e.code === 13 && D.web) {          // браузер: своего распознавания на деле нет (веб-версия, webbridge.js)
     plog("warn", "распознавание браузера недоступно: " + (e.msg || ""));
     const c = Date.now() < sttSysUntil ? null : cloudEars();
     if (c) { S.stt = { engine: "server", url: c.url, key: c.key, model: "gigaam", from_account: loggedIn(), auto: true }; saveS();
@@ -183,7 +192,7 @@ N.on("stt_error", e => {
   }
   plog([6, 7, 5].includes(e.code) ? "info" : "warn", `распознавание (${sttVia}): ${e.code === 6 ? "речи не было" + (/громкость/.test(e.msg || "") ? " — " + String(e.msg).replace(/^[^(]*/, "") : "") : e.code === 7 ? "не расслышал" : "ошибка " + (e.code ?? "") + " " + (e.msg || "")}`);
   // распознаватель телефона сломался, не начав слушать (не запустился, нет сервиса, сеть) — слушает сервер Dewiar
-  if (sttVia === "system" && !sttStarted && ![6, 7].includes(e.code) && cloudEars() && Date.now() >= sttSysUntil) { sttActive = true; sttStall("start"); return; }
+  if (sttVia === "system" && !sttStarted && ![6, 7].includes(e.code) && cloudEars() && Date.now() >= sttSysUntil) { sttActive = true; sttStartAgain = true; sttStall("start"); return; }   // ответил ошибкой — не завис: сразу сервер (№1128 — только для молчания)
   // сервер не пустил (кончились талеры, лимит, ключ) — слушает сам телефон; сказанное пропало, просим повторить
   if (sttVia === "server" && STT_DENIED.test(String(e.msg || ""))) {
     const why = String(e.msg).replace(/^[^:]*:?\s*/, "").trim();
@@ -260,6 +269,9 @@ function voiceOpts(voices, cur) {
 function cloudVoice() {
   if (loggedIn() && S.accCloud && S.accCloud.tts) return { url: S.accCloud.base.split("?")[0] + "?p=", key: S.account.token };
   if (S.llm.cloud && S.llm.tts) return { url: cloudBase() + "?p=", key: S.llm.api_key };
+  // №928/№363 (20.11): мозг — своя модель по API, а слух — облако Dewiar своим ключом: голос пропадал совсем, если в телефоне
+  // нет своего синтеза речи (помогала только установка «Синтеза речи Google»). Тот же ключ облака озвучит ответы
+  if (S.stt.engine === "server" && S.stt.key && /cloud\.php/.test(S.stt.url || "")) return { url: String(S.stt.url).split("?")[0] + "?p=", key: S.stt.key };
   return null;
 }
 /* Голос устройства для героя или героини. Выбран в настройках — он. Иначе подбираем сами: признак пола у голоса (у части

@@ -104,6 +104,29 @@ ok(P.st["posts"][p["id"]]["status"] == "sent" and calls, "«Опубликова
 calls.clear()
 p = P.add("", ["-1001"], poll={"question": "Какой чай любите?", "options": ["Зелёный", "Чёрный", "Улун"]})
 ok(calls[-1][0] == "sendPoll" and calls[-1][1]["options"] == ["Зелёный", "Чёрный", "Улун"] and p["status"] == "sent", "опрос — sendPoll")
+ok("type" not in calls[-1][1] and "correct" not in p["poll"], "без «+» — обычный опрос, не викторина")
+# №1134 (27.11): «участник при выборе ответа должен увидеть, правильно ли он ответил» — «+» у правильного: викторина
+p = P.add("", ["-1001"], poll={"question": "Кто создаёт ордер?", "options": ["Робот", "+ Трейдер", "Биржа"]})
+ok(calls[-1][0] == "sendPoll" and calls[-1][1]["options"] == ["Робот", "Трейдер", "Биржа"] and calls[-1][1].get("type") == "quiz"
+   and calls[-1][1].get("correct_option_id") == 1 and p["poll"]["correct"] == 1, f"«+ Трейдер» — викторина, правильный 2-й: {calls[-1][1]}")
+try:
+    P.add("", ["-1001"], poll={"question": "?", "options": ["+а", "+б"]}); ok(False, "два «+» — нельзя")
+except PostError as e:
+    ok("один" in str(e), "два правильных в викторине — понятная ошибка")
+try:
+    P.add("", ["-1001"], poll={"question": "?", "options": ["+", "б"]}); ok(False, "один настоящий вариант — нельзя")
+except PostError:
+    ok(True, "строка из одного «+» — не вариант")
+P.delete(p["id"])
+ok(p["id"] not in P.st["posts"], "опубликованный — убирается из списка (№1134: «чтобы не было накопления»)")
+js = (ROOT / "ui/studio/pbot_posts.js").read_text(encoding="utf-8")
+ok('data-sent="1">Убрать</button>' in js and "Правильный ответ отметьте «+»" in js, "студия: «Убрать» у опубликованных, подсказка про «+»")
+bot.data["log"] = [{"t": 1, "chat": "", "who": "x", "q": "q", "a": "a"}]
+bot.data["total"] = 5
+r = bot.log_clear()
+ok(r["log"] == [] and r["total"] == 5 and bot.data["log"] == [], "«Что спрашивали» → «Очистить»: список пуст, счётчики остались")
+ok('elif cmd == "pbot_log_clear"' in (ROOT / "core/commands_services.py").read_text(encoding="utf-8")
+   and 'id="bp-logx"' in (ROOT / "ui/settings.html").read_text(encoding="utf-8"), "команда и кнопка «Очистить»")
 try:
     P.add("", ["-1001"], poll={"question": "?", "options": ["один"]}); ok(False, "опрос с одним вариантом — нельзя")
 except PostError:

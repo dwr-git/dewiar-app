@@ -23,3 +23,9 @@ tzdata>=2024.1
 soundcard>=0.4.3      # звук компьютера для суфлёра (WASAPI loopback)
 truststore>=0.10        # сертификаты из хранилища Windows (Касперский с проверкой HTTPS — net.trust_system)
 aec-audio-processing>=1.0.1    # «Перебивать без наушников (проба)»: эхоподавление WebRTC, BSD-3, ~1 МБ (soft_aec.py)
+socksio>=1.0          # прокси SOCKS (было только в .lock)
+# Word, Excel, PowerPoint по просьбе (№1103, 26.11: «в 1.0.79 для Windows нет openpyxl, python-docx и python-pptx, а
+# навыки пишут, что они есть» — задача «сделай документ Word» падала); +lxml ≈ 15 МБ после установки
+openpyxl>=3.1
+python-docx>=1.1
+python-pptx>=1.0

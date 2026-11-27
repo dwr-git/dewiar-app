@@ -25,7 +25,8 @@ RSS = """<rss><channel><item><title>Утечка исходников PHP-дви
 </channel></rss>""".replace("{d}", time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(time.time() - 3600)))
 SITE = '<html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head></html>'
 TG = ('<div class="tgme_widget_message" data-post="ai/5"><div class="tgme_widget_message_text">Gemini 4 Carbon вышла<br/>Агентная модель, '
-      'в 2–6 раз дешевле</div><time datetime="2026-11-12T06:00:00+00:00"></time></div>')
+      'в 2–6 раз дешевле</div><time datetime="' + time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 7200))
+      + '"></time></div>')   # свежая (20.11: дата 12.11 к 20.11 стала старше недели — пост отбрасывался)
 PAGES = {"https://example.by/feed.xml": RSS.replace("habr.com/ru/news", "example.by/n"), "https://example.by": SITE,
          "https://habr.com/ru/rss/all/all/": RSS, "https://t.me/s/ai_news": TG}
 asked = []
@@ -38,7 +39,7 @@ def ask(system, user, max_tokens=700):
     if "спокойный аналитик" in system:
         return "**Главное** — утечка исходников PHP [1], рядом Dart [2] и выдуманное [9]."
     if "ведёшь картину" in system or "maintain an expert" in system:
-        return json.dumps({"theses": [], "new_hyps": [{"text": "Выйдет патч", "due": "2026-11-30"}]})
+        return json.dumps({"theses": [], "new_hyps": [{"text": "Выйдет патч", "due": time.strftime("%Y-%m-%d", time.localtime(time.time() + 10 * 86400))}]})   # срок — всегда в будущем
     sig = 9.2 if "Утечка" in user else 4
     return json.dumps({"summary": "Суть: " + user.split("Заголовок: ")[-1][:40] if "Заголовок" in user else "Суть",
                        "why": "Важно", "type": "incident" if sig > 9 else "release", "tags": ["php", "безопасность"] if sig > 9 else ["dart"],

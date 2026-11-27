@@ -97,7 +97,7 @@ function grVer(m) {
 }
 function grOldNote(g, ms) {                     // старой программе — личное письмо: группу она не покажет, а его — покажет
   ms.filter(m => grVer(m).old).forEach(m => core.call("close_send", { pid: m.pid,
-    text: `Зову вас в группу «${g.name}» в «Близких». Ваша версия Dewiar групп ещё не знает — обновите Dewiar, и группа появится: https://dewiar.pro/dwrapp/download.php` }).catch(() => {}));
+    text: `Зову вас в группу «${g.name}» в «Близких». Ваша версия Dewiar групп ещё не знает — обновите Dewiar, и группа появится: https://dewiar.pro/dwrapp/download` }).catch(() => {}));
 }
 function grPanel(kind) {
   GR.panel = kind;

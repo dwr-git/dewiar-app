@@ -156,6 +156,7 @@
   "done_undo",
   "drive_add_path",
   "drive_open",
+  "drive_path",
   "drive_remove",
   "drive_status",
   "drive_sync",
@@ -307,6 +308,7 @@
   "pbot_connect",
   "pbot_forget",
   "pbot_greet",
+  "pbot_log_clear",
   "pbot_post_add",
   "pbot_post_del",
   "pbot_post_edit",
@@ -319,6 +321,7 @@
   "pbot_set",
   "pbot_try",
   "persona_delete",
+  "persona_look",
   "persona_memory",
   "persona_save",
   "persona_set",
@@ -554,7 +557,10 @@
   "ws_rename",
   "ws_set_path",
   "ws_tree",
-  "ws_write"
+  "ws_write",
+  "xray_export",
+  "xray_get",
+  "xray_list"
  ],
  "names": [
   "APP_ALIASES",
@@ -564,6 +570,7 @@
   "DRY",
   "EXAM_LAUNCH",
   "EXAM_ON",
+  "EXTRA_GROUPS",
   "MAC",
   "MARK_ASK_RX",
   "MARK_DONE_RX",
@@ -585,6 +592,10 @@
   "S",
   "SAFE_CORE",
   "SERVER_OFF",
+  "SHORT_CORE",
+  "SHORT_GROUPS",
+  "SHORT_OF",
+  "SHORT_RECENT",
   "SKILL_TOOLS",
   "SPENT_RX",
   "SUDO_AT",
@@ -2421,12 +2432,15 @@
    "title": "Чтение веб-страниц"
   },
   "remember": {
-   "description": "Запомнить надолго факт о пользователе: имя, близкие, работа, предпочтения, привычки, важные даты. Одна короткая фраза в третьем лице («Любит крепкий чай», «Дочь зовут Аня»).",
+   "description": "Запомнить надолго факт о пользователе: имя, близкие, работа, предпочтения, привычки, важные даты. Одна короткая фраза в третьем лице («Любит крепкий чай», «Дочь зовут Аня»). Исправляешь неверную запись («не Харламент, а Харламенко», «уже не работает там») — fact: верный факт целиком, replace: слово или часть старой записи; старая заменится, а не останется рядом.",
    "fn": "t_remember",
    "level": "safe",
    "parameters": {
     "properties": {
      "fact": {
+      "type": "string"
+     },
+     "replace": {
       "type": "string"
      }
     },

@@ -52,7 +52,7 @@ function scFill() {
 
 /* «Добавить документы из папок персонажа» — только если у выбранного персонажа есть папки со знаниями */
 function scFold() {
-  const p = scPersonas().find(x => x.id === SC.persona) || {}, fold = (p.knowledge || []).filter(b => b.kind === "folder");
+  const p = scPersonas().find(x => x.id === SC.persona) || {}, fold = (p.knowledge || []).filter(b => b.kind === "folder" && b.path);
   $("#sc-fold").disabled = !fold.length;
   $("#sc-foldtip").textContent = fold.length ? `${fold.map(b => b.label || b.path.split(/[\\/]/).pop()).join(", ")} — текст файлов уйдёт на сервер Dewiar вместе со знаниями` : "у этого персонажа нет папок со знаниями";
   scFit();

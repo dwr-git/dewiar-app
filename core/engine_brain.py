@@ -43,6 +43,24 @@ class BrainMixin:
         rv = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "reserve") is not False and not stale else ""
         return own or dw, extra, rv, bool(dw and not own)       # 4-е — прокси выдан Dewiar: в подсказках его адрес не показываем
 
+    def _host_px_conf(self):
+        """Для net.bind_hosts: {сервер модели: прокси} из профилей моделей (поле «Прокси» в студии → «Мозг»). Облако Dewiar —
+        мимо (у него свой путь: «Сеть»), свой компьютер и домашняя сеть — тоже."""
+        import net
+        out = {}
+        for p in (self.s.get("llm", "profiles") or {}).values():
+            px = str((p or {}).get("proxy") or "").strip()
+            if not px or p.get("cloud"):
+                continue
+            h = net.host_of(p.get("base_url") or "")
+            if not h or h in ("localhost", "127.0.0.1", "::1") or net._private_host(h) or h.endswith("dewiar.pro"):
+                continue
+            try:
+                out[h] = net.normalize_proxy(px)
+            except net.NetError:
+                log.debug("прокси профиля «%s» не разобран", p.get("name"))
+        return out
+
     def _lan_fetch(self):
         """Дома — напрямую: спросить у сайта его адрес в домашней сети (cloud.php ?p=/lan, со входом или ключом) и
         передать net.set_lan; сохраняется в net.lan — после перезапуска действует сразу. Раз в 10 минут (_brain_watch)."""
@@ -481,6 +499,17 @@ class BrainMixin:
                 if (self.s.get("llm", "active") or "") != active or \
                         (active and time.monotonic() - getattr(self, "_brain_manual", -1e9) < 3600):
                     return                                     # пока проверяли, модель выбрали сами — не спорим
+                # №940 (21.11: «когда падает мой сервер, приложение перекидывает на облако Dewiar… все галочки страховки
+                # сняла, но оно всё равно переключается»): своя модель или свой сервер не отвечает — в облако только с
+                # согласия («Если своя модель не отвечает — через Dewiar»); Dewiar Server дома и сервис по ключу — по «Подстраховке»
+                if active:
+                    from health import brain_kind
+                    kind = brain_kind(profiles.get(active) or {})
+                    home = active == "dewiar-home" or str((profiles.get(active) or {}).get("name") or "").startswith("Dewiar Server")
+                    if self.s.get("llm", "key_fallback") is False or \
+                            (kind in ("local", "server") and not home and not self.s.get("llm", "own_fallback")):
+                        log.info("🧠 «%s» не отвечает — в облако Dewiar не перехожу: подстраховка выключена", was)
+                        return
                 if self.account.logged_in() and (not self.s.get("cloud", "key") or self.s.get("cloud", "account")):
                     self._account_cloud(force_active=True, quiet=True)
                 elif self.s.get("cloud", "key") and PROFILE_ID in profiles:
@@ -652,8 +681,12 @@ class BrainMixin:
         while not self.stopping.is_set():
             try:
                 self._lan_fetch()                              # дома — к сайту напрямую, без прокси (до остального: оно ходит туда же)
-            except Exception:  # noqa: BLE001
-                log.exception("адрес сайта в домашней сети")
+            except Exception as e:  # noqa: BLE001
+                import httpx
+                if isinstance(e, (httpx.HTTPError, OSError)):  # №917: сеть оборвалась — не сбой программы и не отчёт «сам при сбое»
+                    log.info("Адрес сайта в домашней сети не узнал: %s", e)
+                else:
+                    log.exception("адрес сайта в домашней сети")
             try:
                 self._ensure_brain(why)
             except Exception:  # noqa: BLE001
@@ -995,12 +1028,13 @@ class BrainMixin:
             return False
         return bool(p.get("knowledge")) and not KB_NOTES_RX.search((text or "").split("\n\nВложения:")[0])
 
-    def _persona_knowledge(self, text, turn, p=None, quiet=False, hist=None):
+    def _persona_knowledge(self, text, turn, p=None, quiet=False, hist=None, info=None):
         """У персонажа подключены базы сайта Dewiar (например, «Библия» из публичной библиотеки): перед ответом
         ищем во всех параллельно по вопросу и даём модели найденное — персонаж отвечает по источнику, своим голосом.
         Нужен вход аккаунтом. -> добавка к системной подсказке ("" — баз нет или ход отменён); картинки к найденному
         показываются в фоне. p, quiet, hist — для «Бота персонажа» (pbot.py): чужой персонаж, без событий в окна и
-        без картинок, своя переписка вместо истории разговора."""
+        без картинок, своя переписка вместо истории разговора. info (dict) — что нашлось, для «Проверить ответ»:
+        {"found": [...], "empty": [...], "errs": [...]} — подписи баз."""
         if p is None:
             try:
                 p = self.personas.get(self.s.get("persona")) or {}
@@ -1011,9 +1045,16 @@ class BrainMixin:
         q = (text or "").split("\n\nВложения:")[0].strip()
         if not allb or len(q) < 3:
             return ""
-        local = self._persona_local_knowledge(q, [b for b in allb if b.get("kind") == "folder"], quiet=quiet)
-        bases = [b for b in allb if b.get("kind") != "folder"]
-        if not bases or not self.account.logged_in():
+        # папка на компьютере — kind "folder" С путём; «Мои папки» на сайте — тоже kind "folder", но с id и без пути
+        # (письмо 25.11: «не видит RAG с сайта» — папка сайта уходила в поиск по компьютеру и роняла все знания)
+        local = self._persona_local_knowledge(q, [b for b in allb if b.get("kind") == "folder" and b.get("path")], quiet=quiet,
+                                              info=info)
+        bases = [b for b in allb if not (b.get("kind") == "folder" and b.get("path"))]
+        if bases and not self.account.logged_in():
+            if info is not None:
+                info.setdefault("errs", []).append("базы сайта: не выполнен вход в аккаунт Dewiar")
+            return local
+        if not bases:
             return local
         from concurrent.futures import ThreadPoolExecutor
         from account import AccountError
@@ -1048,6 +1089,10 @@ class BrainMixin:
                  time.monotonic() - t0, ("; ошибки: " + "; ".join(errs)) if errs else "")
         emit("tool", name="knowledge", title=f"Ищу в {labels}", status="error" if errs and not parts else "done",
                   **({"error": errs[0]} if errs and not parts else {}))
+        if info is not None:
+            for b, r, err in got:
+                info.setdefault("errs" if err else "found" if r and r["found"] else "empty", []).append(
+                    f"«{b.get('label')}»" + (f": {err}" if err else ""))
         if images and not quiet:
             threading.Thread(target=self._show_rag_images, args=(images,), daemon=True).start()
         out = ""
@@ -1059,13 +1104,20 @@ class BrainMixin:
             if srcs:
                 out += "\n\nИсточники: " + "; ".join(dict.fromkeys(srcs))
         elif empty:
-            out = (f"\n\nВ твоей базе знаний ({', '.join(empty)}) по этому вопросу ничего не нашлось. Если отвечаешь "
-                   "от себя — так и скажи одной фразой.")
+            # «Что ты знаешь?», «о чём ты?» — по таким словам в базе ничего не найти, и персонаж отвечал «в моей базе
+            # ничего не нашлось», будто баз нет (письмо 25.11, №985). Теперь он знает, какие базы у него есть
+            names = ", ".join(empty)
+            one = len(empty) == 1
+            out = (f"\n\nТВОИ ЗНАНИЯ — {names} ({'база' if one else 'базы'} на сайте Dewiar). По словам этого вопроса "
+                   f"в {'ней' if one else 'них'} ничего не нашлось. "
+                   f"Спрашивают, что ты знаешь, о чём можешь рассказать или чем поможешь, — скажи, что отвечаешь по {names}, "
+                   "и предложи спросить о конкретном. Вопрос о другом — ответь от себя и одной фразой скажи, что в "
+                   f"{names} об этом нет.")
         if errs and not parts:
             out += f"\n\nБаза знаний сейчас недоступна ({errs[0]}). Ответь от себя и коротко скажи, что база не ответила."
         return local + out
 
-    def _persona_local_knowledge(self, q, folders, quiet=False):
+    def _persona_local_knowledge(self, q, folders, quiet=False, info=None):
         """Знания персонажа из папок на этом компьютере (YouTube 27.10: «при создании персонажа нет возможности добавить
         знания из локальной папки, только с сервера»): поиск по отрывкам (knowledge.py, BM25) только в его папках, без
         интернета и входа. -> добавка к подсказке ("" — папок нет)."""
@@ -1098,13 +1150,18 @@ class BrainMixin:
                 "и from (номер отрывка), порцию за порцией, сколько нужно для ответа; оглавление книги с номерами глав — "
                 "search_documents с одним file. Заметки человека (find_notes) не "
                 "трогай, если он сам о них не просит.")
+        if quiet:                                     # «Бот персонажа»: действий у него нет — искать дальше нечем
+            rule = " Это всё, что нашлось к вопросу, — других поисков не будет."
+        if info is not None:
+            info.setdefault("found" if res else "empty", []).append(labels)
         if not res:
             busy = any(st.get("busy") for st in getattr(kn, "fstate", {}).values())
             if busy:
                 return (f"\n\nТвои папки со знаниями ({labels}) ещё читаются — новые файлы проиндексируются за несколько "
                         f"минут.{have} Скажи об этом честно и предложи спросить чуть позже; не выдумывай.")
             return (f"\n\nТВОИ ПАПКИ СО ЗНАНИЯМИ ({labels}).{have} По словам этого вопроса ничего не нашлось.{rule} "
-                    "Не нашла и так — скажи честно, что в этих файлах ответа не нашла; от себя — только с этой оговоркой.")
+                    "Не нашла и так — скажи честно, что в этих файлах ответа не нашла; от себя — только с этой оговоркой. "
+                    "Спрашивают, что ты знаешь или о чём можешь рассказать, — назови эти папки и файлы.")
         if not quiet:
             self.emit("tool", name="knowledge", title=f"Найдено в {labels}", status="done")
         return (f"\n\nТВОЯ БАЗА ЗНАНИЙ (папки на компьютере пользователя: {labels}).{have} Найдено по вопросу — отвечай, "
@@ -1145,16 +1202,41 @@ class BrainMixin:
     def _fake_reminder(self, said, turn):
         """Модель сказала «поставила напоминание», а инструмент не вызывала (бывает у небольших моделей) — честно
         предупредить, а не оставить человека с несуществующим напоминанием. -> текст предупреждения или ""."""
+        if getattr(turn, "raw", False) or getattr(turn, "greet", False):
+            # владелец 21.11, 21:08: «С возвращением» — «напоминание… уже поставила на 21:26» (правда: поставлено в 19:26
+            # без модели), а следом «⚠ на самом деле не поставлено». Служебное поручение (приветствие, дело по расписанию) —
+            # не просьба человека: проверять нечего
+            return ""
         if not re.search(r"\bнапомни|\bнапоминай|\bразбуди|будильник на|таймер на|засеки|"
                          r"(?:поставь|сделай|заведи)\s+(?:мне\s+)?(?:будильник|таймер|напоминание)", (said or "").lower()):
             return ""
         if any(n in ("set_reminder", "cancel_reminder", "list_reminders") for n in getattr(turn, "tools_ok", [])):
             return ""
+        if self._reminder_says_exists(turn.full):
+            return ""                                  # о напоминании, которое правда стоит (поставлено раньше), — правда
         if not re.search(r"напомн|постав|установ|готово|сделано|добавил|запланир|будильник|таймер", turn.full.lower()):
             return ""
         log.warning("⚠ Модель сказала, что поставила напоминание, но инструмент не вызвала: %s", said[:120])
         return ("⚠ На самом деле напоминание не поставлено — модель не вызвала инструмент. Скажите так: «напомни "
                 "в пятницу в 16:30 сделать бэкап» или добавьте в студии, «Напоминания».")
+
+    def _reminder_says_exists(self, answer):
+        """Ответ называет время, на которое у человека правда стоит напоминание (например, поставленное раньше без модели):
+        «уже поставила на 21:26» — правда, а не выдумка. Сверка по списку напоминаний, не по словам."""
+        times = set(re.findall(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b", answer or ""))
+        if not times:
+            return False
+        try:
+            items = list(getattr(self.reminders, "items", None) or [])
+        except Exception:  # noqa: BLE001
+            return False
+        have = set()
+        for x in items:
+            at = str(x.get("at") or x.get("when") or "")
+            m = re.search(r"T(\d{2}):(\d{2})", at)
+            if m:
+                have.add((str(int(m[1])), m[2]))
+        return any((str(int(h)), mm) in have for h, mm in times)
 
     def _set_reminder_fast(self, r, via=None):
         """«Напомни…» разобрали сами — ставим без модели и подтверждаем одной фразой."""

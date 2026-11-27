@@ -26,7 +26,7 @@ import plugins as PL  # noqa: E402
 P = PL.Plugins(ST.Settings(tmp / "s.json"))
 cat = json.loads(json.dumps({"plugins": P.catalog()}, default=str))
 t = next(x for x in cat["plugins"] if x["id"] == "tenders")
-ok(t["try"] == "Есть новые тендеры?" and any(s["required"] for s in t["settings"]) and t["video"] == "", "в каталоге — фраза «попробуйте», обязательные настройки, ролик")
+ok(t["try"] == "Есть новые заказы?" and any(s["required"] for s in t["settings"]) and t["video"] == "", "в каталоге — фраза «попробуйте», обязательные настройки, ролик")
 ok(next(x for x in cat["plugins"] if x["id"] == "kitchen")["try"] == next(x for x in cat["plugins"] if x["id"] == "kitchen")["phrases"][0],
    "нет своей фразы — первая из «Попробуйте сказать»")
 lessons = [{"id": "15-plugins", "n": 15, "title": "Плагины", "about": "", "sec": 65, "video": "https://x.test/15.mp4", "poster": "", "youtube": ""}]
@@ -73,7 +73,7 @@ with sync_playwright() as p:
     ok(st.inner_text("#ht-on") == "Настроить и включить", "плагину нужны настройки — «Настроить и включить»")
     st.click("#ht-on"); st.wait_for_timeout(500)
     ok(st.evaluate("document.querySelector('#p-skills').classList.contains('cur')") and st.evaluate("document.querySelector('#pld').classList.contains('open')")
-       and "Тендеры" in st.inner_text("#pld-name"), "— открыта панель «Тендеров» в «Плагинах»")
+       and "тендеры" in st.inner_text("#pld-name"), "— открыта панель «Тендеров» в «Плагинах»")
     ok(not [c for c in st.evaluate("calls") if c[0] == "plugin_install"], "без настроек не установлен")
     # «Кухня» — включается сразу; после — «Спросить Лиру»
     st.evaluate("() => { document.querySelector('nav button[data-p=\"home\"]').click(); HM.tryI = hmTryList().findIndex(p => p.id === 'kitchen'); hmTry(); }")

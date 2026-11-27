@@ -884,9 +884,11 @@ class Workspace:
             return MEMORY, MEMORY_HEAD
         return persona_mem_rel(who), persona_mem_head(who)
 
-    def remember(self, fact, who=None):
+    def remember(self, fact, who=None, replace=None):
         """Дописывает строку в «Обо мне» (или в свою память персонажа) в формате «- факт _(дд.мм.гггг)_» (его разбирает
-        _FACT в sync.py). Уже известное (текст есть в файле) не повторяет. -> фраза для ответа."""
+        _FACT в sync.py). Уже известное (текст есть в файле) не повторяет. replace — часть неверной старой записи
+        (№919: «не Харламент, а Харламенко» — старый факт оставался рядом с новым): такие строки заменяются новым фактом.
+        -> фраза для ответа."""
         fact = re.sub(r"\s+", " ", (fact or "").strip())
         if not fact:
             raise WorkspaceError("пустой факт")
@@ -894,6 +896,29 @@ class Workspace:
         p = self.safe(str(rel))
         p.parent.mkdir(parents=True, exist_ok=True)
         old = p.read_text(encoding="utf-8") if p.exists() else head
+        rep = re.sub(r"\s+", " ", str(replace or "")).strip().strip(".«»\"'").lower().replace("ё", "е")
+        if len(rep) >= 3:
+            lines, hit = old.split("\n"), []
+            for i, ln in enumerate(lines):
+                if ln.strip().startswith("- ") and rep in ln.lower().replace("ё", "е"):
+                    hit.append(i)
+            if hit:
+                import difflib
+                fw = set(re.findall(r"[\wё]{3,}", fact.lower()))
+                main = max(hit, key=lambda i: len(fw & set(re.findall(r"[\wё]{3,}", lines[i].lower()))))
+                lines[main] = f"- {fact} _({dt.date.today():%d.%m.%Y})_"      # самая похожая строка — целиком новым фактом
+                # в других записях то же неверное слово («Аня учится в 5 классе») — меняем только слово, факт не теряем
+                cand = [w for w in re.findall(r"[\wё-]{3,}", fact) if w.lower() != rep]
+                new_w = max(cand, key=lambda w: difflib.SequenceMatcher(None, w.lower(), rep).ratio(), default="")
+                fixed = 0
+                if new_w and difflib.SequenceMatcher(None, new_w.lower(), rep).ratio() >= 0.5:
+                    for i in hit:
+                        if i != main:
+                            lines[i] = re.sub(re.escape(str(replace).strip().strip(".«»\"'")), new_w, lines[i], flags=re.I)
+                            fixed += 1
+                p.write_text("\n".join(lines), encoding="utf-8")
+                self.mem_changed()
+                return "Исправил: старая запись заменена." + (f" Поправил и в других записях ({fixed})." if fixed else "")
         if fact.lower().rstrip(".") in old.lower():
             return "Это я уже знаю."
         subj, val = fact_parts(fact)
@@ -923,7 +948,7 @@ class Workspace:
             p.write_text(head, encoding="utf-8")
         with open(p, "a", encoding="utf-8") as f:
             f.write(f"- {fact} _({dt.date.today():%d.%m.%Y})_\n")
-        return "Запомнил."
+        return "Запомнил." + (f" Старой записи с «{replace}» не нашёл — добавил новую." if len(rep) >= 3 else "")
 
     def memory_get(self, who=None):
         rel, head = self._mem(who)

@@ -47,6 +47,8 @@ DOMAINS = {"yandex.ru": "yandex", "ya.ru": "yandex", "yandex.com": "yandex", "ya
            "icloud.com": "icloud", "me.com": "icloud", "yahoo.com": "yahoo"}
 
 
+INBOX_PEEK = 262144          # байт начала письма для списка писем (inbox)
+
 class MailError(Exception):
     pass
 
@@ -359,7 +361,9 @@ class Box:
             uids = (data[0] or b"").split()[::-1]
             out, q = [], (query or "").lower().strip()
             for uid in uids[: max(limit * (4 if q else 1), limit)]:
-                typ, d = m.uid("fetch", uid, "(FLAGS BODY.PEEK[])")
+                # начало письма, не всё: список — тема, отправитель, начало текста; вложения в десятки МБ тянулись целиком,
+                # и «Почта» на «Главной» студии открывалась по 40 с (20.11). Целиком письмо читает read()
+                typ, d = m.uid("fetch", uid, f"(FLAGS BODY.PEEK[]<0.{INBOX_PEEK}>)")
                 raw = next((x[1] for x in d if isinstance(x, tuple)), b"")
                 flags = " ".join(x.decode(errors="ignore") if isinstance(x, bytes) else "" for x in d if not isinstance(x, tuple))
                 flags += " ".join(x[0].decode(errors="ignore") for x in d if isinstance(x, tuple))

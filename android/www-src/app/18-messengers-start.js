@@ -221,7 +221,13 @@ function updInstall() {
 }
 N.on("upd_progress", e => { const p = $("#upd-pct"); if (p) p.textContent = e.pct >= 0 ? e.pct + "%" : ""; });
 N.on("upd_ready", () => { plog("info", "⬇️ обновление скачано — открываю установку"); updInstall(); });
-N.on("upd_error", e => updRender(`Не скачалось: ${esc(e.error || "ошибка связи")}.<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"));
+// №1057: попытки и причина — в журнал (раньше отказ не оставлял следа в отчёте); три попытки не помогли — дорога портит
+// файл: путь в обход — скачать со страницы сайта в браузере
+N.on("upd_retry", e => plog("warn", `⬇️ обновление: попытка ${e.try} — ${e.error}`));
+N.on("upd_error", e => { plog("warn", `⬇️ обновление не скачалось: ${e.error}`);
+  updRender(`Не скачалось три раза: ${esc(e.error || "ошибка связи")}. Похоже, файл портит сеть — VPN, прокси или экономия трафика. `
+    + `Выключите их и попробуйте ещё раз — или скачайте Dewiar со страницы <b>dewiar.pro</b> в браузере и установите поверх: всё сохранится.`
+    + `<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && updWantInstall && D.updateCanInstall && D.updateCanInstall()) { updWantInstall = false; updInstall(); } });
 const UPD_OLD = `<p class="hint" style="margin:8px 2px 0">Раньше обновления скачивал браузер — в «Загрузках» могли остаться старые Dewiar-….apk, их можно удалить.</p><button class="btn w" id="upd-dl" style="margin-top:6px">Открыть Загрузки</button>`;
 /* «обновись» голосом: есть новее — открываем «О приложении» и запускаем обновление; нет — говорим, какая стоит.
@@ -247,11 +253,33 @@ async function updateSay(install) {
     return `Есть новая версия ${a.version} — обновляю. Всё ваше сохранится.`;
   } catch (e) { return "Не получилось проверить обновление — нет связи с dewiar.pro. Попробуйте чуть позже."; }
 }
+/* Ритм обновлений (1.0.53, владелец 20.11: «обновлений несколько раз в день — некоторых уже не радует; напоминать раз в
+   2–3 дня, вручную — сразу»): сама предлагаю не раньше чем через 2 дня после того, как встала нынешняя версия, плюс своя
+   случайная добавка телефона до суток. «Важное исправление» (urgent в latest.json) и «Проверить» в «О приложении» — сразу. */
+const UPD_EVERY = 2 * 86400000, UPD_JIT = 86400000;
+/* 1.0.71 («Первая минута», пакет 25.11: из новых телефонов только 3 % начали со свежей версии — старые APK ходят по рукам):
+   самая первая версия на этом телефоне (first) — новая сразу, без ритма; после первого обновления — обычный ритм. */
+function updDue(cur) {
+  if (!S.updSince || S.updSince.v !== cur) { S.updSince = { v: cur, at: Date.now(), first: !S.updSince }; saveS(); }
+  if (S.updSince.first) return 0;
+  if (typeof S.updJit !== "number") { S.updJit = Math.random() * UPD_JIT; saveS(); }
+  return S.updSince.at + UPD_EVERY + S.updJit;
+}
 async function checkUpdate(manual) {
   const r = $("#upd-res");
   try {
+    const inf = JSON.parse(D.info() || "{}");
+    if (inf.store) {                                   // сборка для магазинов (RuStore, Google Play): обновляет магазин
+      if (manual && r) updRender("Обновления приходят через магазин приложений, откуда вы установили Dewiar.");
+      return false;
+    }
+    const cur = inf.version || "0", due = updDue(cur);
     const d = JSON.parse((await http("GET", UPD_URL, { timeout: 10000 })).body || "{}"), a = d.android;
-    const newer = a && cmpVer(a.version, JSON.parse(D.info() || "{}").version || "0") > 0;
+    const newer = a && cmpVer(a.version, cur) > 0;
+    if (newer && !manual && !a.urgent && Date.now() < due) {
+      plog("info", `⬆ есть ${a.version} — предложу через ${Math.max(1, Math.round((due - Date.now()) / 3600000))} ч (обновления раз в 2–3 дня)`);
+      return false;
+    }
     const hands = typeof D.handsState === "function" && D.handsState() !== "none";     // стоит версия с «руками» — и обновляем её
     if (newer && hands && !a.hands_apk) {
       // отчёт 835 (17.11): «скачиваю версию с руками, приходит обновление — и руки слетают; после каждого обновления
@@ -575,9 +603,21 @@ async function addAttach(f) {
 }
 function renderAtts() {
   const box = $("#atts");
-  box.innerHTML = attached.map((a, i) => `<div class="at">${a.kind === "image" ? `<img src="${a.url}" alt="">` : `<span>${esc(a.name)}</span>`}<button data-i="${i}" title="Убрать">${X_SVG}</button></div>`).join("");
-  $$("button", box).forEach(b => b.onclick = () => { attached.splice(+b.dataset.i, 1); renderAtts(); });
+  box.innerHTML = attached.map((a, i) => `<div class="at${a.pasted ? " pasted" : ""}" data-i="${i}">${a.kind === "image" ? `<img src="${a.url}" alt="">` : `<span>${esc(a.name)}</span>`}<button data-i="${i}" title="Убрать">${X_SVG}</button></div>`).join("");
+  $$("button", box).forEach(b => b.onclick = (ev) => { ev.stopPropagation(); attached.splice(+b.dataset.i, 1); renderAtts(); });
+  $$(".at.pasted", box).forEach(d => d.onclick = () => {      // нажатие — вставленный текст обратно в поле
+    const a = attached[+d.dataset.i], t = $("#typed"); attached.splice(+d.dataset.i, 1);
+    t.value = a.text + (t.value.trim() ? "\n\n" + t.value : ""); typedGrow(); renderAtts(); t.focus(); });
 }
+/* Длинная вставка — вложением (№918, владелец 20.11), как на компьютере: поле — для вопроса, модель получает текст целиком. */
+const PASTE_AS_FILE = 2000;
+$("#typed").addEventListener("paste", (e) => {
+  const txt = e.clipboardData && e.clipboardData.getData("text");
+  if (!txt || txt.length <= PASTE_AS_FILE || attached.length >= ATT_MAX) return;
+  e.preventDefault();
+  attached.push({ kind: "text", name: "Вставленный текст", text: txt.slice(0, ATT_TEXT), cut: txt.length > ATT_TEXT, pasted: true });
+  renderAtts(); $("#typebox").classList.add("on");
+});
 $("#b-att").onclick = () => $("#att-file").click();
 $("#att-file").onchange = async (e) => {
   for (const f of Array.from(e.target.files || [])) await addAttach(f);
@@ -651,3 +691,8 @@ function handleIntent(e) {
   }
   else if (e.action === "link") { const m = /server=([^&]+)/.exec(e.url || ""); if (m) { openSettings("brain"); setTimeout(() => { const d = $(".brainalt"); if (d) d.open = true; $('.tile[data-w="pc"]').click(); $("#w-addr").value = decodeURIComponent(m[1]); }, 300); } }
 }
+/* №980, третий раз (владелец 25.11: «активная Лира — в уведомлении Патрик»): напоминания, пришедшие с компьютера до 0.9.92,
+   лежат без «кто ставил», и уведомление подписывалось «текущим обликом», оставшимся от Патрика. Один раз при запуске
+   подписываем такие главным персонажем сейчас; новые приходят с who (sync). */
+setTimeout(() => { try { const pid = S.persona; if (!pid || !PERSONAS.some(p => p.id === pid)) return;
+  JSON.parse(D.alarms() || "[]").filter(a => a && a.id && !a.who).forEach(a => D.alarmSet(JSON.stringify(Object.assign({}, a, { who: pid })))); } catch (e) { } }, 4000);

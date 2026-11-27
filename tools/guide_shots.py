@@ -1,4 +1,4 @@
-"""Снимки экранов для руководства на сайте (server/dwrapp/guide.php): телефон и студия с аккуратными примерами, без
+"""Снимки экранов для руководства на сайте (server/dwrapp/guide): телефон и студия с аккуратными примерами, без
 сервера — мост телефона и ядро студии подменены. Пишет server/dwrapp/guide-*.webp.
     python3 tools/guide_shots.py"""
 import io, shutil, subprocess, sys, tempfile, time
@@ -53,7 +53,7 @@ with sync_playwright() as p:
       clHello = async () => {{}}; openClose('pmama'); }}""")
     pg.wait_for_timeout(600); save(pg.screenshot(), "phone-close-chat", 600)
     # «Близкие»: список и печать-приглашение
-    pg.evaluate("""() => { clCur = ''; clRender(); clInvShow({ link: 'https://dewiar.pro/dwrapp/download.php?close=Gh7xQ2LmP9aKz3Vt', expires: Date.now() / 1000 + 6 * 86400 }); }""")
+    pg.evaluate("""() => { clCur = ''; clRender(); clInvShow({ link: 'https://dewiar.pro/dwrapp/download?close=Gh7xQ2LmP9aKz3Vt', expires: Date.now() / 1000 + 6 * 86400 }); }""")
     pg.wait_for_timeout(600); save(pg.screenshot(), "phone-close-invite", 600)
     pg.close()
 
@@ -63,7 +63,7 @@ with sync_playwright() as p:
     pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1"); pg.wait_for_timeout(1200)
     pg.evaluate(f"""() => {{ const H = {HIST}, P = {PEOPLE}.map(x => Object.assign(x, {{ last: (H[x.pid] || []).slice(-1)[0], unread: x.pid === 'pand' ? 1 : 0 }}));
       core.call = (c, a) => c === 'close_state' ? Promise.resolve({{ me: {{ name: 'Миша' }}, people: P }})
-        : c === 'close_history' ? Promise.resolve(H[a.pid] || []) : c === 'close_invite' ? Promise.resolve({{ link: 'https://dewiar.pro/dwrapp/download.php?close=Gh7xQ2LmP9aKz3Vt' }}) : Promise.resolve({{}});
+        : c === 'close_history' ? Promise.resolve(H[a.pid] || []) : c === 'close_invite' ? Promise.resolve({{ link: 'https://dewiar.pro/dwrapp/download?close=Gh7xQ2LmP9aKz3Vt' }}) : Promise.resolve({{}});
       if (window.studioSkin) studioSkin('snow'); $('nav button[data-p="close"]').click(); }}""")
     pg.wait_for_timeout(900); pg.evaluate("async () => { await loadClose(); await clOpen('pmama'); }"); pg.wait_for_timeout(500)
     save(pg.screenshot(), "studio-close", 1600)

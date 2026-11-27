@@ -714,6 +714,24 @@ class _NeedWav(Exception):
     """Сервер не умеет PCM (400 «Only wav and mp3») или прислал mp3/ogg вместо PCM — повторить запрос с форматом WAV."""
 
 
+def voice_gender(voice_cfg):
+    """Пол голоса персонажа: явно выбранный мужской или женский голос Piper (человек выбирал голос — это его выбор) —
+    иначе пол персонажа. -> "male" | "female" | ""."""
+    vc = voice_cfg or {}
+    pv = str(vc.get("piper") or "")
+    try:
+        from personas import PIPER_VOICES
+        title = PIPER_VOICES.get(pv, "")
+    except Exception:  # noqa: BLE001
+        title = ""
+    if "мужск" in title:
+        return "male"
+    if "женск" in title:
+        return "female"
+    g = vc.get("_gender")
+    return g if g in ("male", "female") else ""
+
+
 class RemoteTTS:
     """OpenAI-совместимый /audio/speech (base_url — с /v1) с потоковым PCM. Понимает три формы ответа: сырой PCM
     (частота — из заголовков ответа, иначе из настройки sample_rate, по умолчанию 24 кГц, как у OpenAI), WAV (частота
@@ -766,7 +784,8 @@ class RemoteTTS:
 
     def synth(self, text, voice_cfg, speed=1.0):
         c = self.cfg
-        own = c.get("voice_f") if voice_cfg.get("_gender") == "female" else c.get("voice_m")   # голос героинь / героев с сервера
+        g = voice_gender(voice_cfg)
+        own = c.get("voice_f") if g == "female" else c.get("voice_m")   # голос героинь / героев с сервера
         # русский (или одни цифры: ответ «14:10» целиком — без букв, отзыв 16.10 «ствисе»): числа словами и здесь — служба голосов старой
         if re.search(r"[А-Яа-яЁё]", text or "") or (re.search(r"\d", text or "") and not re.search(r"[A-Za-z]", text or "")):
             from speechnorm import speech_norm                   # версии читала цифры странными звуками (отзыв 15.10)
@@ -774,8 +793,13 @@ class RemoteTTS:
         else:                                                    # №561: кавычки, «!!!» и разметку голос не читает
             from speechnorm import speech_clean
             text = speech_clean(text) or text
-        body = {"model": c.get("model") or "tts-1", "input": text, "voice": own or voice_cfg.get("remote") or "alloy",
+        # владелец 22.11: «голос выбирал мужской, а слышу женский» — поле «Голос на сервере» пустое, и уходил «alloy»
+        # (у службы голосов — женский). Пусто — голос по полу: мужской персонаж или выбран мужской Piper — мужской
+        body = {"model": c.get("model") or "tts-1", "input": text,
+                "voice": own or voice_cfg.get("remote") or ("onyx" if g == "male" else "nova"),
                 "response_format": "pcm", "stream": True, "speed": speed}
+        if g in ("male", "female"):
+            body["gender"] = g
         if voice_cfg.get("_pid"):                         # служба голосов Dewiar даёт персонажу его собственный голос
             body["persona"] = voice_cfg["_pid"]
         tn = voice_cfg.get("_tone")

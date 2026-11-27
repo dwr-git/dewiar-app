@@ -6,6 +6,11 @@
 разговора, а важное из начала не теряется. Разговор переживает перезапуск программы (STATE_DIR/conversation.json) и
 заканчивается после долгой тишины (llm.history_reset_seconds, по умолчанию 8 часов) или словами «начнём новый разговор».
 Перерыв дольше 20 минут модель видит («перерыв 45 мин») — новая просьба не путается с прежней темой.
+
+Сцена разговора («Ум Лиры», шаг 1; владелец 20.11: «максимально важное»; переключатель llm.scene, по умолчанию выключен):
+живой лист на полстраницы — цель сейчас, что решили и что известно, что ассистент обещал, чего ждём от человека, открытые
+вопросы. Пишет модель в фоне после ответа (не задерживает голос), идёт в справку к вопросу (turn_note), а не в системную
+подсказку — кэш облака цел. Замер — экзамен «Понимание ситуации» (exam.py --scene); всем — только если лучше.
 """
 import json
 import logging
@@ -26,6 +31,18 @@ SUMMARIZE = (
     "коротко, пунктами, от третьего лица («Пользователь…», «Ассистент…»). Ничего не выдумывай и не добавляй советов. "
     "Не больше 18 пунктов, самое старое и мелкое — сокращай. Верни только содержание, без вступлений.")
 
+SCENE_MAX = 900              # символов: сцена — ориентир, не пересказ
+SCENE = (
+    "Ты ведёшь «сцену» разговора голосового ассистента с пользователем — короткий лист, по которому ассистент сразу "
+    "понимает, где они сейчас. Обнови сцену по последним репликам. Ровно эти строки, каждая — коротко, по-русски:\n"
+    "Цель сейчас: чего пользователь добивается в этом разговоре (одна фраза).\n"
+    "Известно и решено: факты, имена, числа, предпочтения пользователя, варианты с их номерами («1 — паста, 2 — суп»), "
+    "поправки (что заменили на что).\n"
+    "Ассистент обещал: что ассистент сказал, что сделает или к чему вернётся (или «—»).\n"
+    "Ждём от пользователя: что пользователь обещал уточнить (или «—»).\n"
+    "Открыто: о чём ещё не договорились; если пользователь отвлёкся на другое — к какой теме вернуться.\n"
+    "Ничего не выдумывай, без советов и оценок. Верни только эти пять строк.")
+
 NEW_RX = re.compile(r"^(?:давай(?:те)?\s+)?(?:начн(?:ем|ём|и)|начать)\s+(?:новый\s+разговор|разговор\s+заново|сначала|заново|с\s+чистого\s+листа)$|"
                     r"^(?:забудь|сотри|очисти)\s+(?:наш\s+|этот\s+|весь\s+)?разговор$|^новый\s+разговор$|^новая\s+тема$")
 
@@ -41,6 +58,8 @@ class Conversation:
     def __init__(self, path):
         self.path = Path(path)
         self.summary = ""
+        self.scene = ""                # сцена разговора (llm.scene): цель, известное, обещания, открытое — scene_update()
+        self._scene_busy = threading.Event()
         self.turns = 0                 # сколько пар реплик было в этом разговоре (вместе со свёрнутыми)
         self.folded = 0                # сколько из них — в содержании
         self.started = 0.0
@@ -94,6 +113,7 @@ class Conversation:
         except (OSError, ValueError):
             return
         self.summary = str(d.get("summary") or "")
+        self.scene = str(d.get("scene") or "")
         self.turns, self.folded = int(d.get("turns") or 0), int(d.get("folded") or 0)
         self.started, self.last = float(d.get("started") or 0), float(d.get("last") or 0)
         self._restored = [m for m in d.get("history") or [] if isinstance(m, dict) and m.get("role") in ("user", "assistant")
@@ -116,6 +136,7 @@ class Conversation:
         считаем (иначе старая беседа обнулилась бы на первом же вопросе)."""
         with self._lock:
             self.summary, self.turns, self.folded, self.started, self.last = "", 0, 0, 0.0, 0.0
+            self.scene = ""
         self._restored = []
         self._load()
         h, self._restored = self._restored, []
@@ -125,7 +146,7 @@ class Conversation:
 
     def save(self, history):
         """conversation.json: содержание, счётчики и до 80 последних текстовых сообщений (role, content, who, model)."""
-        d = {"summary": self.summary, "turns": self.turns, "folded": self.folded, "started": self.started, "last": self.last,
+        d = {"summary": self.summary, "scene": self.scene, "turns": self.turns, "folded": self.folded, "started": self.started, "last": self.last,
              "history": [{k: v for k, v in m.items() if k in ("role", "content", "who", "model")} for m in history
                          if isinstance(m.get("content"), str)][-80:]}
         try:
@@ -139,6 +160,7 @@ class Conversation:
     def reset(self, save=True):
         with self._lock:
             self.summary, self.turns, self.folded, self.started, self.last = "", 0, 0, 0.0, 0.0
+            self.scene = ""
         if save:
             self.save([])
 
@@ -180,6 +202,54 @@ class Conversation:
                             f"Перед этим сообщением в разговоре был перерыв {g} мин")
                            + ". Если новая просьба не связана с прежней темой — просто выполни её, не возвращаясь к старому.")
         return " ".join(out)
+
+    def scene_note(self):
+        """Сцена — в справку к вопросу (если включена и уже есть)."""
+        if not self.scene:
+            return ""
+        return ("Сцена разговора (ориентир; дословные реплики — выше, они главнее): " + self.scene.strip().replace("\n", "; ")
+                + ". Короткие отсылки («второй вариант», «ей», «продолжим», «а если…») понимай по ней, не переспрашивая.")
+
+    def scene_due(self, history):
+        """Обновлять ли сцену: в разговоре уже есть пара реплик и обновление не идёт."""
+        return len(history) >= 2 and not self._scene_busy.is_set()
+
+    def scene_wait(self, timeout):
+        """Подождать, пока допишется сцена (экзамен: следующий шаг сразу после ответа). Людям — 0: голос не ждёт."""
+        if timeout and self._scene_busy.is_set():
+            t = time.time() + timeout
+            while self._scene_busy.is_set() and time.time() < t:
+                time.sleep(0.1)
+
+    def scene_update(self, history, ask_model, pairs=6):
+        """Обновить сцену по последним pairs парам реплик (и содержанию начала). Вызывать в фоне. -> True, если обновили."""
+        if self._scene_busy.is_set():
+            return False
+        self._scene_busy.set()
+        try:
+            started = self.started
+            lines = []
+            for m in history[-2 * pairs:]:
+                who = "Пользователь" if m.get("role") == "user" else "Ассистент"
+                lines.append(f"{who}: {str(m.get('content', ''))[:1200]}")
+            if not lines:
+                return False
+            msg = ((("Содержание раньше:\n" + self.summary.strip() + "\n\n") if self.summary else "")
+                   + (("Сцена до сих пор:\n" + self.scene.strip() + "\n\n") if self.scene else "")
+                   + "Последние реплики:\n" + "\n".join(lines))
+            text = (ask_model(SCENE, [{"role": "user", "content": msg[-12000:]}]) or "").strip()
+            text = re.sub(r"^\s*сцена[^\n:]*:\s*\n", "", text, flags=re.I).strip()
+            if len(text) < 20 or self.started != started:          # пусто — или пока писали, разговор начали заново
+                return False
+            with self._lock:
+                self.scene = text[:SCENE_MAX]
+            log.info("🎬 Сцена разговора обновлена (%d символов)", len(self.scene))
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.info("Сцена разговора не обновилась (%s)", e)
+            return False
+        finally:
+            self._scene_busy.clear()
 
     def window(self, history, turns):
         """Что отдать модели дословно: всё ещё не свёрнутое, но не больше окна с запасом (если свернуть не вышло)."""
@@ -237,5 +307,5 @@ class Conversation:
             self._busy = False
 
     def public(self, history):
-        return {"turns": self.turns, "folded": self.folded, "verbatim": len(history) // 2, "summary": self.summary,
+        return {"turns": self.turns, "folded": self.folded, "verbatim": len(history) // 2, "summary": self.summary, "scene": self.scene,
                 "started": int(self.started), "last": int(self.last)}

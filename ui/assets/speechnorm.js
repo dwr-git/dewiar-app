@@ -61,20 +61,35 @@
     ["ou", "ау"], ["qu", "кв"], ["kh", "х"], ["zh", "ж"], ["ya", "я"], ["yu", "ю"], ["yo", "ё"], ["ts", "ц"]];
   const TR1 = { a: "а", b: "б", c: "к", d: "д", e: "е", f: "ф", g: "г", h: "х", i: "и", j: "дж", k: "к", l: "л", m: "м", n: "н", o: "о",
     p: "п", q: "к", r: "р", s: "с", t: "т", u: "у", v: "в", w: "в", x: "кс", y: "и", z: "з" };
-  const KNOWN = { linux: "линукс", ubuntu: "убунту", windows: "виндоус", telegram: "телеграм", max: "макс", dewiar: "дэвиаар",
-    youtube: "ютуб", google: "гугл", yandex: "яндекс", wifi: "вай-фай", "wi-fi": "вай-фай", ok: "окей", email: "имейл", sudo: "судо",
-    python: "пайтон", chrome: "хром", obsidian: "обсидиан", android: "андроид", iphone: "айфон", bluetooth: "блютус", hdmi: "эйч-ди-эм-ай",
-    jazz: "джаз", relax: "релакс", fm: "эф-эм" };
+  // как core/speechnorm.py _KNOWN (№1111, 26.11: «Deep Space One» — «дип спейс уан», а не «дип спаке оне»)
+  const KNOWN = { linux: "линукс", ubuntu: "убунту", windows: "виндоус", telegram: "телеграм", max: "макс", dewiar: "дэвиаар", youtube: "ютуб", google:
+    "гугл", yandex: "яндекс", wifi: "вай-фай", "wi-fi": "вай-фай", ok: "окей", email: "имейл", sudo: "судо", python: "пайтон", chrome: "хром",
+    obsidian: "обсидиан", android: "андроид", iphone: "айфон", bluetooth: "блютус", hdmi: "эйч-ди-эм-ай", jazz: "джаз", relax: "релакс", fm:
+    "эф-эм", deep: "дип", space: "спейс", one: "уан", two: "ту", three: "фри", the: "зэ", of: "оф", and: "энд", radio: "радио", rock: "рок",
+    pop: "поп", chill: "чилл", chillout: "чиллаут", lounge: "лаунж", house: "хаус", dance: "дэнс", classic: "классик", classics: "классикс",
+    love: "лав", smooth: "смус", groove: "грув", soul: "соул", hits: "хитс", hit: "хит", music: "мьюзик", city: "сити", sky: "скай", star:
+    "стар", stars: "старс", sun: "сан", moon: "мун", night: "найт", day: "дэй", live: "лайв", heart: "харт", kiss: "кисс", energy: "энерджи",
+    plus: "плюс", record: "рекорд", best: "бест", top: "топ", fresh: "фреш", cafe: "кафе", lofi: "лоу-фай", ambient: "эмбиент", trance: "транс",
+    techno: "техно", beat: "бит", beats: "битс", vibe: "вайб", vibes: "вайбс", power: "пауэр", rap: "рэп", metal: "метал", blues: "блюз",
+    country: "кантри", retro: "ретро", disco: "диско", piano: "пиано", nature: "нэйче", ocean: "оушен", world: "ворлд", news: "ньюс", sport:
+    "спорт", hot: "хот", cool: "кул", europa: "европа", radio1: "радио уан", station: "стейшен", sound: "саунд", sounds: "саундс", mix: "микс",
+    chart: "чарт", gold: "голд", new: "нью", old: "олд", school: "скул", dream: "дрим", dreams: "дримс", jungle: "джангл", bass: "бейс", drum:
+    "драм", drive: "драйв", free: "фри", time: "тайм", life: "лайф", light: "лайт", zone: "зон", wave: "вэйв", waves: "вэйвс", coffee: "кофи",
+    morning: "морнинг", evening: "ивнинг", "lounge fm": "лаунж эф-эм" };
+  const MAGIC_E = { a: "ей", i: "ай", o: "оу", u: "ью" };
   function latinWord(w) {
     const low = w.toLowerCase();
     if (KNOWN[low]) return KNOWN[low];
     if ((w === w.toUpperCase() && w.length <= 6) || w.length === 1) return [...low].map(c => LETTER[c] || c).join("-");
-    let out = "", i = 0;
-    while (i < low.length) {
-      const t2 = TR2.find(([a]) => low.startsWith(a, i));
-      if (t2) { out += t2[1]; i += t2[0].length; } else { out += TR1[low[i]] || low[i]; i++; }
+    let out = "", i = 0, src = low, tail = "";
+    const m = src.length >= 4 ? src.match(/([aiou])([bcdfgklmnprstvz])e$/) : null;
+    if (m) { src = src.slice(0, m.index); tail = MAGIC_E[m[1]] + (m[2] === "c" ? "с" : TR1[m[2]] || m[2]); }   // «немое e»: space — спейс
+    while (i < src.length) {
+      if (src[i] === "c" && "eiy".includes(src[i + 1] || "-")) { out += "с"; i++; continue; }            // ce, ci, cy — «с»
+      const t2 = TR2.find(([a]) => src.startsWith(a, i));
+      if (t2) { out += t2[1]; i += t2[0].length; } else { out += TR1[src[i]] || src[i]; i++; }
     }
-    return out;
+    return out + tail;
   }
   function num(s) {
     if (s.includes(":")) {
@@ -170,11 +185,27 @@
   const EMO = (() => { try { return new RegExp("[\\u{1F000}-\\u{1FAFF}\\u2600-\\u27BF\\u2B00-\\u2BFF\\u2190-\\u21FF\\u2300-\\u23FF\\u25A0-\\u25FF\\uFE0E\\uFE0F\\u200D\\u20E3\\u{E0020}-\\u{E007F}\\u00A9\\u00AE\\u2122]", "gu"); }
     catch (e) { return /[☀-➿⬀-⯿←-⇿⌀-⏿■-◿︎️‍⃣©®™]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/g; } })();
   const KEEP_DASH = /[0-9IVXLCDM]/, WCH = new RegExp(`[${W}]`);
+  // как core/speechnorm.py: сайт вслух — его имя; единицы после числа — словами (владелец 20.11)
+  const DOMAIN_RX = /\b(?:www\.)?(?:[A-Za-z0-9-]+\.)*([A-Za-z0-9-]+)\.(?:ru|com|org|net|pro|by|ua|kz|io|ai|app|dev|info|me|tv|online|site)\b(?:\/[^\s,;)]*)?/g;
+  const UNITS = [["Гбит|Gbit", ["гигабит", "гигабита", "гигабит"]], ["Мбит|Mbit", ["мегабит", "мегабита", "мегабит"]],
+    ["GiB|GB|ГБ|Гб", ["гигабайт", "гигабайта", "гигабайт"]], ["TiB|TB|ТБ|Тб", ["терабайт", "терабайта", "терабайт"]],
+    ["MiB|MB|МБ|Мб", ["мегабайт", "мегабайта", "мегабайт"]], ["KiB|KB|КБ|Кб|кБ", ["килобайт", "килобайта", "килобайт"]],
+    ["ГГц|GHz", ["гигагерц", "гигагерца", "гигагерц"]], ["МГц|MHz", ["мегагерц", "мегагерца", "мегагерц"]],
+    ["тыс\\.", ["тысяча", "тысячи", "тысяч"]], ["млн\\.?", ["миллион", "миллиона", "миллионов"]],
+    ["млрд\\.?", ["миллиард", "миллиарда", "миллиардов"]], ["мс|ms", ["миллисекунда", "миллисекунды", "миллисекунд"]],
+    ["ч\\.?", ["час", "часа", "часов"]], ["мин\\.?", ["минута", "минуты", "минут"]], ["сек\\.?", ["секунда", "секунды", "секунд"]]];
+  const PER = { "с": " в секунду", s: " в секунду", "сек": " в секунду", "мин": " в минуту", "ч": " в час", "сут": " в сутки" };
+  const UNIT_RX = new RegExp(`(\\d+)(?:([.,])(\\d{1,2}))?\\s*(${UNITS.map(u => u[0]).join("|")})(?:\\/(сек|сут|мин|с|s|ч))?(?![A-Za-zА-Яа-яЁё])`, "g");
+  function unit(m, n, sep, frac, word, per) {
+    const forms = UNITS.find(([u]) => new RegExp(`^(?:${u})$`).test(word))[1];
+    return (frac ? `${+n},${frac} ${forms[1]}` : `${+n} ${plural(+n, forms)}`) + (per ? PER[per] || "" : "");
+  }
   function clean(text) {
     let t = String(text == null ? "" : text);
     t = t.replace(/```[\s\S]*?```/g, " ").replace(/`([^`]*)`/g, "$1");
     t = t.replace(/!?\[([^\]]*)\]\([^()]*\)/g, "$1");                                   // [текст](ссылка) → текст
     t = t.replace(/https?:\/\/\S+/g, "ссылка");
+    t = t.replace(DOMAIN_RX, "$1");                                                      // news.rambler.ru → rambler
     t = t.replace(/^[ \t]*(?:#{1,6}|>+|[-*+•·▪◦‣●–—]+)[ \t]+/gm, "");                   // заголовки, цитаты, пункты списка
     t = t.replace(/([^\s.!?…:;,])[ \t]*\n\s*/g, "$1. ");                                // строка без точки — пауза перед следующей
     t = t.replace(EMO, " ");
@@ -188,6 +219,7 @@
     });
     t = t.replace(/~\s*(?=\d)/g, "около ").replace(/[#~^|\\<>]+/g, " ");
     t = t.replace(/[(\[{]/g, ", ").replace(/[)\]}]/g, ", ");
+    t = t.replace(/§\s*(?=\d)/g, "пункт ");                                              // «§6.5» — «пункт шесть точка пять»
     t = t.replace(/&/g, " и ").replace(/[¡¿§]/g, "");
     t = t.replace(/(^|[.!?…:;]\s*)[-–—]+\s+/g, "$1");                                   // «— Привет», «Итак: — …»
     t = t.replace(/[ \t]+(?:—|–|-{1,3})[ \t]+|—+/g, (m, i, s) => {                       // тире — пауза, между числами — нет
@@ -203,6 +235,8 @@
   function norm(text, latin = true) {
     let t = romanNorm(clean(text));
     for (let i = 0; i < 3; i++) t = lbReplace(t, /(\d{1,3})[   ](?=\d{3}(?!\d))/g, (c) => !/[\d.,]/.test(c), (m, a) => a);
+    t = t.replace(/(\d)[–—](?=\d)/g, "$1-");                                              // «2–3 ядра» — «два-три»
+    t = lbReplace(t, UNIT_RX, (c) => !inW(c) && c !== "." && c !== ",", unit);
     t = t.replace(/(\d+)(?:[.,](\d{1,2}))?\s*(?:руб(?:л[а-яё]*)?\.?|₽|р\.|BYN|RUB)(?![а-яёА-ЯЁA-Za-z])/g, (m, n, k) => money(n, k, "rub"));
     t = t.replace(/\$\s*(\d+)(?:[.,](\d{1,2}))?|(\d+)(?:[.,](\d{1,2}))?\s*(?:\$|долл\.|USD)/g, (m, n, k, n2, k2) => money(n || n2, k || k2, "usd"));
     t = t.replace(/(\d+)(?:[.,](\d{1,2}))?\s*(?:€|EUR)/g, (m, n, k) => money(n, k, "eur"));

@@ -11,12 +11,13 @@ from answer_rules import (
     crash_blocks, _CRASH_RX, DATE_ASK_RX, device_os, DISK_ASK_RX, facts_shown, honest_rest, IDEA_RULE, INFO_TOOLS, told,
     JOB_ASK_RX, LAW_CODE_RX, LAW_REF_RX, law_unsourced, model_label, _MONTH_NOM, _MONTH_RX, month_year_wrong,
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
-    PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, REPEAT_RX, shown_q, SONGS_ASK_RX,
-    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT)  # noqa: F401 — прежние имена на месте
-from answer_prompt import PromptMixin, prompt_parts
+    PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, ack_again, REPEAT_RX, shown_q, SONGS_ASK_RX,
+    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT, hist_calls)  # noqa: F401 — прежние имена на месте
+from answer_prompt import PromptMixin, prompt_parts, spec_names
+from xray import current as xray_current, turned as xray_turned
 from answer_models import ModelsMixin
 from answer_report import ReportMixin
-from answer_direct import DirectMixin
+from answer_direct import DirectMixin, LookMixin
 
 
 
@@ -24,11 +25,27 @@ from answer_direct import DirectMixin
 HABIT_TURN_RX = re.compile(r"\[Дело по расписанию\][^«]*«[^»]*(?:итог|подвед|сводк|что сделано)|^\W*(?:[а-яё]+,\s*)?(?:итог(?:и)? (?:дня|недели)|"
                            r"подвед[её]?\w* итог|что я (?:сегодня|за день) сделал)", re.I)
 
-class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
+class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin):
     # ---------- ответ ----------
     CODER_RX = re.compile(r"coder|codellama|codegemma|starcoder|codestral|devstral|sqlcoder|code-?llama|wizardcoder", re.I)
 
     def ask(self, text, images=None, quiet=False, via=None, raw=False, shown=None, report=None):
+        """Вопрос → ответ (_ask) под «Рентгеном» (core/xray.py): путь хода, подсказка, действия, проверки — по ходу целиком.
+        Вопрос, ушедший модели, рентген закрывает ход (_run_turn); быструю команду — здесь."""
+        import xray
+        if not str(text or "").strip() and not images:
+            return self._ask(text, images, quiet, via, raw, shown, report)
+        xr = xray.begin(str(text or "").strip() or "Что на этой картинке?", via=via, quiet=quiet, raw=raw,
+                        typed=time.monotonic() - getattr(self, "_typed_t", 0.0) < 2)
+        try:
+            return self._ask(text, images, quiet, via, raw, shown, report)
+        finally:
+            if xr is not None and (xr.get("route") or {}).get("kind") != "model":
+                xray.finish(xr)                        # быстрая команда (или ничего) — ход кончился здесь
+            else:
+                xray.attach(None)                      # ушло модели — дальше пишет поток хода, а этот поток свободен
+
+    def _ask(self, text, images=None, quiet=False, via=None, raw=False, shown=None, report=None):
         """Вопрос → ответ. Сначала быстрые пути без модели (будильник, «спрячься»/«отключись», команды компьютера, сейф, умный дом, деньги,
         дела, заметки, напоминания, «замолчи», новый разговор, позвать персонажа, радио, музыка), затем, возможно,
         передача специалисту (_route) и ход разговора в потоке turn-N; прежний ход отменяется.
@@ -43,7 +60,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
         if via:
             quiet = False
         if not quiet and not raw and hasattr(type(self), "first_asked"):
-            type(self).first_asked(self)                   # первый вопрос новичка — подсказки в виджете больше не нужны
+            type(self).first_asked(self, text)             # первый вопрос новичка — подсказки в виджете больше не нужны
         # 24.10 (владелец: «попросил обновиться — нет; „а теперь“ — она что-то не связанное»): короткое «а теперь?»,
         # «ещё раз», «проверь ещё раз» сразу после быстрой команды без модели — та же команда ещё раз
         lq = getattr(self, "_last_quick", None)
@@ -98,18 +115,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             return
         if not raw and not quiet and not images and not K and self._speed_cmd(text, via):
             return
-        if not raw and not quiet and not images and not K and DISK_ASK_RX.match((text or "").strip()):
-            import shutil
-            try:
-                du = shutil.disk_usage(str(Path.home()))
-                free, total = du.free / 1e9, du.total / 1e9
-                msg = (f"На диске свободно {free:.0f} ГБ из {total:.0f}." + (" Маловато — могу помочь найти, что занимает место."
-                                                                            if free < max(10, total * 0.08) else ""))
-                log.info("💽 «%s» → %s", text, msg)
-                self._say_quick(msg, text, via)
-                return
-            except Exception:  # noqa: BLE001
-                log.debug("диск: быстрый ответ не вышел", exc_info=True)
+        if not raw and not quiet and not images and not K and self._disk_cmd(text, via):
+            return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._vault_cmd(text, via):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._home_cmd(text, via):
@@ -152,6 +159,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._clock_cmd(text, via):
             return                                       # «сколько времени?», «какое сегодня число?» — по часам, без модели
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._open_link_cmd(text, via):
+            return                                       # «открой в браузере» сразу после ответа с одной ссылкой — её и открываем
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._youtube_cmd(text, via):
             return                                       # «включи смешное видео на YouTube» — сразу, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._send_cmd(text, via):
@@ -195,6 +204,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             return
         if not raw and not quiet and not images and not K and self._direct_update(text, via):
             return
+        if not raw and not quiet and not images and not K and self._direct_look(text, via):
+            return
         if not raw and not quiet and not via and not images and self.radio.paused and \
                 re.sub(r"[^\w ]", "", text.lower()).strip() in {"продолжи", "продолжай", "включи обратно", "верни радио",
                                                                 "включи радио", "играй", "продолжи радио"}:
@@ -222,7 +233,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             self._cancel_locked()
             self.turn_n += 1
             turn = Turn(self.turn_n)
+            turn.xr = xray_current()                  # рентген хода — и в поток turn-N
+            xray_turned(turn.xr)
             turn.via = via
+            # набрали текстом (виджет, «Чат» студии) — после ответа не слушаем фон: человек пишет, а голоса рядом —
+            # не ему (владелец 20.11: после набранного вопроса Лира ответила на разговор в комнате)
+            turn.typed = time.monotonic() - getattr(self, "_typed_t", 0.0) < 2
+            self._typed_t = 0.0
             turn.via_job = bool((via or {}).get("job"))  # дело по расписанию: в окна — только итог (_run_job решает, говорить ли)
             turn.asked = text                         # о чём просили (save_note без просьбы записать — не пишем)
             rp = getattr(self, "_chat_replay", 0)      # «Ещё раз»/«Изменить» в «Чате» — повтор, а не новое «да» (_just_agreed)
@@ -249,6 +266,79 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
 
 
     # ---------- для фоновых задач (TaskManager.host) ----------
+
+    def _disk_cmd(self, text, via=None):
+        """«Сколько места на диске?» — настоящие числа сразу, без модели. Методом-командой (а не строками в ask): так ответ
+        попадает в журнал хода как сделанное дело — рентген, ворота ответа и экзамен его видят (стенд Б 26.11,
+        disk_free_real_call: судья 0 из 10 — «ничего не вызвал, выдумал цифры», а цифры были настоящие)."""
+        if not DISK_ASK_RX.match((text or "").strip()):
+            return False
+        import shutil
+        try:
+            du = shutil.disk_usage(str(Path.home()))
+        except Exception:  # noqa: BLE001
+            log.debug("диск: быстрый ответ не вышел", exc_info=True)
+            return False
+        free, total = du.free / 1e9, du.total / 1e9
+        msg = (f"На диске свободно {free:.0f} ГБ из {total:.0f}." + (" Маловато — могу помочь найти, что занимает место."
+                                                                    if free < max(10, total * 0.08) else ""))
+        log.info("💽 «%s» → %s", text, msg)
+        self._say_quick(msg, text, via)
+        return True
+
+    def _mail_prefetch(self, text, turn):
+        """№1122 (26.11, Ollama gemma4:e2b): «Проверь почту» — «Вызываю инструмент read_emails», а в «Рентгене» «Без
+        действий», и так после двух переспросов: малая модель среди 44–50 действий не вызывает нужное. Гарантия — в
+        программе: просьбу проверить почту или прочитать последнее письмо программа выполняет сама до модели (read_emails,
+        для последнего письма — и read_email), действие видно в ходе и «Рентгене», а модель пересказывает полученное. Почта
+        не ответила — причина честно. Отправить, ответить, удалить — по-прежнему модель и только с подтверждением."""
+        from quality_answer import _MAIL_CHECK
+        t = (text or "").strip()
+        if (len(t) > 90 or not _MAIL_CHECK.search(t) or not self._mail_on()
+                or re.search(r"(?i)ответ|перешл|удал|отправ|напиши|спам|таблиц|excel|выгруз|статистик", t)):
+            return ""
+        last = bool(re.search(r"(?i)последн\w*\s+(?:\w+\s+)?письм|(?:прочита|прочти|открой)\w*\s+(?:\w+\s+)?письм", t))
+        unread = bool(re.search(r"(?i)нов\w*|непрочитан", t))
+        box = (re.search(r"(?i)\b([\w.-]+\.(?:ru|com|net|org|by|kz|ua))\b", t) or [None, None])[1]
+        args = {"limit": 1 if last else 8, **({"unread_only": True} if unread and not last else {}), **({"box": box} if box else {})}
+
+        def run(name, a, title):
+            try:
+                res = self.toolbox.run(name, a)
+            except Exception as e:  # noqa: BLE001 — почта не ответила: честно
+                self.emit("tool", name=name, title=title, status="error", args=a, error=str(e)[:300])
+                raise
+            res = str(res)
+            self.emit("tool", name=name, title=title, status="done", args=a, result=res[:2000], detail="программа выполнила сама")
+            turn.mail_fetched = set(getattr(turn, "mail_fetched", ()) or ()) | {name}
+            return res
+        try:
+            try:
+                got = run("read_emails", args, "Проверить почту")
+            except Exception as e:  # noqa: BLE001 — «List.ru», а такого ящика нет: смотрим все
+                if not (box and "нет ящика" in str(e)):
+                    raise
+                args.pop("box", None)
+                got = run("read_emails", args, "Проверить почту")
+            if last and got.startswith("[") and "]" in got:
+                uid = got[1:got.index("]")]
+                got = run("read_email", {"uid": uid}, "Прочитать письмо")
+        except Exception as e:  # noqa: BLE001
+            log.info("📬 почта не ответила: %s", e)
+            return (f"[Почту программа проверить не смогла: {str(e)[:300]}. Скажи это честно одной фразой: проверка не "
+                    "выполнена и почему. Письма из прошлых разговоров за свежие не выдавай.]")
+        log.info("📬 Почту программа проверила сама до модели (%s)", "последнее письмо" if last else "список")
+        return ("[Почту только что проверила программа (" + ("read_email — последнее письмо целиком" if last else "read_emails")
+                + "). Это свежие данные; отвечай только по ним, письма из прошлых разговоров не подмешивай. Вызывать почту "
+                "ещё раз не нужно.]\n" + got[:6000])
+
+    def _mail_on(self):
+        """Почта подключена? Не узнать (нет почты в сборке, сбой) — считаем, что да: проверка «с почтой не работаю» молчит."""
+        try:
+            m = getattr(self, "mail", None)
+            return True if m is None else bool(m.configured())
+        except Exception:  # noqa: BLE001
+            return True
 
     def confirm(self, question, timeout=120, cancel=None, always=False, quiet=False):
         """Спросить «да/нет» вне разговора (для фоновой задачи): голосом и кнопками в виджете.
@@ -352,6 +442,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             msgs = self._messages(text, images, prof)
             if prof.get("cloud") and prof.get("net") and not images and not self._net_closed() and self._net_rules_ok():
                 prof = dict(prof, _net_turn=True)       # «Сеть Лиры»: заголовок — только к основному ходу разговора (llm._headers)
+            if prof.get("cloud") and not images and not getattr(turn, "typed", False) and not getattr(turn, "raw", False) and not getattr(turn, "via", None):
+                # сказано голосом (владелец 20.11, скорость голоса): облако отдаёт простой вопрос лёгкому мозгу целиком —
+                # первое слово ~0,5 с вместо ~7 с у главного; сложное и поручения решает сайт (lite_simple) — как раньше
+                prof = dict(prof, _voice=True)
             from llm import wants_think
             if prof.get("think") not in ("on", "off") and self.s.get("llm", "think_auto") is not False and wants_think(think_ask(text, getattr(turn, "raw", False))):
                 # сложная просьба — модель думает (дольше, но стих с рифмой, а расчёт со смыслом); лимит — с запасом на размышления
@@ -377,7 +471,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 log.info("🎨 Творческая просьба — температура %.2f", temp)
             # харнесс, шаг 1 (15.11): к вопросу — ядро действий и только нужные модули (Toolbox.specs(text)); прочее модель
             # попросит сама (more_tools) — вопрос легче вдвое: окно своей модели, свой ключ, очередь облака
-            slim_text = text.split("\n\nВложения:")[0] + "\n" + "\n".join(
+            slim_text = ask_core(text) + "\n" + "\n".join(
                 str(m.get("content") or "")[:300] for m in self.history[-4:] if m.get("role") == "user" and isinstance(m.get("content"), str))
             specs = self.toolbox.specs(slim_text) if self.s.get("tools", "enabled_all") is not False else []
             if specs and getattr(turn, "via_job", False) and "[Дело по расписанию]" in text:
@@ -386,6 +480,25 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     # владелец 11.11, 21:00: «Итог дня» — «Дела: итог», «Деньги: отчёт», а потом навык «Проверка договора»
                     # (contract-check) — и ни слова итога. Итогу навыки плагинов не нужны
                     specs = [x for x in specs if x.get("name") != "use_skill"]
+            if getattr(turn, "greet", False):
+                # «С возвращением» — по готовым фактам, без инструментов (владелец 20.11: вечером позвала done_report — и в итог
+                # попали «обед с картой», «серия» и «всего 65 дел»; поручение «без инструментов» модель не держала)
+                specs = []
+            turn.lean = False
+            # переключатель — llm.talk_lean (стенд: llm.talk_lean=false — как раньше)
+            tl_ = self.s.get("llm", "talk_lean")
+            # не задан (None) — включён: у обновившихся с 1.0.59 в настройках сохранилось прежнее «null», и оно перебивало новое
+            # «включено для всех» (отчёт №959, 22.11); выключает только явное False
+            if specs and tl_ is not False and not getattr(turn, "via_job", False) and not getattr(turn, "raw", False) \
+                    and not images:
+                # «Чистый разговор» (владелец 21.11: «через Лиру — как у 4B»): просто беседа — характер, разговор и главное, без
+                # правил действий и почти без самих действий; понадобилось дело — модель попросит (more_tools, core/talk_lean.py)
+                import modules as _mods
+                import talk_lean
+                # просьба к плагину (№507: «Когда ближайшее полнолуние?» — плагин «Луна») — дело, не беседа
+                if talk_lean.talk_turn(ask_core(text), self.history, _mods.wanted(ask_core(text))) and not self._plugin_hint(text):
+                    specs, turn.lean = talk_lean.lean_specs(specs), True
+                    log.info("🍃 Просто разговор — подсказка без правил действий (%d действия)", len(specs))
             mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(prof))
             if mode in ("native", "prompt"):
                 prof = dict(prof, tools_mode=mode)
@@ -395,8 +508,15 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             # справкой в начале разговора, подсказки к роду просьбы (стихи, советы, схема, грубость) — в справке к вопросу.
             # Иначе каждая такая добавка ломала кэш начала запроса и для всех инструментов после подсказки (tools/prefix_audit.py)
             pmsg = self._profile_in_msgs(prof)
-            system = self._system(bool(specs), personal=not pmsg)
-            personal = self._personal(bool(specs)).strip() if pmsg else ""
+            full_ = bool(specs) and not turn.lean       # «Чистый разговор» — подсказка как без действий, плюс короткое правило
+            self._rule_names = spec_names(specs)        # Опыт 2 (llm.rules_with_tools): правила — только к действиям этого хода
+            system = self._system(full_, personal=not pmsg, talk=turn.lean)
+            if turn.lean:
+                import talk_lean
+                system += talk_lean.LEAN_RULE
+            # «Чистый разговор»: справка о человеке — как при деле (с папкой и прочим): снимок на начало разговора, а разговор
+            # часто начинается с «привет» — иначе и дела потом шли бы без папки (полный прогон 22.11, prefix_cache1104)
+            personal = self._personal(full_ or turn.lean).strip() if pmsg else ""
             pdelta = ""
             if personal:                               # 0.87: справка в начале разговора — снимок, изменения — к вопросу
                 personal, pdelta = self._profile_snap(personal, msgs)
@@ -420,6 +540,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             except Exception as e:  # noqa: BLE001
                 log.info("Поиск по записям: %s", e)
             ctx = [self._turn_context(text)] + ([pdelta] if pdelta else []) + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней
+            turn.read = read_mode(text, getattr(turn, "typed", False))
+            if turn.read:
+                ctx.append(READ_HINT)                  # длинный разбор — для чтения: подзаголовки, жирное, списки
+                log.info("📖 Ответ для чтения с экрана — вслух только суть")
             mlines, mpages = self.memory_for(text.split("\n\nВложения:")[0])
             if mlines:                                 # Память 2.0: старое о человеке не теряется — приходит к вопросу
                 log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))
@@ -454,6 +578,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                            + (" (to: max)." if src == "MAX" else "."))
             if mode == "none" and specs:
                 specs = []
+                turn.lean = False
                 system = self._system(False, personal=not pmsg) + ("\n\nЭта модель не умеет выполнять действия (музыка, скриншоты, "
                                                 "программы). Если просят действие — честно скажи одной фразой, что с этой "
                                                 "моделью действия недоступны, и предложи выбрать другую модель в «Мозге».")
@@ -462,6 +587,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 # своя модель только что не дождалась ответа с инструментами (180 с) — 20 минут спрашиваем без них, а не
                 # ждём те же 180 с на каждом вопросе и потом ещё ответ без них (№133, 20.10: 4 ядра, Ollama, «вечно в думках»)
                 specs = []
+                turn.lean = False                      # действий нет совсем — и переделка по проверке их не вернёт
                 system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: модель на "
                                                 "этом компьютере не успевает с ними. Если просят действие — честно скажи "
                                                 "это одной фразой.")
@@ -473,6 +599,9 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             kb = self._persona_knowledge(text, turn)
             if kb:
                 ctx.append(kb.strip())
+            mailed = self._mail_prefetch(text, turn) if specs and not images else ""
+            if mailed:
+                ctx.append(mailed)
             if images:
                 ctx.append(VISION_HINT)                      # фото: перевод, документ, еда (идеи пользователей 24.10)
             elif len(text) < 400:
@@ -503,10 +632,43 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 msgs = put_profile(msgs, personal)
             system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)
             self._pparts = prompt_parts(system, specs, msgs, personal if personal else "", "\n\n".join(c for c in ctx if c))
+            try:
+                import xray
+                from llm import context_window
+                xray.prompt(system, specs, msgs, parts=self._pparts, prof=prof, ctx_window=context_window(prof),
+                            extra={"ctx": [c.split("\n", 1)[0][:120] for c in ctx if c], "lean": bool(getattr(turn, "lean", False))})
+            except Exception:  # noqa: BLE001
+                log.debug("рентген", exc_info=True)
         except LLMError as e:
             e.turn_prof = prof                         # сбой при подготовке — какой моделью шёл ход
             raise
         return prof, msgs, specs, system, ask0, ctx, econ_main, pmsg, slim_text
+
+    def _act_cue_arm(self, turn, name, sentences):
+        """Первое действие хода — через ACT_CUE_S проверить, не тишина ли до сих пор (act_cue.py)."""
+        if getattr(turn, "_cue_armed", False):
+            return
+        turn._cue_armed = True
+        from act_cue import ACT_CUE_S
+        t = threading.Timer(ACT_CUE_S, self._act_cue_fire, args=(turn, name, sentences))
+        t.daemon = True
+        t.start()
+
+    def _act_cue_fire(self, turn, name, sentences):
+        """Действие идёт, а Лира ещё ничего не сказала: одна короткая фраза о том, что она делает. Молчим, если ход
+        кончился или отменён, модель уже начала отвечать, вопрос не голосом (мессенджер, дело по расписанию) или
+        «Отвечать текстом»."""
+        from act_cue import cue_text
+        phrase = cue_text(name)
+        if (not phrase or turn.cancel.is_set() or getattr(turn, "ended", False) or self.turn is not turn
+                or turn.full.strip() or turn.spoken or turn.via or getattr(turn, "via_job", False)
+                or getattr(turn, "_cue_said", False) or self.s.get("tts", "text_only")):
+            return
+        turn._cue_said = True
+        phrase = self._g(phrase) if hasattr(self, "_g") else phrase      # программа по-английски — по-английски
+        self.__dict__.setdefault("_cue_set", set()).add(phrase)          # синтез запомнит (engine_remote._synth_mixed)
+        log.info("🗣 «%s» идёт дольше %.1f с — говорю «%s»", name, time.monotonic() - turn.t0, phrase)
+        sentences.put(phrase)
 
     def _turn_steps(self, turn, text, images, sentences, prof, msgs, specs, system, ask0, ctx, econ_main, pmsg, slim_text):
         """Ход разговора, середина (из _run_turn, чистое ядро 1.0.13): фразы в озвучку (что придержать до проверки), до 6
@@ -519,6 +681,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             # сказки, истории и чтение вслух — целиком
             # №377: «хотелось бы прослушивать всё до конца» — студия → «Голос» → «Читать длинные ответы вслух целиком»
             voice_cap = 10 ** 9 if (self.s.get("tts", "read_all") or re.search(r"сказк|истори|расскаж|прочитай|прочти|читай|стих|подробно|целиком|полностью|до конца", text.lower())) else 900
+            if getattr(turn, "read", False) and not self.s.get("tts", "read_all"):
+                voice_cap = READ_VOICE                  # ответ для чтения — вслух только суть
             spoken = [0, False]                         # сколько символов отдано в озвучку; предел уже достигнут
 
             from gender import for_persona
@@ -531,7 +695,11 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     return
                 if spoken[0] + len(s_) > voice_cap and spoken[0] > 0:
                     spoken[1] = True
-                    sentences.put("Дальше не читаю вслух — всё на экране." + ("" if getattr(self, "_cap_said", False) else " Читать целиком — студия, «Голос»."))
+                    if getattr(turn, "read", False):
+                        sentences.put(self._g("Подробно — на экране, так удобнее читать.") if hasattr(self, "_g") else "Подробно — на экране, так удобнее читать.")
+                        self.emit("read_open")             # виджет открывает «Ответ целиком»
+                    else:
+                        sentences.put("Дальше не читаю вслух — всё на экране." + ("" if getattr(self, "_cap_said", False) else " Читать целиком — студия, «Голос»."))
                     self._cap_said = True
                     log.info("🔇 Ответ длинный — вслух прочитано %d симв., остальное на экране", spoken[0])
                     return
@@ -543,7 +711,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, mail_claim, mail_fresh_missing, CAN_ASK_RX, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -584,6 +752,16 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         turn.full = turn.full[:-len(step_text)]
             seen_calls = {}                              # одинаковый вызов в одном ходе — не повторяем (результат уже есть)
             done_calls, checked = [], False                  # что вызвано с результатами — сверить числа ответа (number_mismatch)
+            import ledger as _ledger
+            # Опыт 4 (аудит Fable 25.11, llm.gate_only): при «Каркасе хода» — одни ворота по журналу вместо каскада проверок
+            # «сказала сделано без действия» (*_claim) и их честных замен после хода: журнал сверяет ответ один раз, в конце
+            gate_only = self.s.get("llm", "gate_only") is True and _ledger.on(self.s.get("llm", "ledger"), prof)
+            # стенд Г 26.11 (pc_can «Что ты умеешь на компьютере?»): «Открываю сайты, ищу в интернете…» — рассказ об умениях
+            # принимали за обещание и просили «сделай» — в ответ утекало «Проверка ошибочна… Инструменты не нужны». На вопрос
+            # об умениях («что ты умеешь?») проверки «обещала / сказала сделано» не нужны: рассказ — не обещание. Только этот
+            # вопрос: на «какая погода?» короткое «сейчас посмотрю» без дела — по-прежнему обещание
+            info_q = bool(CAN_ASK_RX.search(text or ""))
+            turn.done_calls = done_calls                     # и в историю — родным форматом (Опыт 1, llm.history_native)
             drew = 0                                         # просили схему, а её нет — попросили нарисовать (до двух раз за ход)
             saved_checked = False                            # «записала» без единого действия — попросили записать (раз за ход)
             style_saved = False                              # №651: просьба о том, как говорить, — правило записано программой (раз за ход)
@@ -599,6 +777,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             for step in range(6):                       # модель → действия → результаты → модель…
                 calls, step_text = [], ""
                 t_step, t_ev = time.monotonic(), None     # «⏱ модель: …» — от запроса до первого события этого шага
+                if step and getattr(turn, "lean", False) and msgs and msgs[-1].get("role") == "user":
+                    # «Чистый разговор», а проверка ответа попросила переделать (вызвать плагин, действие, поиск…) — переделывать
+                    # уже с полной подсказкой и всеми действиями: налегке их нет (полный прогон 22.11: «полнолуние» — плагин «Луна»)
+                    turn.lean = False
+                    specs = self.toolbox.specs(slim_text, keep=set(getattr(turn, "packs", None) or ()))
+                    self._rule_names = spec_names(specs)
+                    system = self._system(True, personal=not pmsg)
+                    log.info("🧰 Проверка просит переделать — дальше с полной подсказкой и действиями")
                 if step == 5 and specs:                  # последний шаг — только слова: ответить тем, что уже узнал
                     can_task = any(x.get("name") == "start_task" for x in specs) and "start_task" not in called
                     specs = []
@@ -618,10 +804,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 try:
                     # с картинкой ответ сначала собираем целиком: если модель её не примет — повторим без неё;
                     # без картинки ждём только первое событие — ошибка сервера всплывёт здесь, до первого слова
+                    # Опыт 9 (llm.force_call): после просьбы «сделай, а не обещай» этот шаг — только действием (tool_choice)
+                    sprof = dict(prof, _force_call=True) if getattr(turn, "force_call", False) and specs else prof
+                    turn.force_call = False
                     try:
-                        events = list(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
+                        events = list(stream_events(sprof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
                             if _has_images(msgs) else _first_then_stream(
-                                stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
+                                stream_events(sprof, system, msgs, cancel=turn.cancel, tools=specs or None))
                     except LLMError as e0:
                         if econ_main is None or step or turn.full or turn.cancel.is_set():
                             raise
@@ -678,6 +867,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                                               "разговора. В LM Studio или Ollama поставьте длину контекста 16384 или больше: "
                                               "с действиями нужно около 12–16 тыс.")
                             specs = []
+                            turn.no_tools = "ctx" if (ctx_full(e) or CTX_TEXT in str(e)) else "tools"   # №944 — для честного итога
                             # №760 (15.11, своя qwen3-4b, окно мало): без действий модель называла курс евро «по памяти»
                             # и выдумывала, что взяла его с cbr.ru. Без инструментов свежих данных нет — так и сказать
                             system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (поиск в интернете, открыть "
@@ -708,19 +898,41 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 # №435 (31.10, на телефоне и так же здесь): итог сказан до действия и повторён после — начало следующего
                 # шага придерживаем, пока не ясно, не повтор ли это сказанного (repeat_head); повтор не говорим и не пишем
                 probe, probing, muted = "", bool(step and _rep_norm(turn.full)), False
+                ack_seen = not probing
                 for kind, val in events:
                     if t_ev is None:
                         t_ev = time.monotonic()
+                        if getattr(self, "lat", None) is not None:
+                            self.lat.mark("ev", t_ev)          # сервер ответил хоть чем-то (первый шаг хода)
+                            # 21.11: где теряются секунды между «сайт: первое слово за 1,2 с» и «у людей — 5,6 с»: заголовки
+                            # ответа и первая строка потока (сеть и посредники) отдельно от первого события (модель)
+                            from llm_hints import wait_info
+                            wi = wait_info(turn.cancel) or {}
+                            for k_ in ("t_conn", "t_tls", "t_sent", "t_hdr", "t_line"):   # 1.0.70: и дорога по шагам
+                                if wi.get(k_):
+                                    self.lat.mark(k_[2:], wi[k_])
                     if turn.cancel.is_set():
                         break
                     if kind == "tools":
                         calls = val
+                        if calls and getattr(self, "lat", None) is not None:
+                            self.lat.act()
                         continue
                     if muted:
                         step_text += val
                         continue
                     if probing:
                         probe += val
+                        if not ack_seen:                # второе «Записала.» после действия — срезать, остальное сказать
+                            cut = ack_again(turn.full, probe)
+                            if cut is None:
+                                continue
+                            ack_seen = True
+                            if cut:
+                                log.info("🔁 Второе подтверждение после действия — не повторяю: %s", probe[:cut].strip())
+                                probe = probe[cut:]
+                                if not probe:
+                                    continue
                         rep = repeat_head(turn.full, probe)
                         if rep is None:
                             continue
@@ -746,6 +958,17 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     for s_ in split.feed(codef.feed(val)):         # код и команды вслух не читаем
                         say(s_)
                 self._usage_note(prof, (t_ev or time.monotonic()) - t_step, turn)
+                from llm import last_served, served_label
+                sv_ = served_label(last_served())
+                if sv_ and sv_ not in turn.__dict__.setdefault("brains", []):
+                    turn.brains.append(sv_)                  # кто ответил на этом шаге на самом деле (облако Dewiar)
+                    log.info("🧠 Ответил %s", sv_)
+                    xr_m = (xray_current() or {}).get("model")
+                    if isinstance(xr_m, dict):
+                        xr_m["served"] = " → ".join(turn.brains)
+                        xr_m["srv"] = re.sub(r"[^a-z0-9]", "", str((last_served() or {}).get("srv") or ""))[:8]   # для замера по мозгам
+                if probing and probe and not ack_seen and ack_again(turn.full, probe, fin=True):
+                    probe = probe[ack_again(turn.full, probe, fin=True):]       # «Записала.» и всё — уже сказано
                 if probing and probe and not repeat_head(turn.full, probe, fin=True):   # короткий новый хвост — не терять
                     turn.full += probe
                     step_text += probe
@@ -759,6 +982,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         log.info("✋ Модель отказалась («нет доступа»), не попробовав %s", "дело по расписанию — прошу завести"
                                  if watch else "поиск — прошу поискать")
                         held.clear()                           # отговорка так и не прозвучала
+                        self.day_miss("refusal", turn.asked or text, step_text)
                         sentences.put("Секунду — настрою." if watch else "Секунду — посмотрю в интернете.")
                         msgs = msgs + [{"role": "assistant", "content": step_text}, {"role": "user", "content": WATCH_NUDGE if watch else REFUSAL_NUDGE}]
                         turn.full = ""
@@ -778,7 +1002,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     # №461 (ПК 0.76): «сейчас посмотрю» — просьба — и снова «сейчас посмотрю», и ход кончился: просим дважды,
                     # второй раз жёстче и с действиями плагина; не взялась и тогда — честно говорим это (ниже, PROMISE_GIVEUP)
                     faked = "" if want_task else fake_call(step_text, names0)       # №522: «[run_command: …] Жду вывод»
-                    promised = not want_task and (bool(faked) or looks_like_promise(step_text, text))
+                    promised = not want_task and (bool(faked) or (not info_q and looks_like_promise(step_text, text)))
                     if (faked or promised) and last_net() and not getattr(turn, "net_redo", False):
                         # рецензия 04.11, третья: ответ узла сети — не FAKE_NUDGE главному мозгу с текстом узла, а тот же
                         # вопрос главному мозгу заново, без текста узла и без заголовка сети
@@ -790,9 +1014,12 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         continue
                     if want_task or (nudged < 2 and promised):
                         nudged += 1
+                        if nudged == 1:
+                            self.day_miss("task" if want_task else "fake_call" if faked else "promise", turn.asked or text, step_text)
                         log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else
                                  f"написала вызов «{faked}» текстом" if faked else "только пообещала", " (ещё раз)" if nudged > 1 else "")
                         retract(drop=bool(faked))                    # текст с выдуманным вызовом — не в ответ
+                        turn.force_call = self.s.get("llm", "force_call") is True
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"},
                                        {"role": "user", "content": FAKE_NUDGE if faked else promise_nudge(want_task, again=nudged > 1,
                                                                                  hint=getattr(turn, "plugin_hint", ""))}]
@@ -831,11 +1058,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                             log.info("💬 Правило, как говорить, — записала сама: «%s»", rule[:80])
                         except Exception:  # noqa: BLE001
                             log.debug("правило общения", exc_info=True)
-                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
+                if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked and not gate_only and not info_q:
                     fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
                         or saved_claim(text, step_text, called) \
                         or (note_claim(text, step_text, called) if "save_note" in {x.get("name") for x in specs or []} else "") \
                         or call_claim(text, step_text, called) \
+                        or mail_claim(text, step_text, self._mail_on(), called) \
+                        or (mail_fresh_missing(text, step_text, self._mail_on(), set(called) | set(getattr(turn, "mail_fetched", ()) or ()))
+                            if "read_emails" in {x.get("name") for x in specs or []} else "") \
                         or found_pics_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
                         or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")
@@ -848,7 +1078,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                             turn.full += " "
                         self.set_state("thinking")
                         continue
-                if not calls and not turn.cancel.is_set() and step < 6 and specs and not failed_checked and getattr(turn, "tools_err", None):
+                if not calls and not turn.cancel.is_set() and step < 6 and specs and not failed_checked and getattr(turn, "tools_err", None) \
+                        and not gate_only:
                     from quality import failed_claim
                     fix = failed_claim(step_text, turn.tools_err, getattr(turn, "tools_ok", None) or [])
                     if fix:                                  # №573: «нет такого пути», а ответ — «открыла папку»
@@ -981,17 +1212,31 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         results.append("Этот вызов с теми же параметрами уже был — его результат выше. Не повторяй: "
                                        "используй его или попробуй иначе, а если сведений хватает — отвечай.")
                         continue
+                    self._act_cue_arm(turn, c.get("name"), sentences)
                     r_ = self._use_tool(turn, c, sentences)
                     seen_calls[key] = True
                     results.append(r_)
-                    done_calls.append({"name": c.get("name"), "args": c.get("args") or {}, "result": str(r_)[:300]})
+                    done_calls.append({"name": c.get("name"), "args": c.get("args") or {}, "result": __import__("outside_guard").plain(r_)[:300]})
                 if turn.cancel.is_set():
                     break
                 more = [str(g) for c, r in zip(calls, results) if c.get("name") == "more_tools" and str(r).startswith("Добавлены")
                         for g in (c.get("args") or {}).get("packs") or []]
-                if more and specs:                      # модель попросила группу действий — следующий шаг уже с ними
+                if more and getattr(turn, "lean", False):   # из беседы — к делу: полная подсказка и нужные действия
+                    turn.lean = False
+                    turn.packs = set(getattr(turn, "packs", None) or ()) | (set(more) - {"core"})
+                    specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    self._rule_names = spec_names(specs)
+                    system = self._system(True, personal=not pmsg)
+                    log.info("🧰 Из разговора — к делу: полная подсказка и действия (%s)", ", ".join(sorted(more)))
+                elif more and specs:                    # модель попросила группу действий — следующий шаг уже с ними
                     turn.packs = set(getattr(turn, "packs", None) or ()) | set(more)
                     specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    if self.s.get("llm", "rules_with_tools") is True:   # Опыт 2: пришла группа — с ней её правила (на месте прежних)
+                        old_r = self._tool_rules()
+                        self._rule_names = spec_names(specs)
+                        new_r = self._tool_rules()
+                        if new_r != old_r and old_r in system:
+                            system = system.replace(old_r, new_r, 1)
                     log.info("🧰 Модель попросила действия: %s", ", ".join(sorted(turn.packs)))
                 if any(c.get("name") == "start_task" and not str(r).startswith(("Ошибка", "Инструмент")) for c, r in zip(calls, results)):
                     specs = []                          # задача запущена — делает она; в разговоре только сказать, что взялся
@@ -1077,6 +1322,16 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     # остались полезные сведения (≥ 60 % и 120 знаков) — с ними; почти всё было «сделала» — только честная фраза
                     turn.full = (rest + " " + PROMISE_GIVEUP).strip() if len(rest) >= max(120, 0.6 * whole) else PROMISE_GIVEUP
                     sentences.put(PROMISE_GIVEUP)
+            if getattr(turn, "no_tools", "") and not called and not turn.cancel.is_set():
+                # №944 (21.11, своя модель, окно контекста мало): действия отключены, а модель переписала из разговора
+                # «Включила радио «Groove Salad»» — тишина, человек трижды просил и не понимал почему. Без действий ничего
+                # не включено, не поставлено и не отправлено — так и говорим, с причиной и что сделать
+                from quality import NO_TOOLS_GIVEUP, no_tools_claim
+                if no_tools_claim(text, turn.full):
+                    honest = NO_TOOLS_GIVEUP[turn.no_tools]
+                    log.warning("✋ Действия недоступны, а ответ говорит «включила / поставила» — говорю правду")
+                    turn.full = honest
+                    sentences.put(honest)
             if failed_checked and not turn.cancel.is_set():
                 from quality import failed_claim, failed_note
                 if failed_claim(turn.full, getattr(turn, "tools_err", None), getattr(turn, "tools_ok", None) or []):
@@ -1085,6 +1340,31 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     log.warning("Действие с ошибкой так и выдано за сделанное — говорю правду")
                     turn.full = (turn.full.rstrip() + " " + note).strip()
                     sentences.put(note)
+            from quality import strip_meta
+            meta_ = strip_meta(turn.full)
+            if meta_ != turn.full:
+                log.warning("✋ В ответ попал спор с проверкой — убираю: %s", turn.full[:160])
+                turn.full = meta_
+            import ledger
+            if ledger.on(self.s.get("llm", "ledger"), prof) and not turn.cancel.is_set() and turn.full.strip():
+                # «Каркас хода» (план «Качество», шаг 3; отзыв Alex 21.11: «сказала, что сделала, а на самом деле нет»): ответ
+                # сверяется с журналом хода — что программа сделала на самом деле (рентген: действия и итог); утверждает
+                # сделанное без основания — правдой из журнала. Решает модель коротким вопросом, не словарь фраз (core/ledger.py)
+                xr_ = xray_current()
+                acts_ = list((xr_ or {}).get("acts") or [])
+
+                def _ask_(sys_, user_):
+                    out_ = ""
+                    for kind_, val_ in stream_events(prof, sys_, [{"role": "user", "content": user_}], cancel=turn.cancel, tools=None):
+                        if kind_ == "text":
+                            out_ += val_
+                    return out_
+                bad_ = ledger.check(text, turn.full, acts_, _ask_)
+                if bad_ and not turn.cancel.is_set():
+                    fix_ = ledger.honest(bad_, acts_)
+                    log.warning("✋ Ответ утверждает сделанное, которого нет в журнале хода (%s) — говорю правду", "; ".join(bad_))
+                    turn.full = (turn.full.rstrip() + " " + fix_).strip()
+                    sentences.put(fix_)
             if remind_asked and "set_reminder" not in called and not turn.cancel.is_set() and not turn.full.rstrip().endswith("?"):
                 # попросили поставить — и всё равно нет: человек должен знать, что напоминания нет (а не ждать утром)
                 log.warning("Обещала напомнить, но напоминание так и не поставлено — говорю об этом прямо")
@@ -1121,6 +1401,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     # «Подробности» под ответом в «Чате» (0.86): модель, время до первого слова и всего, токены (если сервер сказал)
                     meta = {"model": turn.model, "first": getattr(turn, "t_first", None), "total": time.monotonic() - t_start,
                             **(getattr(turn, "tok", None) or {})}
+                    if getattr(turn, "brains", None):
+                        meta["brain"] = " → ".join(turn.brains)   # владелец 21.11: профиль «DWR Chat» — а ответил кто?
                     self.emit("answer", text=turn.full, done=True, model=True, sources=turn.src_done, meta=meta)
                 self.health_count("turns")
                 self.health_count("net_ok")
@@ -1132,6 +1414,19 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
         return prof
 
     def _run_turn(self, turn, text, images=()):
+        """Поток turn-N под «Рентгеном»: тот же рентген, что у вопроса; кончился ход (или отменён) — рентген закрыт."""
+        import xray
+        xray.attach(getattr(turn, "xr", None))
+        try:
+            return self._run_turn_body(turn, text, images)
+        finally:
+            xr = getattr(turn, "xr", None)
+            if xr is not None:
+                if turn.cancel.is_set():
+                    xr["cancelled"] = True
+                xray.finish(xr)
+
+    def _run_turn_body(self, turn, text, images=()):
         """Поток turn-N: один ход разговора. Фразы ответа идут в очередь sentences — их озвучивает отдельный поток
         (_speak_worker; для сообщений без голоса — _drain_worker), None в очереди — конец. До 6 шагов
         «модель → инструменты → результаты → модель». Запасные пути: облако не ответило — запасной мозг;
@@ -1208,12 +1503,14 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             said = text + (" [к сообщению была приложена картинка]" if images else "")
             acts = list(dict.fromkeys(getattr(turn, "tools_ok", None) or []))
             facts = list(getattr(turn, "facts", None) or [])
+            calls = hist_calls(getattr(turn, "done_calls", None)) if self.s.get("llm", "history_native") is True else []
             # передал слово явно (call_persona) или специалист, позванный на вопрос, возвращает слово главному — тому
             # его разговор справкой; просто переключились — нет
             hand = getattr(turn, "switch_to", None) or getattr(turn, "back_to", None)
             self.history += [{"role": "user", "content": said},
                              {"role": "assistant", "content": turn.full.strip(), "who": self.s.get("persona"),
                               **({"acts": acts} if acts else {}), **({"facts": facts} if facts else {}), **({"handoff": hand} if hand else {}),
+                              **({"calls": calls} if calls else {}),
                               **({"model": turn.model} if getattr(turn, "model", "") else {}),
                               **({"net": True} if getattr(turn, "net", False) else {})}]
             self.last_turn_time = time.monotonic()
@@ -1223,8 +1520,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             if not turn.via:
                 self._pause_ok()                           # голосом и без обрыва — добавка к паузе понемногу тает
         follow = 0.0 if turn.via or time.monotonic() < self._echo_until else float(self.s.get("audio", "follow_up_seconds") or 0)
-        if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0):
-            follow = 0.0                                   # микрофон выключен — «ваша очередь» не открываем (12.11)
+        if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0) or getattr(turn, "typed", False):
+            follow = 0.0                                   # микрофон выключен или вопрос набран — «ваша очередь» не открываем
         if getattr(self, "_tray_at", 0) >= getattr(turn, "t0", time.monotonic()):
             # в этом ходе виджет спрятали («Спрякся» — модель поняла и спрятала): не ждать ответа — иначе «Ваша очередь»
             # возвращала виджет на экран (20.10, 22:41: «4 раза просил спрятаться — исчезала и появлялась»)

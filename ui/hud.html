@@ -179,7 +179,9 @@
   #cap .you::before { content: "Вы: "; opacity: .75; }
   html[lang]:not([lang="ru"]) #cap .you::before, html[lang]:not([lang="ru"]) #rd-body .q::before { content: "You: "; }   /* подпись в CSS — словарь её не видит */
   /* длинный ответ прокручивается колесом или пальцем; край, за которым есть ещё текст, плавно тает */
-  #cap .bot { color: var(--ink); user-select: text; -webkit-user-select: text; white-space: pre-wrap; flex: 0 1 auto; min-height: 0;
+  #cap .bot a, #rd-body a { color: #8FC8FF; text-decoration: none; border-bottom: 1px solid rgba(143,200,255,.4); overflow-wrap: anywhere; cursor: pointer; }
+  body.light #cap .bot a, body.light #rd-body a { color: #2563c9; border-bottom-color: rgba(37,99,201,.35); }
+  #cap .bot { color: var(--ink); user-select: text; -webkit-user-select: text; white-space: pre-wrap; flex: 0 1 auto; min-height: 0; overflow-wrap: anywhere;
               overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; margin-right: -8px; padding-right: 8px;
               scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
   #cap .bot p { margin: 0 0 .55em; } #cap .bot p:last-child { margin-bottom: 0; }
@@ -435,6 +437,8 @@
   .ab.send { color: #D6E4F0; }
   #atts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   #atts:empty { display: none; }
+  .att.pasted { cursor: pointer; }
+  .att.pasted:hover { background: rgba(255,255,255,.14); }
   .att { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 3px; border-radius: 10px; background: rgba(255,255,255,.08); font-size: 11.5px; color: var(--ink); }
   .att img, .att .ic { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; flex: none; }
   .att .ic { display: grid; place-items: center; background: rgba(139,140,247,.25); font-size: 9.5px; font-weight: 600; letter-spacing: .02em; }
@@ -456,6 +460,42 @@
   .gi { display: grid; place-items: center; flex: none; }
   .gi svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   #b-team svg.chev { width: 13px; height: 13px; opacity: .7; }
+  /* Образы (1.0.55): у имени — стрелка (есть образы), нажали — кружки образов под именем и «Сама — по времени дня» */
+  #bubble.looks #say { display: inline-flex; align-items: center; gap: 6px; }
+  #bubble .lkc { display: none; width: 12px; height: 12px; margin-left: -3px; fill: none; stroke: currentColor; stroke-width: 2.4;
+                 stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity .15s, transform .2s; }
+  #bubble.looks { cursor: pointer; } #bubble.looks .lkc { display: block; } #bubble.looks:hover .lkc, #bubble.lkopen .lkc { opacity: .6; }
+  #bubble.lkopen .lkc { transform: rotate(180deg); }
+  #looks { position: absolute; left: 14px; right: 14px; z-index: 22; padding: 12px 8px 10px; border-radius: 20px; background: #16161c;
+           box-shadow: 0 18px 40px -12px rgba(0,0,0,.8); animation: tpop .16s ease-out; }
+  #looks[hidden] { display: none; }
+  #card.lkopen #orb { width: calc(150px * var(--ok, 1)); height: calc(150px * var(--ok, 1)); }   /* открыли образы — облик уступает место */
+  #looks { overflow-y: auto; scrollbar-width: none; } #looks::-webkit-scrollbar { display: none; }
+  #looks .lg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 0; }
+  #looks .lg button { display: flex; flex-direction: column; align-items: center; gap: 4px; border: 0; background: none; padding: 2px 0;
+                      color: var(--muted); font: 600 10px Manrope, sans-serif; cursor: pointer; white-space: nowrap; }
+  #looks .lg img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; display: block; background: rgba(255,255,255,.06); box-shadow: 0 0 0 1px rgba(255,255,255,.08);
+                   transition: transform .15s; }
+  #looks .lg button:hover img { transform: scale(1.06); }
+  #looks .lg button.cur { color: var(--ink); } #looks .lg button.cur img { box-shadow: 0 0 0 2px #16161c, 0 0 0 3.5px var(--ink); }
+  #looks .la { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 6px 0; padding-top: 9px;
+               border-top: 1px solid rgba(255,255,255,.07); font-size: 12px; color: var(--ink); cursor: pointer; }
+  #looks .la input { appearance: none; -webkit-appearance: none; width: 30px; height: 17px; border-radius: 9px; margin: 0; flex: none;
+                     background: rgba(255,255,255,.18); position: relative; cursor: pointer; transition: background .2s; }
+  #looks .la input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: left .2s; }
+  #looks .la input:checked { background: var(--ink); } #looks .la input:checked::after { left: 15px; }
+  body.light #looks { background: #fff; box-shadow: 0 14px 40px rgba(20,30,60,.18); }
+  body.light #looks .lg button.cur img { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--ink); }
+  body.light #looks .la { border-top-color: rgba(20,20,40,.08); } body.light #looks .la input { background: rgba(20,20,40,.15); }
+  body.light #looks .la input:checked::after, body.neu #looks .la input:checked::after { background: var(--glass, #fff); }
+  body.neu #looks { background: var(--glass); box-shadow: 8px 8px 20px var(--neu-dark), -8px -8px 20px var(--neu-light); }
+  body.neu #looks .lg img { box-shadow: 3px 3px 7px var(--neu-dark), -3px -3px 7px var(--neu-light); }
+  body.neu #looks .lg button.cur img { box-shadow: 0 0 0 2px var(--glass), 0 0 0 3.5px var(--ink); }
+  body.neu #looks .la { border-top-color: rgba(20,30,60,.08); } body.neu #looks .la input { background: var(--neu-dark); }
+  /* владелец 21.11: «переключатель активный и неактивный выглядит одинаково серо» — фон светлой и мягкой темы перебивал
+     :checked; включён — цветом акцента во всех темах */
+  #looks .la input:checked, body.light #looks .la input:checked, body.neu #looks .la input:checked { background: var(--accent, #8B8CF7); }
+  body.kids #looks, body.kids #bubble .lkc { display: none !important; }
   #team { position: absolute; left: 12px; right: 12px; bottom: 58px; max-height: 236px; overflow-y: auto; z-index: 20; display: none;
           padding: 6px; border-radius: 18px; background: #16161c;
           box-shadow: 0 18px 40px -12px rgba(0,0,0,.8); }
@@ -466,6 +506,8 @@
                  background: none; color: var(--ink); cursor: pointer; text-align: left; font: inherit; }
   #team button:hover { background: rgba(255,255,255,.07); }
   #team button.cur { background: rgba(255,255,255,.1); }
+  #team button.lkrow { border-top: 1px solid rgba(127,127,127,.18); border-radius: 0 0 12px 12px; margin-top: 4px; }
+  #team .lki svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
   #team .gi { width: 22px; color: var(--muted); } #team button.cur .gi { color: var(--ink); }
   #team b { font-weight: 600; font-size: 13px; }
   #team span { color: var(--muted); font-size: 11.5px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
@@ -495,6 +537,13 @@
   #corner .btn:hover, #corner-l .btn:hover { color: #fff; background: rgba(255,255,255,.1); }
   #corner .btn svg, #corner-l .btn svg { width: 15px; height: 15px; }
   #corner.pinned { opacity: 1; }
+  /* блокнот открыт (владелец 19.11: «справа остаются видны джойстик, чашка… дизайн был бы чище»): на виду — только его кнопка,
+     остальные — при наведении на виджет */
+  #corner.pinned .btn:not(.on) { opacity: 0; transition: opacity .2s; }
+  /* 20.11 (владелец: «активная сдвигалась вправо — без этого отступа»): кнопка открытого листа — у самого края; остальные
+     появляются при наведении слева от неё, и она сама не прыгает */
+  #corner.pinned .btn.on { order: 99; }
+  #card:hover #corner.pinned .btn, #corner.pinned:focus-within .btn { opacity: 1; }
   #corner-l.lo { opacity: 1; }
   #b-lo[hidden], #b-watch[hidden], #b-tm[hidden] { display: none; }
   /* «Текстовый режим» (30.10, владелец: «Лира перестала говорить» — режим включился незаметно): метка видна всегда */
@@ -603,6 +652,17 @@
   body.light #rd-body h4 { color: var(--muted); }
   body.light .md .h { color: var(--ink); }
   body.light .md code { background: rgba(20,30,60,.07); }
+  /* «Ответ целиком» — живее, как в блокноте (владелец 20.11: «чтение бледное, текст единообразный»): подзаголовки, главное
+     и пункты списка — своими цветами; в тёмной и светлой теме */
+  #rd-body .md { font-size: 13.5px; line-height: 1.55; }
+  #rd-body .md .h { font-size: 14.5px; color: #8FB4FF; margin: 14px 0 6px; letter-spacing: .01em; }
+  #rd-body .md b { color: #FFE58A; font-weight: 650; }
+  #rd-body .md li::marker { color: #6FF0E1; } #rd-body .md ol li::marker { color: #6FD6FF; font-weight: 700; }
+  #rd-body .md code { color: #D8B4FE; background: rgba(168,85,247,.16); }
+  body.light #rd-body .md .h { color: #2B55C9; }
+  body.light #rd-body .md b { color: #C2386F; }
+  body.light #rd-body .md li::marker { color: #13998D; } body.light #rd-body .md ol li::marker { color: #1D72B8; }
+  body.light #rd-body .md code { color: #7A2FC2; background: #EFE4FF; }
   body.light pre { background: rgba(20,30,60,.06); }
   body.light pre .cp { background: rgba(20,30,60,.08); } body.light pre .cp:hover { background: rgba(20,30,60,.14); }
   body.light .steps .sd { color: #3c4a64; } body.light .steps li.run::before { background: #6f8bb3; }
@@ -623,6 +683,7 @@
   <div id="orb" title="Нажмите — говорить. Удерживайте (или пробел) — диктовка любой длины, отпустите — отправлю"><canvas id="cv"></canvas>
     <svg id="tarc" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="tarcg" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="90" y2="100"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient></defs><circle class="tk" cx="50" cy="50" r="48.5"/><circle class="fg" cx="50" cy="50" r="48.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" stroke="url(#tarcg)" transform="rotate(-90 50 50)"/><circle class="bead" cx="50" cy="1.5" r="1.45"/></svg><span id="tmini"></span></div>
   <div id="bubble"><span id="lvl" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span id="say">Подключаюсь…</span><button id="stopb" type="button" aria-label="Остановить ответ" title="Остановить: замолчать и не отвечать дальше (Esc)"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.2"/></svg>Стоп</button></div>
+  <div id="looks" hidden role="dialog" aria-label="Образ"><div class="lg" id="looks-g"></div><label class="la"><span>Сама — по времени дня</span><input type="checkbox" id="looks-auto"></label></div>
   <div id="mid">
     <div id="cap"><div class="you" id="you" translate="no"></div><div id="act" title="Ход работы"></div><div class="bot" id="bot" translate="no"></div><div id="media"></div><button id="more">Открыть целиком</button></div>
     <div id="yn"><button class="yes" id="y">Да</button><button id="ya" hidden title="Команды, которые только смотрят, на этом сервере — дальше без вопроса">Всегда</button><button id="n">Нет</button></div>
@@ -713,7 +774,7 @@ const entity = new DewiarEntity($("cv"), { style: "nexus", color: "#8A9BFF", pla
 const VOICE_FX = ["bars", "pulse", "wave"];
 function applyLook(ui) {                      // тема карточки и облика (assets/skins.*) + чем голос отзывается вокруг портрета
   ui = ui || {};
-  const top = ui.on_top !== false;             // идея №48: «окошко Лиры поверх всех окон» — выключатель в «Оформлении»
+  const top = ui.on_top === true;              // идея №48: «окошко Лиры поверх всех окон» — выключатель в «Оформлении» (с 1.0.71 выкл.)
   // №438: при загрузке окно уже создано как выбрано — зовём только при смене (вызов сразу после старта вешал окно)
   if (window.__onTop !== top) { const first = window.__onTop === undefined; window.__onTop = top;
     if (!first) try { const a = api(); if (a && a.set_on_top) a.set_on_top(top); } catch (e) { } }
@@ -797,6 +858,15 @@ function renderDots() {                       // список команды —
     b.onclick = guard(b, () => { box.classList.remove("show"); return core.call("persona_set", { id: p.id }).catch(showErr); });
     box.appendChild(b);
   });
+  // образ — и здесь (владелец 21.11: «как менять облик вручную я не понял»): стрелка у имени видна только в покое, а
+  // в меню персонажа ищут первым делом
+  if (hasLooks()) {
+    const b = document.createElement("button"); b.className = "lkrow";
+    b.innerHTML = '<i class="gi lki"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4 4 7l2 3 2-1v11h8V9l2 1 2-3-4-3a4 4 0 0 1-8 0Z"/></svg></i><b>Образ</b><span></span>';
+    b.querySelector("span").textContent = (lookName(current) || "обычный").toLowerCase() + " — сменить";
+    b.onclick = (e) => { e.stopPropagation(); box.classList.remove("show"); looksOpen(true); };
+    box.appendChild(b);
+  }
   paintAv($("team-dot"), current);          // №587: и без выбранного персонажа у «⌄» — значок, а не одна галочка
   $("b-team").title = current ? `Сейчас: ${current.name}${current.role ? " — " + current.role.toLowerCase() : ""}. Нажмите, чтобы выбрать другого` : window.t("hud.pick");
 }
@@ -853,8 +923,42 @@ function setState(s) {
   if (REST.on && (s === "muted" || s === "idle")) { say.textContent = "Отдыхаю до " + REST.until_text; say.title = "Не слушаю и не говорю. Нажмите на лицо или на «отдыхаю» — и я снова с вами"; }
   else if (LABEL[s]) { say.textContent = LABEL[s]; say.title = ""; }
   else if (radioNow && (s === "idle" || s === "muted")) { say.innerHTML = ""; const b = document.createElement("b"); b.textContent = "♪ " + radioNow; say.appendChild(b); say.title = "Играет радио. «Пауза», «дальше», «выключи музыку»"; }
-  else { say.innerHTML = ""; say.title = ""; const b = document.createElement("b"); b.textContent = current ? current.name : "Dewiar"; say.appendChild(b); }
+  else {
+    say.innerHTML = ""; say.title = ""; const b = document.createElement("b"); b.textContent = current ? current.name : "Dewiar"; say.appendChild(b);
+    // имя образа у имени не пишем (владелец 21.11: «надпись не нужна… дизайн становится сложным и грязным»); образ виден
+    // по лицу, а название — в кружках выбора (стрелка у имени)
+    if (hasLooks()) { say.insertAdjacentHTML("beforeend", '<svg class="lkc" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>'); say.title = "Образ — нажмите, чтобы выбрать"; }
+  }
+  bub.classList.toggle("looks", hasLooks() && !LABEL[s] && !(REST.on && (s === "muted" || s === "idle")) && !radioNow);
 }
+/* Образы (1.0.55): тот же персонаж — другие причёска и наряд. У имени — стрелка, нажали — кружки под именем; голосом —
+   «смени образ», «надень зимний», «выбирай образ сама». Выбор — в ядре (persona_look), здесь только показ. */
+function hasLooks() { return !!(current && current.looks && current.looks.length > 1); }
+function lookName(p) { const l = p && p.look ? (p.looks || []).find(x => x.id === p.look) : null; return l ? l.name : ""; }
+function renderLooks() {
+  const g = $("looks-g"); g.innerHTML = "";
+  (current.looks || []).forEach(l => {
+    const b = document.createElement("button"); b.type = "button"; b.className = (current.look || "") === l.id ? "cur" : "";
+    const im = document.createElement("img"); im.src = l.img; im.alt = ""; im.draggable = false;
+    const n = document.createElement("span"); n.textContent = l.name; b.append(im, n);
+    b.onclick = () => core.call("persona_look", { id: current.id, look: l.id }).catch(showErr);
+    g.appendChild(b);
+  });
+  $("looks-auto").checked = !!current.look_auto;
+}
+function looksOpen(on) {
+  const t = $("looks"), b = $("bubble");
+  if (on === undefined) on = t.hidden;
+  if (on && !hasLooks()) on = false;
+  t.hidden = !on; b.classList.toggle("lkopen", on); $("card").classList.toggle("lkopen", on);
+  const place = () => { if (t.hidden) return; const top = b.offsetTop + b.offsetHeight + 10, bar = $("bar") ? $("bar").offsetTop : $("card").clientHeight;
+    t.style.top = top + "px"; t.style.maxHeight = Math.max(120, bar - top - 10) + "px"; };
+  if (on) { renderLooks(); place(); setTimeout(place, 380); }       // облик уменьшается за .35 с — место пересчитать
+}
+$("bubble").addEventListener("click", e => { if (e.target.closest("#stopb") || !$("bubble").classList.contains("looks")) return; e.stopPropagation(); looksOpen(); });
+$("looks-auto").addEventListener("change", e => core.call("persona_look", { id: current.id, auto: e.target.checked }).catch(showErr));
+document.addEventListener("click", e => { if (!$("looks").hidden && !e.target.closest("#looks, #bubble")) looksOpen(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("looks").hidden) looksOpen(false); });
 function setRadio(r) {
   radioNow = r && r.playing ? (r.station || "Радио") : "";
   entity.vinyl = radioNow || null;
@@ -932,11 +1036,33 @@ function capParas(t) {
   }
   return out.length ? out : [String(t)];
 }
+/* Ссылки в ответе — нажимаются и не разъезжаются (26.11, владелец: «ссылка не нажимается… в виджете ещё и обрезается»):
+   голая https-ссылка — <a> с короткой подписью (сайт/…/конец), целиком — в подсказке; откроется в браузере. */
+const URL_RX = /https?:\/\/[^\s<>«»"'`]*[^\s<>«»"'`.,;:!?)]/g;
+function shortUrl(u) {
+  if (String(u).length <= 48) return String(u);                    // короткая — как есть
+  const s = String(u).replace(/^https?:\/\/(www\.)?/i, "");
+  const [path] = s.split(/[?#]/), parts = path.split("/").filter(Boolean), host = parts.shift() || "";
+  const out = host + (parts.length > 1 ? "/…/" + parts[parts.length - 1] : parts.length ? "/" + parts[0] : "") + (path !== s ? "?…" : "");
+  return out.length > 56 ? out.slice(0, 54) + "…" : out;
+}
+function linkify(el, text) {
+  let at = 0;
+  for (const m of String(text).matchAll(URL_RX)) {
+    if (m.index > at) el.appendChild(document.createTextNode(text.slice(at, m.index)));
+    const a = document.createElement("a");
+    a.href = m[0]; a.target = "_blank"; a.rel = "noopener"; a.title = m[0]; a.textContent = shortUrl(m[0]);
+    a.addEventListener("mousedown", (e) => e.stopPropagation());      // не тянуть виджет за ссылку
+    a.addEventListener("click", (e) => e.stopPropagation());          // и не открывать «целиком» — только ссылку
+    el.appendChild(a); at = m.index + m[0].length;
+  }
+  if (at < text.length) el.appendChild(document.createTextNode(text.slice(at)));
+}
 function capSet(text) {
   const b = $("bot"), paras = capParas(text);
   b.textContent = "";
-  if (paras.length < 2) b.textContent = text;
-  else paras.forEach((x) => { const e = document.createElement("p"); e.textContent = x; b.appendChild(e); });
+  if (paras.length < 2) linkify(b, String(text));
+  else paras.forEach((x) => { const e = document.createElement("p"); linkify(e, x); b.appendChild(e); });
   b.classList.toggle("long", String(text).length > 360);
 }
 function showCap(you, bot, err) {
@@ -1207,7 +1333,7 @@ core.on("hello", d => {
 })
 .on("settings", e => { TEXT_MODE = !!((e.settings || {}).ui || {}).text_mode; setTextMode(TEXT_MODE); applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); pultOn = (((e.settings || {}).ui || {}).pult_on) !== false; featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
 .on("persona", e => applyPersona(e.persona))
-.on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); })
+.on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); if (!$("looks").hidden) { if (hasLooks()) renderLooks(); else looksOpen(false); } })
 .on("level", e => { entity.set({ level: e.v, voice: e.src === "voice" }); if (e.src !== "voice" && state === "listening") lvlSet(e.v); })
 .on("listen_none", e => {                  // №178: ждала вопрос — речи не было: сказать почему, без голоса
   const say = $("say"); say.textContent = t(e && e.sound ? "hud.listen.noise" : "hud.listen.none"); say.title = t("hud.listen.tip");
@@ -1315,7 +1441,7 @@ core.on("hello", d => {
    чтобы было понятно, завис он, обновляется или что-то докачивает. Раз в 5 с — ping; ответ говорит, какая
    команда (cmd) и сколько секунд (oldest) уже выполняется. */
 const CMD_RU = { tts_test: "пробует голос", llm_test: "проверяет модель", check_all: "проверяет всё", update_check: "проверяет обновления",
-                 cloud_models: "спрашивает модели облака", radio: "включает радио", say: "отвечает" };
+                 cloud_models: "спрашивает модели облака", radio: "включает радио", say: "отвечает", mail_inbox: "проверяет почту" };
 let pingAt = 0, offlineSince = 0, connectedAt = 0;
 let restarting = 0;
 const pageAt = Date.now();
@@ -1436,7 +1562,7 @@ core.on("hold", e => { if (!e.on && hold && hold.on) { clearInterval(hold.timer)
 let nativeDrag = false;              // Linux, окна прямо на Wayland: тащит композитор (app.Api.native_drag, №442)
 function nativeDragCheck() { const a = api(); if (a && a.native_drag) a.native_drag().then(v => { nativeDrag = !!v; }).catch(() => {}); }
 window.addEventListener("pywebviewready", nativeDragCheck); setTimeout(nativeDragCheck, 1500);
-const NO_DRAG = "button, input, textarea, select, a[href], label, [contenteditable], #ask, #cap, #note, #upd, #task, #yn, #rem, #lightbox, #cloudlow, #annb, #clb, #drb, #reader";
+const NO_DRAG = "button, input, textarea, select, a[href], label, [contenteditable], #ask, #cap, #note, #upd, #task, #yn, #rem, #lightbox, #cloudlow, #annb, #clb, #drb, #reader, #bubble.looks, #looks";
 function noDrag(t) {
   if (!t || !t.closest) return true;
   if (t.closest(NO_DRAG)) return true;
@@ -1850,7 +1976,13 @@ let backT = null;
 let wakeAt = 0, wakeWait = false;
 function popUp() { const a = api(); if (a && mode === "card") { clearTimeout(backT); a.show(); } }
 function backLater(ms) { const a = api(); if (!a || mode !== "card") return; clearTimeout(backT); backT = setTimeout(() => a.tray_back && a.tray_back(), ms); }
-$("b-pad").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("notes"); };
+// блокнот запоминается открытым (владелец 19.11: «он у меня всегда открыт — чтобы в следующий раз открывался сам»): ui.pad_open
+$("b-pad").onclick = async () => { const a = api(); if (!a || !a.pad_toggle) return;
+  const r = await a.pad_toggle("notes"); core.call("settings_save", { patch: { ui: { pad_open: !!r } } }).catch(() => {}); };
+let padOn = false, padRestored = false;
+core.on("hello", d => { const ui = (d.settings && d.settings.ui) || {};
+  if (padRestored || !ui.pad_open || ui.hud_tray) return; padRestored = true;
+  setTimeout(() => { const a = api(); if (!padOn && mode === "card" && a && a.pad_toggle) a.pad_toggle("notes"); }, 1500); });
 $("b-play").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("play"); };
 let pultOn = true;                                         // «Оформление» → «Пульт Лиры» (ui.pult_on); нет ключа — включён
 let gamesFeature = true;                                  // «Возможности» → «Досуг» (features.games); нет ключа — включено
@@ -1861,7 +1993,7 @@ const featuresSet = (f) => { gamesFeature = !(f && f.games === false); padCheck(
 let padFailUntil = 0;
 window.padFail = (t) => { padFailUntil = Date.now() + 12000; health(t, true); };
 // значок пульта у виджета убран (владелец 16.11: «иконок стало много») — пульт открыт: подсвечен блокнот
-window.padMark = (on, m) => { const play = !!on && m === "play"; $("b-pad").classList.toggle("on", !!on && !play); $("b-play").classList.toggle("on", play);
+window.padMark = (on, m) => { padOn = !!on; const play = !!on && m === "play"; $("b-pad").classList.toggle("on", !!on && !play); $("b-play").classList.toggle("on", play);
   $("corner").classList.toggle("pinned", !!on); };
 $("b-tray").onclick = () => { const a = api(); if (!a || !a.to_tray) return; a.to_tray();
   core.call("settings_save", { patch: { ui: { hud_tray: true } } }).catch(() => {}); };
@@ -1904,10 +2036,23 @@ function shrink(file) {
 const b64of = (file) => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result);
   r.onerror = () => bad(new Error(`«${file.name}» не прочитался${r.error && r.error.name ? " (" + r.error.name + ")" : ""} — возможно, это папка, файл в облаке или занят другой программой`));
   r.readAsDataURL(file); });
+/* Длинная вставка — вложением (владелец 20.11: «вставил текст на 21000 символов… удобнее, если большое — превращается в
+   файл»): поле остаётся для вопроса, модель получает текст целиком (как файл). Нажатие на карточку — текст обратно в поле. */
+const PASTE_AS_FILE = 2000;
+async function addPasted(txt) {
+  const f = new File([txt], "Вставленный текст.txt", { type: "text/plain" });
+  atts.push({ kind: "file", name: f.name, b64: await b64of(f), size: f.size, pasted: txt });
+  renderAtts(); fitAsk();
+}
+function unPaste(i) {
+  const a = atts[i], t = $("askin"); atts.splice(i, 1);
+  t.value = a.pasted + (t.value.trim() ? "\n\n" + t.value : ""); renderAtts(); fitAsk(); t.focus();
+}
 function renderAtts() {
   const box = $("atts"); box.innerHTML = "";
   atts.forEach((a, i) => {
     const d = document.createElement("div"); d.className = "att";
+    if (a.pasted) { d.classList.add("pasted"); d.title = `${a.pasted.length.toLocaleString("ru-RU")} симв. — нажмите, чтобы вернуть текст в поле`; d.onclick = () => unPaste(i); }
     const ext = (a.name.split(".").pop() || "").slice(0, 4).toUpperCase();
     d.innerHTML = a.kind === "image" ? `<img alt=""><span></span><button title="Убрать">×</button>` : `<i class="ic"></i><span></span><button title="Убрать">×</button>`;
     if (a.kind === "image") d.querySelector("img").src = a.url; else d.querySelector(".ic").textContent = ext || "ФАЙЛ";
@@ -1950,6 +2095,8 @@ $("askin").addEventListener("paste", (e) => {
   const items = [...(e.clipboardData.items || [])];
   const files = items.filter(x => x.kind === "file").map(x => x.getAsFile()).filter(Boolean);
   if (files.length) { e.preventDefault(); addFiles(files); return; }
+  const txt = e.clipboardData.getData("text");
+  if (txt && txt.length > PASTE_AS_FILE) { e.preventDefault(); addPasted(txt); return; }
   if (!e.clipboardData.getData("text")) { e.preventDefault(); pasteImage(true); }      // текста нет — значит, картинка
 });
 document.addEventListener("keydown", (e) => {          // Ctrl+V мимо поля вопроса — открыть поле с картинкой из буфера
@@ -1964,7 +2111,7 @@ function sendAsk() {
   const label = q || atts.map(a => a.name).join(", ");
   tlReset(label);
   const kept = atts;
-  core.sendLater("say", { text: q, images, files }).catch(e => {   // не дошло — вопрос обратно в поле (№200)
+  core.sendLater("say", { text: q, images, files, typed: true }).catch(e => {   // не дошло — вопрос обратно в поле (№200)
     if (!$("askin").value.trim()) { $("askin").value = q; atts = kept; renderAtts(); fitAsk(); }
     showErr(new Error(errText(e) + " — вопрос вернул в поле, отправьте ещё раз"));
   });
@@ -2004,7 +2151,9 @@ function mdLite(t) {
   const parts = String(t || "").split(/```/);
   return parts.map((p, i) => {
     if (i % 2) { const code = p.replace(/^[\w+-]*\n/, ""); return `<pre><button class="cp">Копировать</button><code>${escR(code.replace(/\n$/, ""))}</code></pre>`; }
-    let h = escR(p).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+    let h = escR(p).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, t, u) => `<a href="${u}" target="_blank" rel="noopener" title="${u}">${t}</a>`)
+      .replace(/(^|[\s(«])(https?:\/\/[^\s<>«»"'`]*[^\s<>«»"'`.,;:!?)])/g, (_, p, u) => `${p}<a href="${u}" target="_blank" rel="noopener" title="${u}">${escR(shortUrl(u.replace(/&amp;/g, "&")))}</a>`)
+      .replace(/(^|[\s(«])\*([^*\s][^*\n]*?)\*(?=[\s.,;:!?)»]|$)/gm, "$1<i>$2</i>");   // *курсив*
     const out = []; let list = null, num = 0;          // num — номер первого пункта нумерованного списка (0 — точки)
     const close = () => { if (list) out.push(num ? `<ol start="${num}">${list.join("")}</ol>` : `<ul>${list.join("")}</ul>`); list = null; };
     for (const line of h.split("\n")) {
@@ -2053,6 +2202,7 @@ $("rd-x").onclick = () => $("reader").classList.remove("on");
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("reader").classList.contains("on")) $("reader").classList.remove("on"); });
 core.on("heard", e => { if (e.text) tlReset(e.text); })
     .on("answer", e => { TL.answer = e.text || ""; moreBtn(); })
+    .on("read_open", () => { if (!$("reader").classList.contains("on")) openReader(); })   // большой разбор — читать с экрана
     .on("confirm", e => { TL.steps.push({ name: "_confirm", title: "Спрашиваю разрешение", detail: e.text || "", status: "run" }); moreBtn(); })
     .on("confirm_done", e => { const c = [...TL.steps].reverse().find(x => x.name === "_confirm" && x.status === "run");
       if (c) { c.status = e.ok ? "done" : "declined"; c.title = e.ok ? "Разрешили" : "Не разрешили"; moreBtn(); } })

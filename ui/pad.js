@@ -30,7 +30,7 @@ window.padShown = (side) => { if (side) padSide(side); document.body.classList.r
   setTimeout(() => { if (window.padSnipTake) padSnipTake(); }, 300); };   // вернулись из «Вырезать с экрана» — вставить вырезанное
 window.padClose = async () => { gameStop(); await saveNow(); document.body.classList.remove("snap"); setTimeout(() => $("#wrap").classList.add("away"), 90);
   setTimeout(() => { const a = api(); if (a && a.pad_hide) a.pad_hide(); }, 320); };
-$("#b-close").onclick = () => padClose();
+$("#b-close").onclick = () => { core.call("settings_save", { patch: { ui: { pad_open: false } } }).catch(() => { }); padClose(); };   // закрыли сами — в следующий раз не открывать
 /* ⇄ — лист на другую сторону от виджета; выбор запоминается (ui.pad_side). Владелец 24.10: «раньше был слева — можно
    переключать на одну или другую сторону?» Не помещается с той стороны (виджет у края экрана) — остаётся, где был. */
 $("#b-side").onclick = async () => { const a = api(); if (!a || !a.pad_flip) return;
@@ -551,10 +551,30 @@ $("#sheet").addEventListener("scroll", () => { if (selImg()) imgBtn(); }, { pass
 addEventListener("resize", () => { if (selImg()) imgBtn(); });
 ED.addEventListener("mouseover", (e) => { $("#hint").textContent = e.target.closest && e.target.closest("a[href]") ? "Ctrl+щелчок — открыть ссылку" : ""; });
 
+/* Заголовок (владелец 25.11: «выделить текст, нажать H1 — станет крупнее, и так сколько угодно, текст гигантский»).
+   Выделение, начатое не внутри заголовка, давало formatBlock ещё раз — заголовок в заголовке, а размер в em растёт с
+   каждым. Теперь: уже этот заголовок — снова обычный абзац; в пункте списка — сначала строка выходит из списка;
+   вложенные заголовки после команды раскрываются. */
+function heading(c) {
+  const s = getSelection(), at = (n) => { while (n && n !== ED) { if (n.nodeType === 1 && /^H[1-6]$/.test(n.tagName)) return n; n = n.parentNode; } return null; };
+  const h = at(s.anchorNode) || at(s.focusNode), b = block();
+  if (h && h.tagName === c.toUpperCase()) { document.execCommand("formatBlock", false, "p"); flatHeads(); return; }
+  const li = b && b.closest && b.closest("li");
+  if (li) document.execCommand(li.parentNode && li.parentNode.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList");
+  document.execCommand("formatBlock", false, c);
+  flatHeads();
+}
+function flatHeads() {
+  ED.querySelectorAll("h1 h1, h1 h2, h1 h3, h2 h1, h2 h2, h2 h3, h3 h1, h3 h2, h3 h3, li h1, li h2, li h3").forEach(x => {
+    if (x.closest("li") && !x.parentElement.closest("h1,h2,h3")) { const p = document.createElement("span"); p.append(...x.childNodes); x.replaceWith(p); return; }
+    x.replaceWith(...x.childNodes);
+  });
+}
+
 /* ---------- панель ---------- */
 async function cmd(c) {
   ED.focus();
-  if (c === "h1" || c === "h2") { const b = block(); document.execCommand("formatBlock", false, b && b.tagName === c.toUpperCase() ? "p" : c); }
+  if (c === "h1" || c === "h2") heading(c);
   else if (c === "bold" || c === "italic") document.execCommand(c);
   else if (c === "strike") document.execCommand("strikeThrough");
   else if (c === "ul") document.execCommand("insertUnorderedList");

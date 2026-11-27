@@ -242,7 +242,8 @@ async function reportSend(note, auto, summary, extra) {
   const plog = extra && extra.talk === false ? PLOG.filter(l => !TALK_LINE_RX.test(l)) : PLOG;
   note = String(note || "").trim().slice(0, 2000);
   let text = [`Dewiar (телефон) ${info.version || ""} — отчёт ${new Date().toLocaleString("ru-RU")}`,
-    `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`, "",
+    `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`,
+    `TZ: ${(() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return "?"; } })()} (UTC${(() => { const o = -new Date().getTimezoneOffset(); return (o >= 0 ? "+" : "-") + String(Math.floor(Math.abs(o) / 60)).padStart(2, "0") + String(Math.abs(o) % 60).padStart(2, "0"); })()}); UTC ${new Date().toISOString().slice(11, 16)}`, "",
     ...(note ? ["== Со слов человека", note, ""] : []),
     "== Состояние", JSON.stringify({ state, online: navigator.onLine, sync: syncStatus, cloud: cloudInfo, alarms: remHealth() || undefined, audio: audioInfo() }, null, 1), "",
     "== Настройки (без ключей)", JSON.stringify(mask(st), null, 1), "",

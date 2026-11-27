@@ -4,6 +4,17 @@
 /* Ответ модели потоком (OpenAI-совместимый /chat/completions или Ollama /api/chat). onText(кусок) — текст по мере прихода,
    уже без размышлений и вызовов функций текстом; -> {text, calls:[{id,name,args}]} */
 var turnServers = new Set();                        // серверы облака, отвечавшие в этом ходе (экзамен: строка «сервер»)
+/* №989 (24.11): «модель ответила 400: Invalid Unicode (unpaired surrogate)» на каждый вопрос. Тексты в истории и памяти
+   обрезаются по длине (slice), а эмодзи — две половинки: обрезка по середине оставляет одну, и сервер не принимает запрос.
+   Перед отправкой — каждую оборванную половинку заменяем знаком «�» (без «взгляда назад» — старый Safari). */
+const wfStr = (s) => s.replace(/[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff]/g, (m) => m.length === 2 ? m : "\ufffd");
+function wellFormed(o) {
+  if (typeof o === "string") return wfStr(o);
+  if (Array.isArray(o)) return o.map(wellFormed);
+  if (o && typeof o === "object") { const r = {}; for (const k of Object.keys(o)) r[k] = wellFormed(o[k]); return r; }
+  return o;
+}
+let NO_GZ = "";                         // адрес облака Dewiar, не принявший сжатый запрос (сайт старше 1.0.67)
 async function llmStream(messages, tools, onText, signal, opt = {}) {
   const model = await resolveModel();
   const think = opt.think != null ? !!opt.think : thinkMode() === "on";
@@ -27,6 +38,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     // «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — только там, где поле точно понимают
     if (S.llm.no_usage !== llmBase() && (["dewiar", "local", "server"].includes(brainKind()) || /openai\.com|openrouter|deepseek\.com/.test(url))) body.stream_options = { include_usage: true };
   }
+  body = wellFormed(body);                          // №989: без «половинок» эмодзи — иначе сервер отвечает 400
   const tAsk = Date.now(); let tFirst = 0, usage = null;
   let hold = null, held = "", text = "", buf = "", inThink = false, gate = true, gbuf = "", tcBuf = "", inTool = false, finish = "", sawReason = false;
   let afterCall = false, dropped = "";      // текст после вызова — сочинённый до результата: не озвучиваем
@@ -137,13 +149,13 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
       if (!hold) { emitT(held + out); held = ""; } else held += out;
     }
   };
-  let srv = "";                             // какой сервер облака отвечал (строка-комментарий «: dewiar-server …», 0.81)
+  let srv = "", srvModel = "";              // какой сервер облака отвечал и какая модель (21.11) (строка-комментарий «: dewiar-server …», 0.81)
   let netHeld = "";                         // ответ узла «Сети Лиры» — придерживаем целиком, решаем в конце (NET_SUSPECT_RX)
   const emitT = (t) => { if (/^n\d/.test(srv)) netHeld += t; else if (onText) onText(t); };
   const line = (l) => {
     l = l.trim(); if (!l) return;
     if (!tFirst) tFirst = Date.now();
-    if (!ollama && l.startsWith(":")) { const m = /^:\s*dewiar-server\s+(\S+)/.exec(l); if (m) srv = m[1]; return; }   // и «: keepalive» — поток жив
+    if (!ollama && l.startsWith(":")) { const m = /^:\s*dewiar-server\s+(\S+)(?:\s+(\S+))?/.exec(l); if (m) { srv = m[1]; srvModel = m[2] || ""; } return; }   // и «: keepalive» — поток жив
     if (!ollama) { if (!l.startsWith("data:")) return; l = l.slice(5).trim(); if (l === "[DONE]") return; }
     let o; try { o = JSON.parse(l); } catch (e) { return; }
     if (o.error) throw new Error(typeof o.error === "string" ? o.error : (o.error.message || "ошибка модели"));
@@ -193,10 +205,20 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   // idle — сколько поток может молчать: программа (make_app) — целый HTML в одном вызове, и сервер модели нередко отдаёт
   // вызов целиком в конце (экзамен 0.9.18: «Сделай программу: 3D-модель атома» — 322 с и «сервер замолчал посреди ответа»)
   const hdr = llmHeaders(); if (opt.net && netHeaderOk()) hdr["X-Dewiar-Net"] = "1";
+  if (opt.voice && S.llm.cloud) hdr["X-Dewiar-Voice"] = "1";   // сказано голосом: простой вопрос — лёгкому мозгу (сайт решает сам)
+  // 1.0.67: облаку Dewiar — тело сжатым (сжимает Net.java): запрос 60–150 КБ, а сети по пути «замирают» на больших запросах.
+  // Сайт старше 1.0.67 ответит 400 — этому адресу дальше как раньше (NO_GZ). Веб-версия и браузерные проверки (D.mock: fetch,
+  // заголовок сжатия требует CORS-предзапроса) шлют как раньше
+  const gz = !D.web && !D.mock && !ollama && brainKind() === "dewiar" && NO_GZ !== llmBase();
+  if (gz) hdr["Content-Encoding"] = "gzip";
   const r = await http("POST", url, { headers: hdr, body, stream: true, timeout: 180000, signal, idle: opt.idle || 75000,
     onChunk: (chunk) => { if (err) return; buf += chunk; const parts = buf.split("\n"); buf = parts.pop(); try { parts.forEach(line); } catch (e) { err = e; } } });
   if (buf) { try { line(buf); } catch (e) { err = err || e; } }
   if (!err) { gateEnd(); feedInner("", true); }      // остаток, придержанный на случай разрезанного тега
+  if (r.status >= 400 && gz && (r.status === 400 || r.status === 415) && /bad_request|Нужен JSON|gzip/i.test(String(r.body || ""))) {
+    NO_GZ = llmBase(); plog("info", "Dewiar cloud: gzip request rejected (old site) — sending uncompressed");
+    return llmStream(messages, tools, onText, signal, opt);
+  }
   if (r.status >= 400) {
     let msg = r.body || "", ej = {}; try { let j = JSON.parse(msg); if (Array.isArray(j)) j = j[0] || {}; ej = (j && typeof j.error === "object" && j.error) || {}; msg = (j.error && (j.error.message || j.error)) || j.detail || msg; } catch (e) { }   // Gemini — ошибкой-списком
     // Gemini из России и др. (пакет 22.10): «User location is not supported» — повторять бесполезно, сказать, что делать
@@ -238,7 +260,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
       throw Object.assign(new Error(`${brainName()}: сервис не знает модель «${model}» (${clip(err.message, 100)}). Проверьте имя модели: Настройки → Мозг.`), { human: true });
     const again = retryRejected(err.message); if (again) return again;
   }
-  if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
+  if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}${srvModel ? " (" + srvModel + ")" : ""}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
   if (usage && usage.prompt) { plog("info", usageLine(usage, ((tFirst || Date.now()) - tAsk) / 1000)); hCache(usage); }
   if (err) throw err;
   if (inTool && tcBuf.trim()) tcRaw.push(tcBuf);
@@ -371,6 +393,21 @@ function turnTime(stage) {
   }
 }
 const CALC_TURN = /посчитай|подсчитай|рассчитай|вычисли|сколько\s+(?:ещё\s+|еще\s+)?(?:дней|минут|часов|недель|месяцев|лет|будет|процент)|через\s+сколько|сколько\s+осталось/i;
+/* Голос во время долгого действия (владелец 20.11, как на компьютере — core/act_cue.py): действие идёт дольше ~2,5 с,
+   а Лира ещё ничего не сказала — одна короткая фраза о том, что она делает. Только для действий, которые бывают долгими;
+   с подтверждением и говорящие сами — без фразы; текстовый режим и Telegram молчат сами (say). */
+const ACT_CUE_MS = 2500;
+const ACT_CUE = { web_search: "Ищу в интернете…", read_webpage: "Читаю страницу…", world_news: "Смотрю новости…",
+  ask_knowledge: "Смотрю в знаниях…", find_notes: "Смотрю заметки…", recall: "Вспоминаю…", pc_documents: "Смотрю документы на компьютере…",
+  weather: "Смотрю погоду…", calendar_list: "Смотрю календарь…", show_images: "Ищу картинки…", money_report: "Считаю…",
+  month_summary: "Считаю…", client_list: "Смотрю клиентов…", route: "Строю маршрут…" };
+function actCueArm(name, ctl, sink) {
+  const p = ACT_CUE[name]; if (!p) return;
+  setTimeout(() => {
+    if (ctl.signal.aborted || turnAbort !== ctl || !busy || sink.text().trim()) return;
+    plog("info", `🗣 «${name}» идёт дольше ${ACT_CUE_MS / 1000} с — «${p}»`); say(p);
+  }, ACT_CUE_MS);
+}
 function sentenceSink() {
   let pending = "", shown = "", first = true, raw = "", inCode = false;
   // блоки ``` … ``` (код, схемы) вслух не читаем: они приходят кусками, поэтому граница блока ищется в потоке;

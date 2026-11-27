@@ -118,6 +118,8 @@ class QuickMixin:
                 if not m.get("repeat"):
                     self.reminders.remove(m["id"])
                     closed.append(m.get("text") or "")
+                else:
+                    self.reminders.done_round(m["id"])
                 lst.append({"title": m.get("text") or t, "rid": m["id"]})
             else:
                 lst.append({"title": t})
@@ -189,6 +191,34 @@ class QuickMixin:
         self.emit("tool", name="play_youtube", title="YouTube: включить", status="done", detail=q, result=str(res)[:300])
         say = str(res).replace("Открыл поиск", "Открываю поиск").replace("Открыл на", "Включаю на")
         self._say_quick(say, text, via, acts=["play_youtube"])
+        return True
+
+    def _open_link_cmd(self, text, via=None):
+        """«Открой в браузере», «открой ссылку», «открой её» — сразу после ответа со ссылкой: открываем ЭТУ ссылку, без модели
+        (26.11, владелец: Лира нашла в заметке ссылку на оплату, «Открой в браузере» — модель вызвала show_page, сделала
+        страницу-файл, и та открылась в редакторе кода, а не в браузере). Ссылок в ответе нет или их несколько — к модели."""
+        t = re.sub(r"[?!.,«»\"]+", " ", (text or "").lower().replace("ё", "е"))
+        t = re.sub(r"\s+", " ", t).strip()
+        if not re.fullmatch(r"(?:да |давай |ага |пожалуйста )?(?:открой|открывай|открыть|перейди)(?: (?:ее|его|ссылку|эту ссылку|страницу|"
+                            r"эту страницу|ее в браузере|его в браузере|это|в браузере|по ссылке))*(?: пожалуйста)?", t):
+            return False
+        last = next((m.get("content") for m in reversed(self.history[-4:]) if m.get("role") == "assistant" and isinstance(m.get("content"), str)), "")
+        urls = list(dict.fromkeys(u.rstrip(".,;:!?)»") for u in re.findall(r"https?://[^\s<>«»\"'`]+", last or "")))
+        if len(urls) != 1:
+            return False
+        import tools as T
+        url = urls[0]
+        self.emit("tool", name="open_url", title="Открыть ссылку", status="run", args={"url": url}, detail=url)
+        log.info("🛠  open_url %s (ссылка из прошлого ответа, без модели)", url[:120])
+        try:
+            T.t_open_url({"url": url}, {})
+        except Exception as e:  # noqa: BLE001
+            self.emit("tool", name="open_url", title="Открыть ссылку", status="error", error=str(e))
+            self._say_quick(f"Не получилось открыть ссылку: {e}", text, via)
+            return True
+        self.emit("tool", name="open_url", title="Открыть ссылку", status="done", detail=url)
+        host = re.sub(r"^https?://(?:www\.)?", "", url).split("/")[0]
+        self._say_quick(f"Открываю в браузере: {host}.", text, via, acts=["open_url"])
         return True
 
     def _send_cmd(self, text, via=None):

@@ -113,6 +113,7 @@ LLM_PRESETS = {
 DEFAULTS = {
     "version": 1,
     "persona": "lira",
+    "looks": {},                    # образы персонажей (1.0.55): {id: {"look": id образа, "auto": «Сама — по времени и сезону»}}
     "all_names": False,             # отзываться на имя любого персонажа (19.11, владелец: по умолчанию — только активного;
                                     # другого зовут через него: «Лира, позови Патрика»)
     "team": {"route": True,         # главный (Агент) сам передаёт вопрос специалисту: код — Кодеру, письмо — Лире…
@@ -124,8 +125,25 @@ DEFAULTS = {
         "persona": {},              # id персонажа -> id профиля: свой мозг у персонажа («» — общий, active). 27.10
         "persona_model": {},        # id персонажа -> своя модель того же профиля (№403, 29.10: у Ollama много моделей)
         "history_turns": 8,
+        "xray": True,               # «Рентген» ответа: путь хода, подсказка, действия, проверки (core/xray.py)
+        "talk_lean": True,          # «Чистый разговор» (core/talk_lean.py): включён для всех с 1.0.60 — стенд 22.11: «Разговор»
+                                    # 88–98 % → 95 %, «Как твои дела?» 2/6 → 3/3, «Понимание ситуации» 73 % → 79 %; False — как раньше
+        "ledger": "auto",           # «Каркас хода»: ответ сверяется с журналом сделанного (core/ledger.py). "auto" (1.0.69) — у
+                                    # облака Dewiar да (стенд 24.11: «Честность» 31→33 из 33, «Действия» и «Разговор» без потерь;
+                                    # проверка — ещё один короткий запрос, своей медленной модели не добавляем); True/False — всегда/никогда
+        "history_native": False,    # Опыт 1 (аудит Fable 25.11): действия прошлых ответов — в истории родным форматом (вызов и его
+                                    # итог, как в самом ходе), а не пометкой «[выполнено инструментами: …]». Проба — включаем по стенду
+        "force_call": False,        # Опыт 9 (аудит Fable 25.11): «пообещала и не сделала» — повторный шаг с обязательным действием
+                                    # (tool_choice required; vLLM 0.8.3+, OpenAI, Claude). Проба — включаем по стенду
+        "rules_with_tools": False,  # Опыт 2 (аудит Fable 25.11): правила действий в подсказке — только к действиям этого хода
+                                    # (answer_prompt.TOOL_RULES); выключено — все правила, как раньше. Проба — включаем по стенду
+        "gate_only": False,         # Опыт 4 (аудит Fable 25.11): при «Каркасе хода» — только его ворота, без каскада *_claim
+                                    # (money/saved/note/call/action/task_claim, failed_claim) и их честных замен. Проба — по стенду
         "key_fallback": True,       # сервис по ключу (Gemini, Kimi…) не ответил — мозг Dewiar (15.11, «Кто чем думает»)
         "own_fallback": False,      # своя модель не отвечает — мозг Dewiar (по согласию; engine_answer._own_fallback)
+        "scene": False,             # «Ум Лиры», шаг 1: проба сцены разговора (экзамен --scene) — True включает всегда
+        "scene_on": None,           # сцена разговора в справке к вопросу (conversation.py): None — у облака Dewiar да (1.0.54)
+        "scene_wait": 0,            # сек.: ждать дописанную сцену перед ответом (экзамен; людям — 0, голос не ждёт)
         "lean_prompt": False,       # проба: короткая инструкция — навыки только именами, описания — к подходящему вопросу
         "think_auto": True,         # сложная просьба (стих, расчёт, анализ, план, код) — модель думает перед ответом (llm.wants_think)
         "tools_modes": {},          # «адрес|модель» → native | prompt | none: как модель вызывает инструменты (проверяется само)
@@ -188,7 +206,8 @@ DEFAULTS = {
            "lang": "auto",               # язык программы (0.88): auto — по системе, ru, en (core/i18n.py)
            "wayland_sharp": False,          # Linux: окна прямо на Wayland — чёткий текст при дробном масштабе GNOME (№442), но без «поверх всех» и места окна
            "hud_w": None, "hud_h": None,    # свой размер карточки виджета (растянули за угол), px при масштабе 100 %
-           "on_top": True,                  # виджет поверх всех окон (идея №48: можно выключить — студия → «Оформление»)
+           "on_top": False,                 # виджет поверх всех окон (идея №48 — студия → «Оформление»); 1.0.71, владелец 25.11: по
+                                            # умолчанию выключено у новых установок; у обновившихся — как было (владелец: «можно не трогать»)
            "hud_smooth": True,              # Linux с композитором: прозрачное окно и гладкие скругления (ui/app.py)
            "skin": "neusky",                # тема (фон) виджета и телефона — список в ui/assets/skins.js; по умолчанию «Небесный» (20.10)
            "voice_fx": "bars",              # когда говорит: bars (лучи вокруг портрета) | pulse (расходящиеся круги) | wave (волна)
@@ -201,7 +220,7 @@ DEFAULTS = {
            # первый вопрос (0.74): None — прежний пользователь (не трогаем), False — новичок ещё не спросил, True — спросил
            "first_ask": None, "first_nudged": False,
            "mode_seen": 0,                  # первый экран «Для кого эта Лира?» показан (studio/modes.js, 0.58)
-           "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
+           "pad_w": None, "pad_h": None, "prompter_w": None, "prompter_h": None,    # свои размеры блокнота и суфлёра (№364); блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
            "pad_colors": None,              # цвета текста в блокноте: forest/sea/dusk/theme/plain (ui/pad.js colorScheme); пусто — «Чернила»
            "pult_on": True,                 # «Пульт Лиры» — первая вкладка блокнота и значок у виджета (ui/padpult.js); «Оформление»
@@ -247,7 +266,7 @@ DEFAULTS = {
     "calendars": {"items": [], "remind_minutes": 10},   # календари по ссылке iCal (Google, Яндекс…), напомнить за N минут
     "cloud": {"key": "", "url": "", "account": False, "stt_ok": False, "tts_ok": False,
               "net_share": True, "net_pub": "",   # «Сеть Лиры»: пускать общие вопросы на узлы людей; ключ сети (доверие при первом использовании)
-              "join": {}},      # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
+              "join": {}, "gift_seen": "", "paid_seen": None},     # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
     "kids": {"on": False},   # детский режим (kids.py): ребёнок, время, что можно; PIN — в STATE_DIR/kids.json
     "net": {"proxy": "", "dewiar": False, "web_via": True,   # прокси для серверов Dewiar, если провайдер блокирует dewiar.pro: свой (socks5://… или http://…) или «Использовать прокси Dewiar»
             "dewiar_secret": "", "dewiar_at": 0,                # прокси, выданный dewiar.pro, и когда получен (обновляется раз в 6 часов, engine_brain.py)
@@ -269,7 +288,7 @@ DEFAULTS = {
               "judge_llm": "",    # проверяющий итога (выпуск 3 «Больших задач»): сильная модель; пусто — та же, что у задачи
               # выпуск 6: помощники — частей сразу (1–8), бюджет части (шаги, токены; 0 — без предела), шагов разведчика
               "parts_max": 4, "part_steps": 60, "part_tokens": 800000, "explore_steps": 10,
-              "budget_tokens": 0},   # выпуск 7: бюджет задачи в токенах (0 — без предела): 50 % — весточка, 80 % — итог и пауза
+              "budget_tokens": 0},   # выпуск 7: бюджет задачи в токенах (0 — сам: платный ключ 1,5 млн, иначе без предела; -1 — без предела): 50 % — весточка, 80 % — итог и пауза
     "welcome": {"on": True, "away_min": 20},   # вернулись к компьютеру после away_min минут — коротко сказать главное (presence.py)
     "diary": {"night": True, "hour": 3},   # дневник ассистента: ночью (после hour:00) — запись о прожитом дне и выводы на завтра
     "night": {"on": True},                 # ночной обход (night.py): сбои за сутки, повтор задач, утром — фраза, отчёт — с согласия
@@ -355,9 +374,13 @@ class Settings:
                 if au.get("follow_up_seconds", 8) == 8 and not au.get("follow_v2"):
                     self.data["audio"]["follow_up_seconds"] = 15             # №514: 8 с — прежнее значение по умолчанию, не выбор
                 self.data["audio"]["follow_v2"] = True                        # перевод один раз: выбранные потом 8 с не трогаем
+                if (raw.get("llm") or {}).get("ledger") is False and not (raw.get("llm") or {}).get("ledger_v2"):
+                    self.data["llm"]["ledger"] = "auto"                  # False — прежнее значение по умолчанию (проба), не выбор
+                self.data["llm"]["ledger_v2"] = True                      # перевод один раз: выключенный потом не трогаем
                 if (raw.get("llm") or {}).get("history_reset_seconds") in (300, 1200):
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
                 self._cloud_kind()
+                self._dedupe_profiles()
             except FileNotFoundError:
                 self.data = copy.deepcopy(DEFAULTS)
                 if system_dark():                                         # №259 (25.10): тёмная система — с первого запуска
@@ -377,6 +400,35 @@ class Settings:
             if isinstance(p, dict) and p.get("cloud") and "/dwrapp/cloud.php" in str(p.get("base_url") or "") \
                     and p.get("kind") != "openai":
                 p["kind"] = "openai"
+
+    def _dedupe_profiles(self):
+        """Владелец 22.11: «в выборе мозга три Гугла и мозг Dewiar — непонятно, что выбирать». Каждое «Подключить» по ключу
+        добавляло новый профиль. Одинаковые (сервис, адрес, модель, ключ, прокси) — один: остаётся выбранный (или первый),
+        ссылки персонажей на лишние переходят к нему. -> сколько убрано."""
+        llm = self.data.get("llm") or {}
+        profs = llm.get("profiles") or {}
+        seen, drop = {}, {}
+        order = sorted(profs, key=lambda k: (k != llm.get("active"), list(profs).index(k)))
+        for pid in order:
+            p = profs.get(pid)
+            if not isinstance(p, dict) or p.get("cloud"):
+                continue
+            key = (p.get("kind") or "openai", str(p.get("base_url") or "").rstrip("/").lower(), str(p.get("model") or ""),
+                   str(p.get("api_key") or ""), str(p.get("proxy") or ""))
+            if not key[1]:
+                continue
+            if key in seen:
+                drop[pid] = seen[key]
+            else:
+                seen[key] = pid
+        for pid, keep in drop.items():
+            profs.pop(pid, None)
+            for who, ref in list((llm.get("persona") or {}).items()):
+                if ref == pid:
+                    llm["persona"][who] = keep
+        if drop:
+            log.info("Мозг: одинаковых подключений убрано — %d", len(drop))
+        return len(drop)
 
     def save(self):
         """Через .tmp с правами 600 (в файле ключи API): файл не останется недописанным и не будет виден другим."""

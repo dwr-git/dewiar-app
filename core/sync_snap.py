@@ -107,6 +107,8 @@ class SnapMixin:
                 nid = by_path.get(rel) or "f" + hashlib.sha1(rel.encode("utf-8")).hexdigest()[:12]
             if nid:
                 d["note"] = nid
+            if r.get("who"):
+                d["who"] = str(r["who"])[:40]                    # кто ставил — лицо и имя в уведомлении телефона
             out["reminder:" + r["id"]] = d
         for m in list(self.host.money.items):
             d = {k: m.get(k) for k in ("date", "kind", "amount", "currency", "category", "note")}

@@ -76,7 +76,7 @@ def sha256(p):
 
 SPEAKER_NAME = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 SPEAKER_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/" + SPEAKER_NAME
-SPEAKER_SHA = "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"
+SPEAKER_SHA = "53cab20ba8f2eb2f6e2d89ecc18e88ef3222169b61b4419cbc13666744a4574b"
 
 
 def fetch(url, dst, expect_sha=None):

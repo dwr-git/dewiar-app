@@ -21,7 +21,7 @@ CASES = {
     "Сохранила в report.pdf и /home/user/Документы/план.docx.": "Сохранила в report.",
     "Подробнее: https://weather.rambler.ru/v-minske/ — там всё.": "Подробнее: там всё.",
     "Т.е. завтра дождь, т.к. циклон.": "то есть завтра дождь, так как циклон.",
-    "Сайт dewiar.pro работает.": "Сайт dewiar.pro работает.",
+    "Сайт dewiar.pro работает.": "Сайт dewiar работает.",          # 20.11: сайт вслух — его именем
 }
 bad = {k: speakable(k) for k, v in CASES.items() if speakable(k) != v}
 ok(not bad, "компьютер: ссылки, пути и сокращения" + (f": {bad}" if bad else ""))

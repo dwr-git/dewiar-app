@@ -50,6 +50,17 @@ async function dvRefresh() {
   dvRender();
 }
 
+/* Связь понятная (владелец 20.11): ошибка обмена — что случилось и что делать, а не «облако ответило 503» */
+function dvSyncHuman(msg) {
+  const m = String(msg || "");
+  if (/fetch|network|timeout|timed out|сеть|сети|ssl|соедин|unreachable|connect/i.test(m))
+    return "Нет связи с dewiar.pro — проверьте интернет на компьютере. Ничего не потеряется: правки уйдут сами, как только связь появится.";
+  if (/\b40[13]\b|ключ dewiar|вход|token|авториз/i.test(m)) return "Вход в Dewiar на этом компьютере устарел — войдите снова в «Мозге». Всё, что здесь, сохранится.";
+  if (/\b5\d\d\b|занят|busy|перегруж/i.test(m)) return "dewiar.pro сейчас занят — повторю сама через минуту.";
+  if (/шифр|decrypt|расшифр/i.test(m)) return "Ключ шифрования здесь не совпадает с другими устройствами — подключите это устройство заново кодом.";
+  return "Не синхронизировалось: " + m;
+}
+
 function dvRender() {
   const d = DV; if (!d || !$("#p-devices")) return;
   const st = d.sync || {}, devs = d.devices || [];
@@ -57,7 +68,7 @@ function dvRender() {
   const t = st.at ? new Date(st.at * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
   $("#dv-sync-st").className = "dv-st " + (!st.available || !st.on ? "" : st.ok === false ? "bad" : st.ok ? "ok" : "");
   $("#dv-sync-st").textContent = !st.available ? "Синхронизации нет: здесь ещё нет входа в Dewiar — введите код с другого устройства или подключите Dewiar в «Мозге»."
-    : !st.on ? "Синхронизация выключена." : st.ok === false ? "Не синхронизировалось: " + st.error : t ? `Синхронизировано в ${t}` : "Первая синхронизация — в течение минуты.";
+    : !st.on ? "Синхронизация выключена." : st.ok === false ? dvSyncHuman(st.error) : t ? `Синхронизировано в ${t}` : "Первая синхронизация — в течение минуты.";
   $("#dv-now").disabled = false; $("#dv-now").classList.toggle("ghost", !st.available || !st.on);   // не серая кнопка без объяснения: нажали — скажем, что сделать
   $("#dv-sync-on").checked = !!st.on; $("#dv-sync-on").disabled = !st.available;
   $("#dv-via").textContent = st.available ? (d.mode === "account" ? `по аккаунту${d.login ? " " + d.login : ""} на dewiar.pro` : "по ключу Dewiar") : "нужен вход в Dewiar";

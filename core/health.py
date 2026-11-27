@@ -66,6 +66,24 @@ def _proc_start():
         return time.time()
 
 
+def _boot_launch():
+    """Запуск вместе с системой: флаг от интерфейса (--autostart → DEWIAR_AUTOSTART, Windows и Mac запускают ядро сами) или
+    ядро стартовало в первые 3 минуты после включения (Linux — служба systemd при входе)."""
+    if os.environ.get("DEWIAR_AUTOSTART") == "1":
+        return True
+    try:
+        if os.name == "nt":
+            import ctypes
+            f = ctypes.WinDLL("kernel32").GetTickCount64
+            f.restype = ctypes.c_ulonglong
+            up = f() / 1000.0
+        else:
+            up = float(open("/proc/uptime", encoding="ascii").read().split()[0])
+    except Exception:  # noqa: BLE001
+        return False
+    return up < 180
+
+
 def _cpu_total():
     """(занято, всего) тиков процессора всей машины — для доли нагрузки между двумя замерами; нет данных — None."""
     try:
@@ -161,6 +179,47 @@ def _bug_pub(lst):
     return [{"id": b["id"], "preview": b["preview"]} for b in lst]
 
 
+# «Рентген дороги» (1.0.70): дорога до dewiar.pro из России, Беларуси и других стран разная (ТСПУ, №977). Страна — только
+# двухбуквенный код, из настроек системы (Windows — «Страна или регион»; Linux и Mac — часовой пояс), не по адресу.
+_TZ_CC = {"Europe/Minsk": "BY", "Europe/Kiev": "UA", "Europe/Kyiv": "UA", "Asia/Almaty": "KZ", "Asia/Qostanay": "KZ",
+          "Asia/Aqtobe": "KZ", "Asia/Aqtau": "KZ", "Asia/Atyrau": "KZ", "Asia/Oral": "KZ", "Asia/Qyzylorda": "KZ",
+          "Asia/Tashkent": "UZ", "Asia/Samarkand": "UZ", "Asia/Bishkek": "KG", "Asia/Tbilisi": "GE", "Asia/Yerevan": "AM",
+          "Asia/Baku": "AZ", "Europe/Chisinau": "MD", "Asia/Dushanbe": "TJ", "Asia/Ashgabat": "TM", "Europe/Riga": "LV",
+          "Europe/Vilnius": "LT", "Europe/Tallinn": "EE", "Asia/Jerusalem": "IL", "Europe/Berlin": "DE", "America/New_York": "US"}
+_TZ_RU = re.compile(r"^(Europe/(Moscow|Kaliningrad|Samara|Volgograd|Saratov|Ulyanovsk|Astrakhan|Kirov)|Asia/(Yekaterinburg|Omsk|"
+                    r"Novosibirsk|Barnaul|Tomsk|Novokuznetsk|Krasnoyarsk|Irkutsk|Chita|Yakutsk|Khandyga|Vladivostok|Ust-Nera|"
+                    r"Magadan|Sakhalin|Srednekolymsk|Kamchatka|Anadyr))$")
+_CC = [None]
+
+
+def device_country():
+    """Двухбуквенный код страны этого компьютера или "" (не знаем) — один раз за запуск."""
+    if _CC[0] is not None:
+        return _CC[0]
+    cc = ""
+    try:
+        if os.name == "nt":
+            import ctypes
+            k = ctypes.windll.kernel32
+            gid = k.GetUserGeoID(16)                                    # GEOCLASS_NATION
+            buf = ctypes.create_unicode_buffer(8)
+            if gid != -1 and k.GetGeoInfoW(gid, 4, buf, 8, 0):          # GEO_ISO2
+                cc = buf.value
+        else:
+            tz = os.environ.get("TZ") or ""
+            if not tz:
+                try:
+                    tz = os.path.realpath("/etc/localtime").split("zoneinfo/", 1)[1]
+                except (IndexError, OSError):
+                    tz = ""
+            tz = tz.lstrip(":")
+            cc = "RU" if _TZ_RU.match(tz) else _TZ_CC.get(tz, "")
+    except Exception:  # noqa: BLE001
+        cc = ""
+    _CC[0] = cc.upper() if re.fullmatch(r"[A-Za-z]{2}", cc or "") else ""
+    return _CC[0]
+
+
 class HealthMixin:
     _health_lock = None
 
@@ -182,7 +241,9 @@ class HealthMixin:
                 lv.write_text(VERSION, encoding="utf-8")
         except OSError:
             pass
-        self._h_start = {"ts": int(time.time()), "first": (self.s.get("ui", "intro") or "") == "", "v": VERSION, "upd": upd}
+        # auto — запуск вместе с системой (--autostart, 20.11): такие дни в воронке — не «открыл и молчит»
+        self._h_start = {"ts": int(time.time()), "first": (self.s.get("ui", "intro") or "") == "", "v": VERSION, "upd": upd,
+                         "auto": _boot_launch()}
         self._h_marks = {}
         if self.wav_input and not os.environ.get("DEWIAR_PULSE_URL"):
             return                                       # прогон по wav-файлу — не пульс человека
@@ -222,6 +283,66 @@ class HealthMixin:
             self._h["starts"] = (self._h.get("starts") or [])[-9:] + [st]
             self._health_save()
 
+    # «Первая минута» компьютера (20.11; воронка: 221 за неделю закрыли в первые 10 минут, ни о чём не спросив, — а что они
+    # успели увидеть, не знали). Как у телефона (04-health.js fsMark): события первого запуска — секунды от старта, вид
+    # приветствия; без текстов. Окно — 10 минут первого запуска; закрыли раньше первого пульса — пульс уходит при выходе.
+    FIRST_KEYS = ("greet", "tries", "try", "ask", "answer", "fail", "nudge", "mic_no", "quit")
+
+    def first_mark(self, e, kind=""):
+        st = getattr(self, "_h_start", None)
+        if self._health_lock is None or not st or not st.get("first") or e not in self.FIRST_KEYS:
+            return
+        sec = int(time.time() - st["ts"])
+        if sec > 600:
+            return
+        with self._health_lock:
+            f = self._h.setdefault("first", {})
+            if e not in f:
+                f[e] = sec
+                if kind and re.fullmatch(r"[a-z]{2,10}", kind):
+                    f["kind"] = kind
+                self._health_save()
+
+    def health_quit(self):
+        """Выход из программы: в первые 10 минут первого запуска — «закрыли» и пульс сразу (иначе такой запуск не виден)."""
+        st = getattr(self, "_h_start", None)
+        if not st or not st.get("first") or time.time() - st["ts"] > 600 or self._health_lock is None:
+            return
+        self.first_mark("quit")
+        if getattr(self, "_pulse_sent", False):
+            return
+        t = threading.Thread(target=self.pulse_send, name="pulse-quit", daemon=True)
+        t.start()
+        t.join(timeout=4)                                # выход не ждёт дольше: нет связи — так нет
+
+    DAY_MISS_KEEP = 7 * 86400
+
+    def day_miss(self, kind, ask, said=""):
+        """«Ум Лиры», шаг 3 — сначала замер: промах хода (promise — пообещала и не сделала, fake_call — написала вызов
+        текстом, task — не запустила задачу, refusal — «нет доступа», не попробовав, correction — человек поправил) — в пульс
+        (miss_<kind>) и в журнал промахов STATE_DIR/misses.jsonl (7 дней; просьба и сказанное — по 160 знаков). Из него ночью
+        будут «Уроки дня»; сейчас — сколько их и каких."""
+        self.health_count("miss_" + str(kind))
+        try:
+            import json as _json
+            from pathlib import Path
+            f = Path(STATE_DIR) / "misses.jsonl"
+            now = time.time()
+            rows = []
+            if f.exists():
+                for ln in f.read_text(encoding="utf-8").splitlines()[-400:]:
+                    try:
+                        r = _json.loads(ln)
+                    except ValueError:
+                        continue
+                    if now - float(r.get("t") or 0) < self.DAY_MISS_KEEP:
+                        rows.append(ln)
+            rows.append(_json.dumps({"t": int(now), "kind": kind, "ask": str(ask or "")[:160], "said": str(said or "")[:160]},
+                                    ensure_ascii=False))
+            f.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            log.debug("журнал промахов", exc_info=True)
+
     def health_count(self, what, n=1):
         """Счётчик для пульса: turns — ответы, net_ok / net_fail — удачные и неудачные запросы к модели, rude / refused —
         грубость к помощнику и его отказы (boundaries.py; только числа)."""
@@ -229,6 +350,29 @@ class HealthMixin:
             return
         with self._health_lock:
             self._h[what] = int(self._h.get(what, 0)) + n
+        if what == "turns" and hasattr(self, "first_mark"):
+            self.first_mark("answer")
+
+    def qual_note(self, rec):
+        """Шаг 4 плана «Качество» (21.11): качество ответа модели по «где думает» — ходов, сколько поправили проверки ответа
+        («✋»: сказала, что сделала, а нет; пообещала; выдумала…), сколько вышли пустыми. Из рентгена хода (xray.on_finish).
+        Только числа: {kind: [ходов, поправлено, пусто]}."""
+        try:
+            if (rec.get("route") or {}).get("kind") != "model" or rec.get("cancelled") or self._health_lock is None:
+                return
+            kind = str((rec.get("model") or {}).get("kind") or "?")[:12]
+            srv = str((rec.get("model") or {}).get("srv") or "")
+            if srv:                                    # облако Dewiar: кто ответил — основной, лёгкий, сервер «Мощностей» (21.11)
+                kind = f"{kind}_{srv}"[:24]
+            ans = (rec.get("answer") or {}).get("text") or ""
+            with self._health_lock:
+                q = self._h.setdefault("qual", {})
+                v = q.setdefault(kind, [0, 0, 0])
+                v[0] += 1
+                v[1] += 1 if rec.get("checks") else 0
+                v[2] += 0 if ans.strip() else 1
+        except Exception:  # noqa: BLE001
+            log.debug("качество по мозгам", exc_info=True)
 
     def health_cache(self, u, prof=None):
         """«Голос без пауз» (04.11): запрос к модели — сколько токенов в подсказке и сколько сервер взял из кэша начала
@@ -289,6 +433,8 @@ class HealthMixin:
         if self._health_lock is None:
             return
         k = f"{brain_kind(prof)}:{why_kind(err)}"
+        if hasattr(self, "first_mark"):
+            self.first_mark("fail")
         with self._health_lock:
             w = self._h.setdefault("net_why", {})
             if k in w or len(w) < 40:
@@ -382,7 +528,9 @@ class HealthMixin:
                 "turns": h.get("turns", 0), "net_ok": h.get("net_ok", 0), "net_fail": h.get("net_fail", 0), "errors": h.get("errors", 0),
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
                 "problems": [{"sig": k, "text": mask_personal(v["text"]), "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
-                "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}}
+                "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}, "first": h.get("first") or {},
+                "misses": {k[5:]: v for k, v in h.items() if k.startswith("miss_") and isinstance(v, int)},   # «Ум Лиры», шаг 3: замер
+                "qual": h.get("qual") or {}}                     # «Качество», шаг 4: по «где думает» [ходов, поправлено, пусто]
 
     def _lat_how(self):
         """Чем думает ассистент — для разбивки задержки голоса (dewiar, local, cloud…)."""
@@ -403,6 +551,18 @@ class HealthMixin:
         for x in xs:
             by.setdefault(x.get("how") or "?", []).append(x["total"])
         out["by"] = {k: [len(v), Latency.summary([{"total": t} for t in v])["total"][0]] for k, v in list(by.items())[:6]}
+        # 21.11 (пакет: первая строка потока 5,3 с при «первом слове модели» у сайта 1,2 с — но в это число входят и своя
+        # модель, и ключ сервиса): путь до сервера — по «где думает», чтобы облако Dewiar было видно отдельно
+        net = {}
+        for x in xs:
+            if "line" in x:
+                net.setdefault(x.get("how") or "?", []).append(x)
+        if net:
+            out["net_by"] = {k: [len(v), Latency.summary([{"total": 0, "hdr": y.get("hdr", 0), "line": y["line"]} for y in v]).get("hdr"),
+                                 Latency.summary([{"total": 0, "line": y["line"]} for y in v]).get("line"),
+                                 Latency.summary([{"total": 0, "sent": y["sent"]} for y in v if "sent" in y]).get("sent")]
+                             for k, v in list(net.items())[:6]}
+        out["cc"] = device_country()                     # «Рентген дороги» (1.0.70): дорога — по странам
         out["_n"] = len(xs)
         return out
 
@@ -437,7 +597,16 @@ class HealthMixin:
                     pr[sig]["n"] -= n
                     if pr[sig]["n"] <= 0:
                         del pr[sig]
+            q = self._h.get("qual") or {}
+            for kind, v in (body.get("qual") or {}).items():           # качество по мозгам — вычесть отправленное
+                if kind in q:
+                    q[kind] = [max(0, int(q[kind][i]) - int(v[i])) for i in range(3)]
+                    if not q[kind][0]:
+                        del q[kind]
             self._h["starts"] = (self._h.get("starts") or [])[len(body["starts"]):]
+            st = getattr(self, "_h_start", None) or {}
+            if body.get("first") and time.time() - st.get("ts", 0) > 600:
+                self._h.pop("first", None)            # «Первая минута» досчитана и ушла — дальше не нужна
             pc, sent_pc = self._h.get("pcache") or {}, body.get("pcache") or {}
             for k in ("n", "k", "ptok_all", "ptok", "cached"):     # кэш подсказки: вычесть отправленное
                 if k in pc:
@@ -467,6 +636,7 @@ class HealthMixin:
         if lat is not None and (body.get("lat") or {}).get("_n"):
             with lat._lock:                              # отправленные ходы — забыть
                 lat.samples = lat.samples[int(body["lat"]["_n"]):]
+        self._pulse_sent = True
         log.info("💓 Пульс отправлен: запусков %d, ответов %d, сбоев %d", len(body["starts"]), body["turns"], len(body["problems"]))
         return True
 

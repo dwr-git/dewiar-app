@@ -56,6 +56,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             try { Alarms.schedule(c, cur); } catch (Exception ignored) { }
             return;
         }
+        if (cur != null && RemWatch.cancelledElsewhere(c, id)) { MainActivity.poke("alarms"); return; }   // №992: сняли на компьютере
         JSONObject x = Alarms.fired(c, id);           // null — в списке уже нет: показываем по данным самого сигнала
         if (x != null && !x.optString("note", "").isEmpty()) noteSet(c, id, x.optString("note", ""));
         String title = x != null ? x.optString("title", "Напоминание") : in.getStringExtra("title");

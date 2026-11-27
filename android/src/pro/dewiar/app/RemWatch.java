@@ -58,14 +58,30 @@ public class RemWatch extends JobService {
         return n > 1 ? "d:" + s : "";
     }
 
-    static void check(Context c) throws Exception {
+    static void check(Context c) throws Exception { check(c, 15000, 20000); }
+
+    /** №992 (24.11): «отметил дело выполненным на компьютере, а телефон всё равно напоминает, пока не откроешь Dewiar».
+     *  Фоновая проверка — раз в 15 минут и позже (экономия заряда), а сигнал звонит раньше. Перед самим сигналом — быстрый
+     *  вопрос облаку (до 3 с): напоминание сняли на другом устройстве — не звоним. Нет сети — звоним, как раньше.
+     *  -> true, если сигнал id сняли. */
+    static boolean cancelledElsewhere(final Context c, String id) {
+        if (Alarms.get(c, id) == null) return false;
+        Thread t = new Thread(new Runnable() { @Override public void run() {
+            try { check(c, 2000, 2500); } catch (Throwable ignored) { }
+        } });
+        t.start();
+        try { t.join(3000); } catch (InterruptedException ignored) { }
+        return Alarms.get(c, id) == null;
+    }
+
+    static void check(Context c, int connectMs, int readMs) throws Exception {
         SharedPreferences pr = c.getSharedPreferences("dewiar", Context.MODE_PRIVATE);
         JSONObject w = new JSONObject(pr.getString("rem_watch", "{}"));
         String base = w.optString("base"), token = w.optString("token");
         if (base.isEmpty() || token.isEmpty()) return;
         long since = Math.max(w.optLong("since"), pr.getLong("rem_since", 0));
         HttpURLConnection h = (HttpURLConnection) new URL(base + "?p=/sync/peek&since=" + since).openConnection();
-        h.setConnectTimeout(15000); h.setReadTimeout(20000);
+        h.setConnectTimeout(connectMs); h.setReadTimeout(readMs);
         h.setRequestProperty("Authorization", "Bearer " + token);
         if (!w.optString("link").isEmpty()) h.setRequestProperty("X-Sync-Link", w.optString("link"));
         if (h.getResponseCode() != 200) return;

@@ -185,6 +185,16 @@ const EXAM_PHONE = [
     steps: ["запланируй на завтра в 13 позвонить в банк в 16 тренировка в 19 купить подарок маме", "я позвонил в банк", "отметь тренировку", "готово купил подарок маме"],
     done: { min: 3, all: ["банк", "трениров", "подар"], reminder_gone: "банк" },
     judge: "Сцена из видео (18.10), фразы — как их пишет распознавание речи. План — три дела напоминаниями на завтра (не календарь); каждое «сделано» — отметка (дело из плана закрыто), третье — похвала и достижение «Тройка». Отметки на словах — 0 баллов." },
+  { id: "remind_quoted_1119", group: "Напоминания", title: "«Завтра в 10 напомни \"ЗАВТРА СКАЧАТЬ…\"» — сразу и дословно",
+    steps: ["Завтра в 10 часов напомни \"ЗАВТРА СКАЧАТЬ СЕБЕ НА НОУТ VLLM\""], alarm: { any: ["vllm"], hm: "10:00", within_h: [1, 40] },
+    judge: "Владелец 19.11: «попросил на завтра напомнить, а она зачем-то спросила разрешение» — слово «завтра» в кавычках принималось за непонятый день. Хорошо: напоминание на завтра в 10:00, текст — как сказан в кавычках, короткое подтверждение. Плохо: переспросил, другое время, текст переписан." },
+  { id: "remind_next_monday_897", group: "Напоминания", title: "«В следующий понедельник в 13» — именно понедельник (№897)",
+    steps: ["В следующий понедельник в 13 часов напомни связаться с Артёмом Бородиным"], alarm: { any: ["артем", "артём"], hm: "13:00", dow: 0, within_h: [1, 200] },
+    judge: "№897 (19.11): «в следующий понедельник» ставилось на завтра. Хорошо: напоминание в понедельник в 13:00 «связаться с Артёмом Бородиным». Плохо: другой день недели или «завтра»." },
+  { id: "company_whatfor_1119", group: "Как в жизни", title: "«Я руковожу компанией — чем Лира поможет?» — полный цикл",
+    steps: ["Я руковожу компанией из десяти человек. Чем Лира может помочь именно компании? Коротко, по пунктам."],
+    expect: { any: ["поручени"], any2: ["клиент", "заяв"], none: ["не умею", "не могу помочь"] },
+    judge: "Урок 30 «Лира для компании» (19.11). Хорошо: коротко по руководству — компания с одним балансом, сотрудники по ссылке, поручения с «Беру» → «Сделано» с фото, консультант на сайте и в Telegram, заявка → карточка клиента и поручение, итог недели. Плохо: выдуманное, общие слова без названий разделов." },
   { id: "life_move_remind", group: "Как в жизни", title: "«Встреча переносится… напомни завтра в 9» — напоминание правда стоит",
     steps: ["слушай встреча с Ирой переносится на послезавтра на 12 напомни мне завтра в 9 утра"],
     alarm: { any: ["ир", "встреч"], within_h: [1, 40] },
@@ -453,6 +463,8 @@ function examChecks(sc, last, toolsAll, t0) {
       if (w.any && !w.any.some(s => x.title.toLowerCase().includes(s))) return false;
       if (w.minutes != null && Math.abs((x.at - t0) / 60000 - examNum(w.minutes)) > (w.tol || 2)) return false;
       if (w.within_h) { const h = (x.at - now) / 36e5; if (h < w.within_h[0] || h > w.within_h[1]) return false; }
+      if (w.hm) { const d = new Date(x.at); if (`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` !== w.hm) return false; }
+      if (w.dow != null && (new Date(x.at).getDay() + 6) % 7 !== w.dow) return false;          // 0 — понедельник (№897)
       if (w.kind && (x.kind || "reminder") !== w.kind) return false;            // таймер — именно таймер (отсчёт на экране)
       if (w.att) { const n = x.note && notes().find(y => y.id === x.note); if (!n || (n.att || []).length < w.att) return false; }   // фото — при напоминании
       return true;
@@ -589,6 +601,7 @@ async function examScenario(sc) {
 function examMarkdown(rep) {
   const s = rep.summary, L = [`# Экзамен Dewiar ${rep.version} — ${rep.started.slice(0, 16).replace("T", " ")}`, "",
     `Модель: **${rep.model}**. Сдано **${s.passed} из ${s.total}**` + (s.avg_score != null ? `, средняя оценка судьи ${s.avg_score}` : "") + `, ${Math.round(rep.duration_s / 60)} мин.`, ""];
+  if ((rep.sets || []).length) L.push(`Переключатель: ${rep.sets.join("; ")}.`, "");
   for (const [g, v] of Object.entries(s.by_group)) L.push(`- ${g}: ${v.passed} из ${v.total}`);
   for (const r of rep.scenarios) {
     L.push("", `## ${r.passed ? "✅" : "❌"} ${r.group} — ${r.title}`, `_${r.time_s} с` + (r.score != null ? `, судья: ${r.score}/10 — ${r.judge.why}` : "") + "_");
@@ -617,6 +630,16 @@ async function examReport(job, o) {
 }
 
 /* Весь экзамен: песочница → сценарии → итог в кабинет → перезагрузка (всё как было). onStep(i, n, title) — ход. */
+/* «llm.talk_lean=false; llm.scene=true» -> { talk_lean: false, scene: true }: только ключи мозга (llm.*), значения — true/false/число/слово */
+function examSets(raw) {
+  const out = {};
+  for (const x of (Array.isArray(raw) ? raw : String(raw || "").split(/[;\n,]+/))) {
+    const m = /^llm\.([a-z_][a-z0-9_]*)=([^\s;]{1,60})$/.exec(String(x).trim());
+    if (!m || ["base_url", "api_key", "model", "cloud", "account", "kind", "name"].includes(m[1])) continue;
+    out[m[1]] = m[2] === "true" ? true : m[2] === "false" ? false : /^-?\d+(\.\d+)?$/.test(m[2]) ? +m[2] : m[2];
+  }
+  return out;
+}
 async function examRun(onStep, job) {
   if (EXAM) return null;
   let info = {}; try { info = JSON.parse(D.info() || "{}"); } catch (e) { }
@@ -624,23 +647,27 @@ async function examRun(onStep, job) {
   SANDBOX = { prefs: {}, files: {}, dev: [] };                                           // eslint-disable-line no-global-assign
   EXAM = { tools: [], alarms: [], calendar: [], stop: false };
   const keepText = S.textMode; S.textMode = true;                               // ничего не озвучивать
+  // 1.0.61 — стенд на телефоне: группы и переключатель llm.* из кабинета («llm.talk_lean=false»); после — как было
+  const groups = Array.isArray(job && job.groups) ? job.groups.map(String) : [], sets = examSets(job && job.sets);
+  const list = groups.length ? EXAM_PHONE.filter(sc => groups.includes(sc.group)) : EXAM_PHONE;
+  const keepLlm = Object.assign({}, S.llm); Object.assign(S.llm, sets);
   const results = [];
   try {
-    for (let i = 0; i < EXAM_PHONE.length && !EXAM.stop; i++) {
-      const sc = EXAM_PHONE[i];
-      onStep && onStep(i + 1, EXAM_PHONE.length, sc.title);
-      await examReport(job, { state: "running", i: i + 1, n: EXAM_PHONE.length, title: sc.title });
+    for (let i = 0; i < list.length && !EXAM.stop; i++) {
+      const sc = list[i];
+      onStep && onStep(i + 1, list.length, sc.title);
+      await examReport(job, { state: "running", i: i + 1, n: list.length, title: sc.title });
       if (EXAM.stop) break;
       results.push(await examScenario(sc));
     }
-  } finally { S.textMode = keepText; }
+  } finally { S.textMode = keepText; S.llm = keepLlm; }
   const by = {};
   for (const r of results) { const g = by[r.group] = by[r.group] || { passed: 0, total: 0 }; g.total++; if (r.passed) g.passed++; }
   const sc = results.map(r => r.score).filter(x => x != null);
   const model = (S.llm.cloud ? "Dewiar " : "") + (S.llm.model || S.llm.name || "модель");
   const rep = { version: "телефон " + (info.version || ""), started: new Date(started.getTime() - started.getTimezoneOffset() * 6e4).toISOString().slice(0, 19),
     duration_s: Math.round((Date.now() - started) / 1000), model: model + " · телефон", host: String(info.device || "").slice(0, 40),
-    os: "Android " + (info.android || ""), long: false, app: "phone", scenarios: results,
+    os: "Android " + (info.android || ""), long: false, app: "phone", scenarios: results, sets: Object.keys(sets).map(k => `llm.${k}=${sets[k]}`), groups,
     summary: { passed: results.filter(r => r.passed).length, total: results.length, by_group: by, avg_score: sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length * 10) / 10 : null } };
   rep.md = examMarkdown(rep);
   let sent = null, err = "";

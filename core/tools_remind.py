@@ -73,7 +73,16 @@ class Reminders:
                     "text": (text or "Напоминание").strip(), "repeat": repeat or None, "kind": kind,
                     "created": datetime.now().isoformat(timespec="seconds")}
             item.update({k: v for k, v in (extra or {}).items() if k in ("deliver", "brief", "preset", "note", "note_id", "title",
-                         "care", "care_n", "care_of", "care_root", "care_at") and v not in (None, "")})   # care — лекарство (senior.py)
+                         "care", "care_n", "care_of", "care_root", "care_at", "who") and v not in (None, "")})   # care — лекарство (senior.py)
+            # владелец 25.11 (третий раз, №980): «активная Лира, напоминание ставил через неё — в уведомлении Патрик». Кто
+            # ставил — с записью, и через синхронизацию на телефон (там его лицо и имя в уведомлении), а не «текущий» телефона
+            if "who" not in item and callable(getattr(self, "who", None)):
+                try:
+                    w = str(self.who() or "")[:40]
+                    if w:
+                        item["who"] = w
+                except Exception:  # noqa: BLE001
+                    pass
             self.items.append(item)
             self._save()
             return dict(item)
@@ -124,8 +133,8 @@ class Reminders:
             if cur is None:
                 cur = {"id": item["id"], "created": datetime.now().isoformat(timespec="seconds")}
                 self.items.append(cur)
-            for k in ("at", "text", "repeat", "kind", "paused", "note_id"):
-                if k in item:
+            for k in ("at", "text", "repeat", "kind", "paused", "note_id", "who"):
+                if k in item and (k != "who" or item[k]):        # кто ставил — не стираем пустым
                     cur[k] = item[k]
             if not cur.get("note_id"):
                 cur.pop("note_id", None)
@@ -156,6 +165,22 @@ class Reminders:
                     self._save()
                     return dict(x)
         return None
+
+    def done_round(self, rid, now=None):
+        """«Сделано» по повторяющемуся напоминанию: звонки этого круга больше не нужны (№927: «каждый месяц с 15 по 19…
+        пока не будет выполнено» звенело и после «Готово») — следующее с нового круга (when.after_done). -> новое время
+        или None (ничего не меняли)."""
+        from when import after_done
+        x = self.get(rid)
+        if not x or not x.get("repeat"):
+            return None
+        try:
+            nxt = after_done(x["repeat"], datetime.fromisoformat(x["at"]), now or datetime.now())
+        except (KeyError, ValueError, TypeError):
+            return None
+        if nxt:
+            self.update(rid, {"at": nxt.isoformat(timespec="seconds")})
+        return nxt
 
     def find(self, query):
         """Записи по id или по тексту: запрос входит в текст или текст — в запрос («отмени напоминание про обед»)."""
@@ -558,6 +583,8 @@ def t_mark_done(a, ctx):
             if not m.get("repeat"):
                 rem.remove(m["id"])
                 closed.append(m.get("text") or "")
+            else:
+                rem.done_round(m["id"])
             lst.append({"title": m.get("text") or t, "rid": m["id"]})
         else:
             lst.append({"title": t})

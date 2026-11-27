@@ -1,5 +1,5 @@
 """Идея №48 (29.10): «Добавить настройку: включить/выключить окошко с Лирой всегда сверху». Студия → «Оформление» →
-«Виджет поверх всех окон» (ui.on_top, по умолчанию — да); виджет при смене зовёт api.set_on_top — окно сразу становится
+«Виджет поверх всех окон» (ui.on_top, по умолчанию — да; с 1.0.71 — нет); виджет при смене зовёт api.set_on_top — окно сразу становится
 обычным (или снова поверх), сторож «поверх окон» на Linux его больше не поднимает; при запуске окно создаётся как выбрано."""
 import os, sys, types
 from pathlib import Path
@@ -16,7 +16,8 @@ def ok(c, m):
 
 import app  # noqa: E402
 import settings as ST  # noqa: E402
-ok(ST.DEFAULTS["ui"]["on_top"] is True, "по умолчанию — поверх всех окон, как было")
+# 1.0.71 (владелец 25.11: «по умолчанию, чтобы была снята»; «у тех, кто обновился, — можно не трогать»)
+ok(ST.DEFAULTS["ui"]["on_top"] is False and "on_top_v2" not in ST.DEFAULTS["ui"], "по умолчанию — обычное окно; у обновившихся — как было")
 a = app.Api.__new__(app.Api)
 w1, w2 = types.SimpleNamespace(on_top=True), types.SimpleNamespace(on_top=True)
 a.wins = {"card": w1, "x": w2}
@@ -30,10 +31,10 @@ w1.on_top = w2.on_top = False
 ok(a.set_on_top(True) and w1.on_top and app.ON_TOP[0], "включили — снова поверх")
 src = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok(src.count('on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=bridge') == 2, "при запуске виджет создаётся как выбрано (Linux и Windows)")
-ok("if not ON_TOP[0] and gw.get_title() != PAD_TITLE:" in src, "сторож «поверх окон» не поднимает виджет, если выключено")
-ok(src.index('ON_TOP[0] = ui_settings().get("on_top", True) is not False') < src.index("return main_win(args, extra)"), "настройка читается до выбора системы")
+ok("if not ON_TOP[0]:                              # виджет «не поверх» — не поднимаем ни его, ни блокнот" in src, "сторож «поверх окон» не поднимает ни виджет, ни блокнот, если выключено")
+ok(src.index('ON_TOP[0] = ui_settings().get("on_top", False) is True') < src.index("return main_win(args, extra)"), "настройка читается до выбора системы")
 hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
-ok("const top = ui.on_top !== false;" in hud and "a.set_on_top(top)" in hud, "виджет зовёт set_on_top при смене настройки")
+ok("const top = ui.on_top === true;" in hud and "a.set_on_top(top)" in hud, "виджет зовёт set_on_top при смене настройки")
 ok("const first = window.__onTop === undefined" in hud and "if (!first) try" in hud, "№438: при загрузке страница set_on_top не зовёт — окно уже создано как выбрано")
 ok("f.Invoke(Action(_set))" in src and "def _topmost_ui" in src, "№438: в Windows TopMost меняется из потока окна")
 from playwright.sync_api import sync_playwright  # noqa: E402

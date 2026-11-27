@@ -258,7 +258,7 @@ function mindPrompt() {
 function syncSnapshot(st) {
   const out = {};
   JSON.parse(D.alarms() || "[]").forEach(x => { out["reminder:" + x.id] = Object.assign({ text: x.title || "", at: +x.at, kind: x.kind || "reminder", repeat: repToDict(x.repeat, x.at), paused: false },
-    x.note ? { note: x.note } : {}); });                // note — id заметки с фото и файлами (то же, что note:<id>)
+    x.note ? { note: x.note } : {}, x.who ? { who: x.who } : {}); });   // note — id заметки с фото и файлами; who — кто ставил
   notes().forEach(x => { out["note:" + x.id] = { title: x.title || "", text: x.text || "", folder: x.folder || "" };
     if (+x.time) Object.defineProperty(out["note:" + x.id], "t", { value: +x.time, enumerable: false }); });   // когда написана: старая копия не перебьёт новую
   money().forEach(x => { out["money:" + x.id] = { date: x.date, kind: x.kind, amount: +x.amount, currency: x.currency, category: x.category || "", note: x.note || "" }; });
@@ -306,7 +306,10 @@ function syncApply(it) {
     if (!d.repeat && +d.at < Date.now() - 300000 && !exists) return false;
     if (d.paused) { if (exists) D.alarmCancel(it.id); return true; }
     const was = exists ? JSON.parse(D.alarms() || "[]").find(x => x.id === it.id) : null, note = "note" in d ? d.note : was && was.note;
-    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) },
+    // №980 (третий раз, 25.11): кто ставил — приходит с компьютера (d.who); нет — прежний; нет и его — тот, кто главный сейчас
+    // (S.persona), а не «текущий облик» уведомлений, который мог остаться от Патрика
+    const who = [d.who, was && was.who, S.persona].find(w => w && PERSONAS.some(p => p.id === w)) || "";
+    D.alarmSet(JSON.stringify(Object.assign({ id: it.id, title: d.text || "Напоминание", at: +d.at, kind: ["alarm", "timer"].includes(d.kind) ? d.kind : "reminder", repeat: repFromDict(d.repeat) }, who ? { who } : {},
       note ? { note } : {})));
     if (d.kind === "timer") setTimeout(tmrShow, 0);
   } else if (it.kind === "note") {
@@ -435,7 +438,8 @@ async function syncRun(manual) {
     syncStatus = Object.assign(syncStatus, { ok: false, at: Date.now(), error: bad.err.message, via: bad.c.via, chans: chs });
   }
   // облако не ответило, а по Wi-Fi всё прошло — так и сказать (было «Синхронизация: нет сети» при удачном обмене)
-  if (manual && bad && !bad.err.home) toast(first ? `Синхронизировано по Wi-Fi с «${(S.sync.home || {}).n || "компьютером"}» — dewiar.pro сейчас не ответил` : "Синхронизация: " + bad.err.message);
+  if (manual && bad && !bad.err.home) toast(first ? `Синхронизировано по Wi-Fi с «${(S.sync.home || {}).n || "компьютером"}» — dewiar.pro сейчас не ответил`
+    : typeof devSyncHuman === "function" ? devSyncHuman(bad.err.message) : "Синхронизация: " + bad.err.message);
 }
 /* Состояние обмена канала: облако — pref «sync» (там же шифрование: e2eRemote, resealAll), Wi-Fi — «sync_home:<узел>».
    Номер устройства один на все каналы. Прежние версии держали обмен по Wi-Fi в «sync» — переносим. */

@@ -30,7 +30,7 @@ import engine_commands as EC  # noqa: E402
 s = ST.Settings(tmp / "s.json")
 P = PL.Plugins(s); K = SK.Skills(s); K.plugins = P; K.reload()
 ids = sorted(P.items)
-BUILTIN = ["bedtime", "contract", "dacha", "digest", "english", "kitchen", "rates", "travel", "tenders", "recruiter", "artist", "transcribe"]   # + «Тендеры», «Рекрутер», «Художник» (31.10), «Расшифровка» (18.11)
+BUILTIN = ["bedtime", "contract", "dacha", "digest", "english", "kitchen", "rates", "travel", "jira", "tenders", "recruiter", "artist", "transcribe"]   # + «Тендеры», «Рекрутер», «Художник» (31.10), «Расшифровка» (18.11)
 ok(ids == sorted(BUILTIN) and "obsidian" not in ids, f"встроенные, без Obsidian: {ids}")
 bad = [pid for pid, p in P.items.items() if not (p["skill_dirs"] and p["phrases"] and p["tagline"] and p["description"] and p["icon"] and (p["dir"] / "README.md").is_file())]
 ok(not bad, f"у каждого — навык, фразы, описание, значок и README: {bad}")

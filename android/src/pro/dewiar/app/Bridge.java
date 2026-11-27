@@ -38,8 +38,18 @@ public final class Bridge {
             if (f.exists()) crash = Net.readAll(new FileInputStream(f));
             return new JSONObject().put("version", BuildInfo.VERSION).put("sdk", Build.VERSION.SDK_INT)
                     .put("android", Build.VERSION.RELEASE).put("device", Build.MANUFACTURER + " " + Build.MODEL)
-                    .put("recognizer", Speech.systemAvailable(a)).put("tts", a.tts.ready()).put("crash", crash).put("aid", joinAid()).toString();
+                    .put("recognizer", Speech.systemAvailable(a)).put("tts", a.tts.ready()).put("crash", crash).put("aid", joinAid())
+                    .put("store", store()).toString();
         } catch (Exception e) { return "{}"; }
+    }
+
+    /** Сборка для магазинов (Dewiar-X-store.apk, build_apk.sh): метка pro.dewiar.store в манифесте — обновляет магазин,
+     *  приложение само обновлений не ищет (в этой сборке нет и разрешения ставить пакеты). */
+    private boolean store() {
+        try {
+            android.content.pm.ApplicationInfo ai = a.getPackageManager().getApplicationInfo(a.getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
+            return ai.metaData != null && ai.metaData.get("pro.dewiar.store") != null;
+        } catch (Exception e) { return false; }
     }
 
     /** 0.82.1 (владелец 04.11: «Забыть ключ» и переустановка давали новый подарок): номер этого телефона для сайта — хэш
@@ -179,6 +189,7 @@ public final class Bridge {
                 w.setStatusBarColor(c);
                 w.setNavigationBarColor(c);
                 a.web.setBackgroundColor(c);
+                if (a.root != null) a.root.setBackgroundColor(c);   // Android 15+: цвет под панелями — это фон корня
                 android.view.View v = w.getDecorView();
                 int f = v.getSystemUiVisibility() & ~(0x2000 | 0x10);   // LIGHT_STATUS_BAR (API 23), LIGHT_NAVIGATION_BAR (API 26)
                 if (light) f |= 0x2000 | (Build.VERSION.SDK_INT >= 26 ? 0x10 : 0);
@@ -366,6 +377,18 @@ public final class Bridge {
     }
 
     /** Открыт «Сейф» — экран без снимков: ни скриншота, ни картинки в «недавних приложениях» (FLAG_SECURE). */
+    /** Сейф отпечатком (SafeKey): none | off | on. */
+    @JavascriptInterface public String safeBioState() { return SafeKey.state(a); }
+    /** Включить: ключ сейфа (base64) — под защиту экрана блокировки; ответ — событием safebio {op: save}. */
+    @JavascriptInterface public void safeBioSave(final String keyB64) {
+        a.runOnUiThread(new Runnable() { @Override public void run() { SafeKey.save(a, keyB64); } });
+    }
+    /** Открыть: системное подтверждение (отпечаток, лицо, PIN) → событие safebio {op: open, ok, key}. */
+    @JavascriptInterface public void safeBioOpen() {
+        a.runOnUiThread(new Runnable() { @Override public void run() { SafeKey.open(a); } });
+    }
+    @JavascriptInterface public void safeBioForget() { SafeKey.forget(a); }
+
     @JavascriptInterface public void secureScreen(final boolean on) {
         a.runOnUiThread(new Runnable() { @Override public void run() {
             try {

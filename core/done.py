@@ -135,6 +135,8 @@ class Done:
             for e in entries if isinstance(entries, (list, tuple)) else [entries]:
                 o = {"title": e} if isinstance(e, str) else dict(e or {})
                 title = re.sub(r"\s+", " ", str(o.get("title") or "")).strip()[:120]
+                # «Отметь ещё: отправила договор…» — «ещё:» из просьбы, а не часть дела (экзамен 20.11: «Еще: отправила…»)
+                title = re.sub(r"^(?:и\s+(?:ещ[её]|также)\s+|(?:ещ[её]|также|тоже)\s*[:,—-]\s*)", "", title, flags=re.I).strip()
                 if not title:
                     continue
                 title = title[0].upper() + title[1:]
@@ -262,8 +264,13 @@ def say(r, closed=()):
     return out + " Похвали коротко и тепло, одной фразой" + (", назови достижение" if ach else "") + "; не перечисляй дела заново."
 
 
+STREAK_ROUND = (7, 14, 21, 30, 50, 100, 200, 365)
+
+
 def report(done, days=1, skip=None):
-    """skip(title, rid) -> True — не показывать (привычки в ходе-итоге, engine_music._habit_pred)."""
+    """skip(title, rid) -> True — не показывать (привычки в ходе-итоге, engine_music._habit_pred). В ходе-итоге (skip задан)
+    — только сделанное: без «серия, всего, лучший день, достижения» (владелец 20.11: «серия пять дней, всего 65 дел…» каждый
+    вечер — не новость); серия — только круглая (7, 14, 30…)."""
     d = max(1, min(60, int(days or 1)))
     s = done.stats()
     start = dt.datetime.combine(dt.date.today() - dt.timedelta(days=d - 1), dt.time())
@@ -280,6 +287,10 @@ def report(done, days=1, skip=None):
             out = f"За {d} {dney(d)} сделано {len(it)} {dela(len(it))}:\n" + "\n".join(f"{k[8:]}.{k[5:7]}: {'; '.join(v)}" for k, v in by.items())
     else:
         out = "Сегодня пока ничего не отмечено." if d == 1 else f"За {d} {dney(d)} ничего не отмечено."
+    if skip is not None:
+        if s["streak"] in STREAK_ROUND:
+            out += f"\nСерия: {s['streak']} {dney(s['streak'])} подряд — круглая дата."
+        return out + ("\nЭто дела пользователя, не твои: «ты проверил», не «проверила»." if it else "")
     out += f"\nСерия: {s['streak']} {dney(s['streak'])} подряд (лучшая — {s['best_streak']}). Всего: {s['total']}. Лучший день: {s['best_day']}."
     out += "\nДостижения: " + (", ".join(f"{a[3]} {a[4]}" for a in s["earned"]) or "пока нет") + "."
     nxt = [next((a for a in ACHIEVE if a[1] == g and _val(a, s) < a[2]), None) for g in ("day", "streak", "total")]

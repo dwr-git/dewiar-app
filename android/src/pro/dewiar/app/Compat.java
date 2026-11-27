@@ -101,4 +101,22 @@ public final class Compat {
             return true;
         } catch (Throwable e) { return true; }
     }
+
+    /** Android 15+ (targetSdk 35, 1.0.47): окно всегда «от края до края» — строка состояния и панель жестов рисуются поверх
+     *  содержимого, цвет панелей Android больше не красит, а adjustResize сам окно под клавиатуру не сжимает. Поэтому —
+     *  отступы корня = вставки системы (строка состояния, жесты, вырез, клавиатура: при adjustResize она входит в
+     *  getSystemWindowInsets), фон корня — цвет панелей. Вёрстка остаётся той же, что на Android 14 и ниже; там — ничего не
+     *  делаем. Полноэкранная игра (immersive) прячет панели — вставки нулевые, отступов нет. */
+    public static void edgeInsets(android.view.View root) {
+        if (Build.VERSION.SDK_INT < 35 || root == null) return;
+        final int l = root.getPaddingLeft(), t = root.getPaddingTop(), r = root.getPaddingRight(), b = root.getPaddingBottom();   // свои отступы окна (будильник) — сохраняем
+        root.setOnApplyWindowInsetsListener(new android.view.View.OnApplyWindowInsetsListener() {
+            @SuppressWarnings("deprecation")
+            @Override public android.view.WindowInsets onApplyWindowInsets(android.view.View v, android.view.WindowInsets in) {
+                v.setPadding(l + in.getSystemWindowInsetLeft(), t + in.getSystemWindowInsetTop(), r + in.getSystemWindowInsetRight(), b + in.getSystemWindowInsetBottom());
+                return in.consumeSystemWindowInsets();
+            }
+        });
+        root.requestApplyInsets();
+    }
 }

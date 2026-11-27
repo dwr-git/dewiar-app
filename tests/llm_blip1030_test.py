@@ -55,5 +55,14 @@ r = run("http://127.0.0.1:11434/v1/chat/completions", 2)
 ok(r[0] == "ConnectError" and r[1] == 2 and r[2] == [0.8], f"своя модель на компьютере — как было: {r}")
 r = run("http://192.168.1.5:1234/v1/chat/completions", 1)
 ok(r[0] == "ответ" and r[1] == 2, f"своя модель в сети — один повтор: {r}")
+# 24.11 (№999): сервер принял соединение и закрыл, не ответив — один повтор новым соединением, второй раз — честная ошибка
+r = run("https://dewiar.pro/dwrapp/cloud.php?p=/chat/completions", 1,
+        lambda m: httpx.RemoteProtocolError("Server disconnected without sending a response."))
+ok(r[0] == "ответ" and r[1] == 2 and r[2] == [1.0], f"облако: закрыл соединение, не ответив — повтор проходит ({r})")
+r = run("https://dewiar.pro/dwrapp/cloud.php?p=/chat/completions", 5,
+        lambda m: httpx.RemoteProtocolError("Server disconnected without sending a response."))
+ok(r[0] == "RemoteProtocolError" and r[1] == 2, f"облако: закрывает снова — один повтор, потом честная ошибка ({r})")
+r = run("http://127.0.0.1:11434/v1/chat/completions", 1, lambda m: httpx.RemoteProtocolError("illegal status line"))
+ok(r[0] == "RemoteProtocolError" and r[1] == 1, f"другая ошибка протокола — без повтора ({r})")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

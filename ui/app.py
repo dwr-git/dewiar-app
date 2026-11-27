@@ -89,7 +89,8 @@ TRANSPARENT = [False]                   # Linux с композитором: о�
 
 
 ABOVE_TITLES = None          # заголовки окон, которые должны быть «поверх всех» (виджет, значок, блокнот) — см. keep_above_guard
-ON_TOP = [True]              # виджет поверх всех окон (ui.on_top; идея №48 — можно выключить в «Оформлении»)
+ON_TOP = [False]             # виджет поверх всех окон (ui.on_top; идея №48 — «Оформление»; с 1.0.71 по умолчанию выключено)
+STUDIO_FRONT = [False]       # студия в фокусе и сама «поверх» (_studio_focus_hook) — сторож окна Лиры не переподнимает
 
 
 def keep_above_guard():
@@ -109,7 +110,9 @@ def keep_above_guard():
         for gw in Gtk.Window.list_toplevels():
             if gw.get_title() not in ABOVE_TITLES or not gw.get_visible():
                 continue
-            if not ON_TOP[0] and gw.get_title() != PAD_TITLE:   # виджет «не поверх» — не поднимаем
+            if not ON_TOP[0]:                              # виджет «не поверх» — не поднимаем ни его, ни блокнот (владелец 24.11)
+                continue
+            if STUDIO_FRONT[0]:                                # студия в фокусе — впереди она (владелец 24.11)
                 continue
             gdw = gw.get_window()
             if gdw is None or not gw.get_mapped() or not isinstance(gdw, GdkX11.X11Window):
@@ -249,7 +252,17 @@ def composited_x11():
         from gi.repository import Gdk, Gtk
         Gtk.init_check([])
         scr = Gdk.Screen.get_default()
-        return bool(scr is not None and scr.is_composited() and scr.get_rgba_visual() is not None)
+        if scr is None or scr.get_rgba_visual() is None:
+            return False
+        if scr.is_composited():
+            return True
+        # №915 (KDE Plasma 6.8 на Wayland): окна идут через XWayland, а KWin не объявляет X-клиентам, что он композитор, —
+        # GTK отвечал «не композитор», виджет становился сплошным, а форма X Shape там не применяется: тёмный квадрат.
+        # Под Wayland окна XWayland с альфа-каналом всегда смешивает сам композитор Wayland — прозрачность работает
+        if os.environ.get("WAYLAND_DISPLAY"):
+            _ui_log("виджет: XWayland без объявленного композитора (KDE Plasma 6?) — прозрачное окно, композитор Wayland")
+            return True
+        return False
     except Exception:  # noqa: BLE001
         return False
 
@@ -418,6 +431,7 @@ def pad_rects(side, w, h, gap, clips, radius):
     return out + [(cx, int(y), gap, int(ch)) for y, ch in clips]
 PROMPTER_TITLE = "Dewiar — суфлёр"
 PROMPTER_RADIUS = 24
+PROMPTER_WH, PROMPTER_MIN = (440, 680), (360, 420)   # №364: размер по умолчанию и наименьший (уголок внизу справа)
 PROMPTER_BAR, PROMPTER_BTNS = 56, 180   # заголовок суфлёра (prompter.html, header): высота и место под кнопки справа
 STUDIO_TITLE = "Dewiar — студия"
 STUDIO_RADIUS = 12              # скругление углов студии (своя рамка в Linux)
@@ -529,7 +543,7 @@ def ensure_core():
 def _core_call(token, cmd, timeout=4):
     """Одна команда ядру по WebSocket (Linux; на Windows — winshell.core_call): hello с токеном, затем {id, cmd}."""
     from websockets.sync.client import connect
-    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=timeout, close_timeout=1) as ws:
+    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=timeout, close_timeout=1, max_size=None) as ws:   # ответ на hello — все настройки, бывает > 1 МБ (№908, Mac: 5 МБ)
         ws.send(json.dumps({"cmd": "hello", "token": token}))
         ws.recv(timeout=timeout)
         ws.send(json.dumps({"id": 1, "cmd": cmd, "args": {}}))
@@ -1800,7 +1814,10 @@ class Api:
         if on == ON_TOP[0]:
             return on
         ON_TOP[0] = on
-        for w in list(getattr(self, "wins", {}).values()):
+        # владелец 24.11: выключил «поверх всех» — виджет ушёл назад, а блокнот рядом с ним остался висеть поверх всего.
+        # Блокнот — часть виджета: «поверх» у него такое же
+        pad = getattr(self, "_pad", None)
+        for w in list(getattr(self, "wins", {}).values()) + ([pad] if pad is not None else []):
             try:
                 if not (WIN and _topmost_ui(w, on)):
                     w.on_top = on
@@ -1808,12 +1825,38 @@ class Api:
                 _ui_log(f"поверх окон: {e}")
         return ON_TOP[0]
 
+    def _file_dialog(self, kind, **kw):
+        """Окно выбора файла или папки. Письмо 25.11 (Windows): «окно выбора папки зависает, ничего не сделать — только
+        закрыть программу в трее; и после перезапуска не работает». pywebview в Windows открывает диалог прямо из потока
+        вызова со страницы, а владелец диалога — окно студии в своём потоке; так же висло окно с «поверх всех» (№438).
+        Теперь в Windows диалог открывается в потоке окна (Invoke) — он принадлежит студии и всегда поверх неё.
+        -> путь(и) или None (отказались, не открылся)."""
+        w = self._studio or self._hud
+        if WIN:
+            try:
+                from webview.platforms.winforms import BrowserView
+                from System import Action                 # noqa: PLC0415 — pythonnet есть только в Windows
+                f = BrowserView.instances.get(getattr(w, "uid", None))
+                if f is not None and f.InvokeRequired:
+                    out = []
+
+                    def run():
+                        if f.TopMost:                     # окно «поверх» — не заслонять им диалог
+                            f.TopMost = False
+                        out.append(w.create_file_dialog(kind, **kw))
+                    f.Invoke(Action(run))
+                    return out[0] if out else None
+            except Exception as e:  # noqa: BLE001
+                _ui_log(f"окно выбора файла: {e}")
+                return None
+        return w.create_file_dialog(kind, **kw)
+
     def pick_folder(self):
         """Выбор папки проекта (для задач по коду). -> путь или "" (отказались)."""
         import webview
         # новые pywebview — webview.FileDialog.*, старые — webview.*_DIALOG (так же в pick_file и save_file*)
         kind = getattr(getattr(webview, "FileDialog", None), "FOLDER", None) or webview.FOLDER_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()))
+        res = self._file_dialog(kind, directory=str(Path.home()))
         if not res:
             return ""
         return res if isinstance(res, str) else res[0]
@@ -1828,7 +1871,7 @@ class Api:
             start = str(default_dir()) if default_dir().is_dir() else str(Path.home())
         except Exception:  # noqa: BLE001
             start = str(Path.home())
-        res = (self._studio or self._hud).create_file_dialog(k, directory=start, file_types=types)
+        res = self._file_dialog(k, directory=start, file_types=types)
         if not res:
             return ""
         return res if isinstance(res, str) else res[0]
@@ -1911,6 +1954,11 @@ class Api:
             # pkexec: 126 — окно пароля закрыли, 127 — не разрешили
             why = [x for x in tail if re.search(r"dpkg:|error|ошибк|E:|не удалось|failed", x, re.I) and "preconfigure" not in x]
             err = "установка отменена (пароль не введён)" if rc in (126, 127) else (" ".join((why or tail)[-4:]) or f"код {rc}")[-600:]
+            # №913 (20.11, CachyOS): окно пароля не у всех систем есть (нет агента polkit) — та же установка одной строкой
+            # в терминале; путь — к уже скачанному и проверенному файлу
+            if cmd and cmd[0] == "pkexec":
+                import shlex
+                err += ". Можно поставить и в терминале: sudo " + " ".join(shlex.quote(x) for x in cmd[1:] if x not in ("-o", "APT::Status-Fd=1"))
             try:
                 (Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "dewiar-update.log").write_text("\n".join(tail), encoding="utf-8")
             except OSError:
@@ -2098,7 +2146,7 @@ class Api:
         """Сохранение через системный диалог (в окне pywebview обычные загрузки не работают)."""
         import webview
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()), save_filename=filename,
+        res = self._file_dialog(kind, directory=str(Path.home()), save_filename=filename,
                                                             file_types=("Настройки Dewiar (*.dewiar)", "Все файлы (*.*)"))
         if not res:
             return ""
@@ -2112,11 +2160,31 @@ class Api:
         import base64
         import webview
         kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
-        res = (self._studio or self._hud).create_file_dialog(kind, directory=str(Path.home()), save_filename=filename)
+        res = self._file_dialog(kind, directory=str(Path.home()), save_filename=filename)
         if not res:
             return ""
         path = res if isinstance(res, str) else res[0]
         Path(path).write_bytes(base64.b64decode(b64))
+        return path
+
+    def save_copy(self, src, filename):
+        """«Скачать» файл из «Облака Лиры»: окно «Сохранить как…» и копия файла с диска (без пересылки через страницу).
+        -> путь или "". Копируем только файлы из облака Лиры (их путь дало ядро)."""
+        import shutil
+        import webview
+        from drive import EXTS, FILE_MAX
+        p = Path(str(src or ""))
+        if not p.is_file():
+            raise ValueError("файла нет на этом компьютере")
+        if p.suffix.lower() not in EXTS or p.name.startswith(".") or p.stat().st_size > FILE_MAX:
+            raise ValueError("скачать можно только файл из облака Лиры")      # мост окна — не копировщик любых файлов
+        kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
+        start = Path.home() / "Downloads" if (Path.home() / "Downloads").is_dir() else Path.home()
+        res = self._file_dialog(kind, directory=str(start), save_filename=filename or p.name)
+        if not res:
+            return ""
+        path = res if isinstance(res, str) else res[0]
+        shutil.copyfile(p, path)
         return path
 
     def open_skills_folder(self, path=""):
@@ -2200,6 +2268,11 @@ class Api:
             if not MAC:                                    # перетаскивание файла в «Мои файлы» (Linux, _drop_hook)
                 drop = lambda *a: __import__("threading").Thread(target=self._gtk, args=(lambda: self._drop_hook(STUDIO_TITLE, win),), daemon=True).start()  # noqa: E731
                 win.events.loaded += drop
+                lift = lambda *a: __import__("threading").Thread(target=self._gtk, args=(self._studio_focus_hook,), daemon=True).start()  # noqa: E731
+                win.events.shown += lift
+        # Windows: «студия впереди» (TopMost у студии, 1.0.67–1.0.77) убрана — №1059, №1093, №1096, №1060, письмо 25.11:
+        # с ней зависали окна и окна выбора файла, кнопки виджета не нажимались, виджет пропадал при открытой студии.
+        # Её просили на Ubuntu; в Windows щелчок и так поднимает окно, а виджет — маленький и «поверх всех» по выбору.
         if own:
             import threading
             hook = lambda *a: threading.Thread(target=self._gtk, args=(self._studio_frame,), daemon=True).start()  # noqa: E731
@@ -2473,9 +2546,60 @@ class Api:
         wv.connect("button-release-event", on_release)
         reshape()
 
+    def _studio_focus_hook(self):
+        """Владелец 24.11 (Ubuntu): «виджет всегда выше всех — открываю студию, она под виджетом… на чём фокус, то и
+        выше». 1.0.67 (владелец 16:49: «стало только хуже» — студия выходит и тут же прячется, виджет мигает, блокнот
+        остаётся сверху): окна Лиры больше не опускаем. Пока студия активна, она сама «поверх всех» — среди окон этого
+        слоя впереди та, с которой работают, и она перекрывает и виджет, и блокнот; ушли из неё — обычное окно, Лира снова
+        над ней. Как у плавающих палитр и мини-плееров. «Поверх всех» у Лиры выключено — студия как обычное окно.
+        Главный поток GTK; подключается к окну студии один раз."""
+        gw = self._studio_gw()
+        if gw is None or getattr(gw, "_dw_focus", False):
+            return
+        gw._dw_focus = True
+
+        def on_active(g, _p=None):
+            if not ON_TOP[0]:                              # Лира не «поверх всех» — студии слой не нужен
+                STUDIO_FRONT[0] = False
+                return
+            front = g.is_active()
+            if front == STUDIO_FRONT[0] and getattr(g, "_dw_front_set", False):
+                return
+            STUDIO_FRONT[0] = front
+            g._dw_front_set = True
+            try:
+                g.set_keep_above(front)
+                gdw = g.get_window()
+                if front and gdw is not None:
+                    gdw.raise_()                           # в слое «поверх» — выше виджета и блокнота (порядок слоя)
+                _ui_log(f"студия {'в фокусе — впереди' if front else 'не в фокусе — обычное окно'}")
+            except Exception as e:  # noqa: BLE001
+                _ui_log(f"студия впереди: {e}")
+        gw.connect("notify::is-active", on_active)
+        gw.connect("destroy", lambda *_: STUDIO_FRONT.__setitem__(0, False))
+        _ui_log(f"студия: слежу за фокусом (Лира поверх всех: {bool(ON_TOP[0])})")
+        on_active(gw)
+
     def _studio_gw(self):
         from gi.repository import Gtk
         return next((g for g in Gtk.Window.list_toplevels() if g.get_title() == STUDIO_TITLE), None)
+
+    def _pad_attach(self, gw):
+        """Linux, главный поток GTK. Владелец 24.11 (Ubuntu, «поверх всех» выключено): «фокус на виджете — он поднялся над
+        браузером, а блокнот, который с ним работает, под браузером; нажал на блокнот — он поднялся, а виджет спрятан».
+        Блокнот и виджет — два отдельных окна, каждое поднималось само по себе. Блокнот — подчинённое окно виджета
+        (transient_for): оконный менеджер держит его над виджетом и поднимает их вместе — нажали на любое из двух, оба
+        впереди. Проверено в настоящем Mutter: без этого — «виджет, браузер, блокнот», с ним — «браузер, виджет, блокнот»."""
+        try:
+            from gi.repository import Gtk
+            title = TITLES.get(getattr(self, "mode", "card"), TITLES["card"])
+            parent = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == title), None)
+            if parent is None or gw is None or gw.get_transient_for() is parent:
+                return
+            gw.set_transient_for(parent)
+            _ui_log("блокнот: подчинённое окно виджета — поднимаются вместе")
+        except Exception as e:  # noqa: BLE001
+            _ui_log(f"блокнот рядом с виджетом: {e}")
 
     def _raise_studio(self):
         """Linux: поднять студию наверх и дать ей фокус. GNOME не пускает вперёд окна фоновой программы (защита от
@@ -2501,7 +2625,9 @@ class Api:
             except Exception:  # noqa: BLE001 — не X11 (Wayland без XWayland)
                 pass
             gw.present_with_time(ts)
-            GLib.timeout_add(700, lambda: (gw.set_keep_above(False), False)[1])
+            # «на миг» — только чтобы GNOME пустил вперёд; студия уже активна и Лира «поверх всех» — слой держит
+            # _studio_focus_hook (владелец 24.11, 1.0.67: флажок снимался и под работой — студия пряталась под виджет)
+            GLib.timeout_add(700, lambda: (None if (ON_TOP[0] and gw.is_active()) else gw.set_keep_above(False), False)[1])
             return True
         try:
             self._gtk(run)
@@ -3080,7 +3206,14 @@ class Api:
                 return True
             except Exception:  # noqa: BLE001
                 self._prompter = None
-        w, h = 440, 680
+        w, h = PROMPTER_WH
+        try:                                               # №364: размер, который человек выбрал в прошлый раз
+            ui = ui_settings()
+            pw, ph = int(ui.get("prompter_w") or 0), int(ui.get("prompter_h") or 0)
+            if pw >= PROMPTER_MIN[0] and ph >= PROMPTER_MIN[1]:
+                w, h = pw, ph
+        except (TypeError, ValueError):
+            pass
         try:
             if WIN:
                 l, t_, r, b = winshell.work_area()
@@ -3088,15 +3221,17 @@ class Api:
             else:
                 scr = webview.screens[0]
                 sw, sh, ox, oy = scr.width, scr.height, getattr(scr, "x", 0), getattr(scr, "y", 0)
+            w = min(w, int(sw) - 40)
             h = min(h, int(sh) - 60)
             x, y = int(ox + sw - w - 28), int(oy + 40)
         except Exception:  # noqa: BLE001
             x = y = None
         url, bridge = self._bridged(self._url("prompter.html"))
-        win = webview.create_window(PROMPTER_TITLE, url, width=w, height=h, x=x, y=y,
-                                    resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
+        win = webview.create_window(PROMPTER_TITLE, url, width=w, height=h, x=x, y=y,     # resizable — для уголка (№364)
+                                    resizable=True, min_size=PROMPTER_MIN, frameless=True, easy_drag=False, on_top=True, hidden=True,
                                     background_color="#16131d", js_api=bridge, **_no_shadow())
         self._prompter = win
+        self._prompter_wh = [w, h]
         win.events.closed += lambda *a: setattr(self, "_prompter", None)
         done, lock = [], threading.Lock()
 
@@ -3431,6 +3566,7 @@ class Api:
                         gw = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == PAD_TITLE), None)
                         if gw is None:
                             return False
+                        self._pad_attach(gw)
                         gw.show_all()
                         gw.present()
                         if gw.get_window() is not None:
@@ -3452,8 +3588,8 @@ class Api:
             + ("&mode=" + mode if mode in ("play", "pult") else "") + ("&game=" + getattr(self, "_pad_game", "") if mode == "play" and getattr(self, "_pad_game", "") else "")
         self._pad_game = ""
         url, bridge = self._bridged(self._url("pad.html", q))
-        win = webview.create_window(PAD_TITLE, url, width=W, height=g["h"], x=g["x"], y=g["y"],
-                                    resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
+        win = webview.create_window(PAD_TITLE, url, width=W, height=g["h"], x=g["x"], y=g["y"],      # «поверх» — как виджет
+                                    resizable=False, frameless=True, easy_drag=False, on_top=ON_TOP[0], hidden=True,
                                     background_color="#dbe5f1" if light else "#12131b", js_api=bridge, **_no_shadow())
         self._pad, self._pad_born = win, time.monotonic()
         win.events.closed += lambda *a: (setattr(self, "_pad", None), setattr(self, "_pad_on", False)) if getattr(self, "_pad", None) is win else None
@@ -3486,6 +3622,7 @@ class Api:
                         r = int(round(PAD_RADIUS * (ZOOM[0] or 1.0)))
                         shape_window(gw, "pad", rects=pad_rects(g["side"], g["w"] * k, g["h"] * k, g["gap"] * k,
                                                                 [(y * k, c * k) for y, c in g["clips"]], r * k))
+                        self._pad_attach(gw)
                         gw.show_all()
                         gw.get_window().move(g["x"], g["y"])
                         return True
@@ -3623,6 +3760,49 @@ class Api:
                     print(f"Окно блокнота: {e}", file=sys.stderr)
             threading.Thread(target=run, daemon=True).start()
 
+    def prompter_size(self):
+        """№364: нынешний размер окна суфлёра [ш, в] (для уголка в prompter.html)."""
+        return list(getattr(self, "_prompter_wh", None) or PROMPTER_WH)
+
+    def prompter_resize(self, w, h, final=False):
+        """№364 (20.11, Денис: «окно суфлёра фиксированного размера, а текста много — тянуть за край, с запоминанием»):
+        уголок внизу справа тянет окно; w, h = 0 — как задумано. Скругление — заново по новому размеру. -> [ш, в]."""
+        win = getattr(self, "_prompter", None)
+        if win is None:
+            return None
+        try:
+            w, h = (int(w), int(h)) if w and h else PROMPTER_WH
+        except (TypeError, ValueError):
+            return None
+        w, h = max(PROMPTER_MIN[0], min(w, 2400)), max(PROMPTER_MIN[1], min(h, 1800))
+        try:
+            if WIN:
+                try:                                       # WinForms не даёт окну стать меньше «наименьшего» — снимаем
+                    form = win.native
+                    from System import Action
+                    from System.Drawing import Size
+                    form.Invoke(Action(lambda f=form: setattr(f, "MinimumSize", Size(1, 1))))
+                except Exception:  # noqa: BLE001
+                    pass
+                win.resize(w, h)
+                hwnd = winshell.hwnd(PROMPTER_TITLE)
+                if hwnd:
+                    winshell.shape(hwnd, "prompter", PROMPTER_RADIUS)
+            else:
+                win.resize(w, h)
+
+                def run():
+                    from gi.repository import Gtk
+                    gw = next((g for g in Gtk.Window.list_toplevels() if g.get_title() == PROMPTER_TITLE), None)
+                    if gw is not None:
+                        shape_window(gw, "prompter", (w, h), PROMPTER_RADIUS)
+                    return True
+                self._gtk(run, timeout=2)
+        except Exception as e:  # noqa: BLE001
+            print(f"Окно суфлёра: размер {w}×{h}: {e}", file=sys.stderr)
+        self._prompter_wh = [w, h]
+        return [w, h]
+
     def close_prompter(self):
         win = getattr(self, "_prompter", None)
         self._prompter = None
@@ -3656,11 +3836,11 @@ def no_file_xhr():
 # js_bridge_call, и в самом фасаде. Чужой вызов молча отбрасывается: ответа фрейм не получит.
 JS_API = (
     "auto_back", "cancel_back", "capture_set", "capture_status", "mic_set", "mic_status", "card_size", "clip_secret", "clip_text", "clipboard_image",
-    "close_alarm", "close_capture", "close_prompter", "drag_begin", "drag_native", "drag_step", "from_tray", "get_pos",
+    "close_alarm", "close_capture", "close_prompter", "prompter_resize", "prompter_size", "drag_begin", "drag_native", "drag_step", "from_tray", "get_pos",
     "install_codec", "install_update", "move_to", "native_drag", "open_note", "open_prompter", "open_settings",
     "open_skills_folder", "open_url", "pad_flip", "pad_full", "pad_hide", "pad_mode_mark", "pad_resize", "pad_size",
     "pad_toggle", "pick_file", "pick_folder", "play_open", "quit_all", "resize_card", "rest_note", "rest_toggle", "restart",
-    "restart_core", "run_installer", "save_file", "save_file_b64", "save_pos", "set_mode", "set_on_top", "set_zoom", "shot_hide",
+    "restart_core", "run_installer", "save_copy", "save_file", "save_file_b64", "save_pos", "set_mode", "set_on_top", "set_zoom", "shot_hide",
     "show", "show_alarm", "show_capture", "snip_close", "snip_open", "snip_show", "studio_close", "studio_max", "studio_min",
     "to_tray", "toggle_settings", "tray_back", "update_progress",
 )
@@ -4077,7 +4257,7 @@ def _present(gw):
 def _core_save_ui(token, patch):
     """Сохранить ui.* в настройках ядра (Linux: тот же WebSocket, что у страниц)."""
     from websockets.sync.client import connect
-    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=3, close_timeout=1) as ws:
+    with connect(f"ws://127.0.0.1:{WS_PORT}", open_timeout=3, close_timeout=1, max_size=None) as ws:   # ответ на hello — все настройки, бывает > 1 МБ (№908, Mac: 5 МБ)
         ws.send(json.dumps({"cmd": "hello", "token": token}))
         ws.recv(timeout=3)
         ws.send(json.dumps({"id": 1, "cmd": "settings_save", "args": {"patch": {"ui": patch}}}))
@@ -4255,6 +4435,8 @@ def main():
     ap.add_argument("--mic", action="store_true", help="«Позвать Лиру» (сочетание клавиш, ui/hotkey.py, идея №154)")
     ap.add_argument("target", nargs="?", help="файл .dewiar или ссылка dewiar://connect?server=…")
     args = ap.parse_args()
+    if args.autostart:
+        os.environ["DEWIAR_AUTOSTART"] = "1"      # ядро, запущенное отсюда, знает: запуск вместе с системой (пульс, 20.11)
     from urllib.parse import quote
     extra = ""
     if args.target:
@@ -4265,7 +4447,7 @@ def main():
         extra = ("&address=" + quote(t, safe="")) if t.startswith("dewiar:") else ("&import=" + quote(str(Path(t).resolve()), safe=""))
         args.settings = True
 
-    ON_TOP[0] = ui_settings().get("on_top", True) is not False
+    ON_TOP[0] = ui_settings().get("on_top", False) is True        # 1.0.71: нет в настройках (новая установка) — не поверх
     if WIN:
         return main_win(args, extra)
     if MAC:

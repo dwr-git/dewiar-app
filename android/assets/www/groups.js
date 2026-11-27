@@ -172,7 +172,7 @@ function grVer(m) {
   return { old, txt: known.map(k => ({ pc: "компьютер", phone: "телефон", web: "браузер" })[k[1]] + " " + k[2]).join(", ") };
 }
 function grOldNote(g, ms) {                         // старой программе — личное письмо: группу она не покажет, а его — покажет
-  ms.filter(m => grVer(m).old).forEach(m => { try { clSend(m.pid, `Зову вас в группу «${g.name}» в «Близких». Ваша версия Dewiar групп ещё не знает — обновите Dewiar, и группа появится: https://dewiar.pro/dwrapp/download.php`).catch(() => { }); } catch (e) { } });
+  ms.filter(m => grVer(m).old).forEach(m => { try { clSend(m.pid, `Зову вас в группу «${g.name}» в «Близких». Ваша версия Dewiar групп ещё не знает — обновите Dewiar, и группа появится: https://dewiar.pro/dwrapp/download`).catch(() => { }); } catch (e) { } });
 }
 function grInfoHtml(st, g) {
   const add = g.mine ? st.people.filter(p => !(g.members || []).some(m => m.pid === p.pid)) : [];

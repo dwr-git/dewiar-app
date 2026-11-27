@@ -21,6 +21,33 @@ def startfile(target):
     os.startfile(str(target))              # noqa: S606 — это и есть «открыть как двойным щелчком»
 
 
+def default_browser():
+    """Программа браузера по умолчанию (тот, кто открывает https) -> путь к .exe или None. Нужна для своих .html (26.11:
+    страница «Страниц» открылась «двойным щелчком» — в редакторе кода, которому Windows отдала .html, а не в браузере)."""
+    import re
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice") as k:
+            prog = winreg.QueryValueEx(k, "ProgId")[0]
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, prog + r"\shell\open\command") as k:
+            cmd = str(winreg.QueryValueEx(k, "")[0])
+    except OSError:
+        return None
+    m = re.match(r'\s*"([^"]+)"|\s*(\S+)', cmd)
+    exe = (m.group(1) or m.group(2)) if m else ""
+    return exe if exe.lower().endswith(".exe") and os.path.isfile(exe) else None
+
+
+def open_in_browser(target):
+    """Открыть адрес или свой .html именно в браузере по умолчанию; не нашли его — как двойным щелчком."""
+    exe = default_browser()
+    if exe:
+        subprocess.Popen([exe, str(target)], creationflags=NO_WINDOW)   # noqa: S603
+        return
+    startfile(target)
+
+
 def run_hidden(cmd, **kw):
     """subprocess.run без окна консоли (из pythonw иначе мелькает чёрное окно)."""
     return subprocess.run(cmd, creationflags=NO_WINDOW, **kw)

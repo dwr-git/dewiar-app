@@ -145,6 +145,12 @@ class ListenMixin:
                         # виджета и сигнала. Цена — доля секунды до «слушаю».
                         log.info("🎤 «%s»? Проверю точной моделью%s", phrase, " — вокруг разговор" if self._noisy() else "")
                         self.vosk_wake_check, self._vosk_wake_word = (self.utt_id if in_speech else self.utt_id + 1), phrase
+                        if not self._noisy():
+                            # владелец 21.11: «говорю „Лира“ — команда проваливается в тишину… как у умных колонок, звук сразу
+                            # после имени, а сверка пусть идёт после». Сигнал «слушаю» — на паузе после имени, как без
+                            # проверки; подтвердится — второй раз не звучит (listen_for_command), не подтвердится — молча.
+                            # Вокруг разговор — без сигнала: там быстрый слух ошибается чаще
+                            self._wake_tone_due, self._wake_soft = now, True
                         continue
                     self.emit("wake", phrase=phrase)
                     if self.state in ("speaking", "thinking") and barge != "off":
@@ -185,7 +191,7 @@ class ListenMixin:
                 self.spotter.last_final = None
                 if self._pending_media_stop and now - self._pending_media_stop < 4 and fin.strip() in MEDIA_STOP \
                         and self.state in ("idle", "listening"):
-                    threading.Thread(target=self._media_stop_word, args=(fin.strip(),), daemon=True).start()
+                    self._media_stop_heard(fin.strip(), now, in_speech)
                 elif fin.strip() in MEDIA_WORDS and self.radio.playing and self.state == "idle" and not self.meeting \
                         and not self.alarm:
                     threading.Thread(target=self._media_word, args=(fin.strip(),), daemon=True).start()
@@ -195,8 +201,12 @@ class ListenMixin:
             due = getattr(self, "_wake_tone_due", 0.0)
             if due and ((not in_speech and p < 0.5) or silence >= 8 or now - due > 6):
                 self._wake_tone_due = 0.0                      # после имени замолчали — теперь «слушаю»
-                if self.state in ("listening", "thinking") and now - due <= 6:
+                soft, self._wake_soft = getattr(self, "_wake_soft", False), False
+                if (self.state in ("listening", "thinking") or (soft and self.vosk_wake_check >= 0)) and now - due <= 6:
                     self.play_tone("wake")
+                    self._wake_tone_at = now                   # на само имя уже прозвучало — после сверки не повторять
+                    if soft and self.state not in ("listening", "thinking"):
+                        self._wake_soft_tone = now             # сигнал прозвучал до сверки — не подтвердится, будет «отбой»
             a = np.frombuffer(frame, dtype=np.int16).astype(np.float32)
             rms = float(np.sqrt(np.mean(a * a)))
             if self.state == "listening":                  # для журнала: насколько громко было, пока ждали вопрос
@@ -283,6 +293,7 @@ class ListenMixin:
         в распознавание как вопрос (stt_q), в проверку имени точной моделью или отпечатком (check_q),
         ранней проверке, которая уже идёт, — или отбросить (короткий звук, «стоп», чужой разговор, своё эхо)."""
         dur = len(pcm) / 2 / RATE
+        self._media_stop_utt(pcm, now)
         if self.stop_utt:
             self.stop_utt = False
             if dur < 1.6:                                  # было только «стоп»/«хватит» — замолчали и спим до имени
@@ -307,6 +318,7 @@ class ListenMixin:
                 self.check_q.put(("utt", pcm, uid))
             else:
                 self.vosk_wake_check = -1
+                self._wake_dismiss()
             return
         if self.barge_sent == uid and self.barge_hit != uid:
             # по этой фразе уже идёт ранняя проверка — решит она; звук оставляем ей

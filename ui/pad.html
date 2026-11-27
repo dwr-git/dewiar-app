@@ -192,6 +192,7 @@
   #ed > * + * { margin-top: .55em; }
   #ed h1 { font: 700 1.45em/1.3 "Unbounded", "Manrope", sans-serif; letter-spacing: -.01em; margin-top: .9em; }
   #ed h2 { font-size: 1.17em; font-weight: 800; margin-top: .9em; }
+  #ed h1 h1, #ed h1 h2, #ed h2 h1, #ed h2 h2, #ed li h1, #ed li h2 { font-size: inherit; margin: 0; }   /* 25.11: заголовок в заголовке не растёт */
   #ed h3 { font-size: 1.03em; font-weight: 800; color: var(--muted); margin-top: .8em; }
   #ed > :first-child { margin-top: 0; }
   #ed a { color: var(--acc); text-decoration: none; border-bottom: 1px solid var(--acc-soft); cursor: text; }
@@ -334,11 +335,11 @@
   #ask button.danger { background: #FF6B8A; color: #fff; }
   /* «Пульт Лиры» (1.0.6, ui/padpult.js; макеты владельца 15.11): первая вкладка — чем Лира занята прямо сейчас.
      Обводок нет: цвет, тень, свечение, прозрачность. Движется только настоящее: дышит то, что идёт сейчас; тишина — тихо. */
-  body { --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #f0a35a; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
+  body { --pu-plugbg: rgba(242,179,107,.14); --pu-plug: #f2b36b; --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #c49bff; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
          --pu-card: rgba(255,255,255,.045); --pu-lift: 0 10px 26px rgba(0,0,0,.28); --pu-glow: rgba(154,166,255,.30);
          --pu-veil: rgba(10,12,20,.55); --pu-leadbg: rgba(95,208,143,.11); }
-  /* Радар в светлой теме — яркий оранжевый, а не коричневый (владелец 17.11: «грустноватый»); контраст с листом ≥ 4,3 */
-  body.light { --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #c2410c; --pu-lead: #23784a; --pu-err: #c4473a;
+  /* Радар — фиолетовый (владелец 19.11: «не нравится сочетание зелёный, синий и коричнево-оранжевый»): в одной холодной гамме с бирюзой «Дальше» и синим «Мыслей»; контраст с листом ≥ 4,3 */
+  body.light { --pu-plugbg: rgba(180,95,18,.09); --pu-plug: #b45f12; --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #7c3aed; --pu-lead: #23784a; --pu-err: #c4473a;
                --pu-card: rgba(255,255,255,.6); --pu-lift: 0 10px 24px rgba(36,50,74,.12); --pu-glow: rgba(74,99,216,.24);
                --pu-veil: rgba(219,229,241,.72); --pu-leadbg: #e2efe7; }
   /* 18.11 вечер, владелец: «слишком белый блок… нижние на каком-то фоне, скруглённые уголки на углах без скруглений»: тень
@@ -393,6 +394,7 @@
   .pu-ev .e.diary .dot { fill: var(--pu-think); } .pu-ev .e.radar .dot { fill: var(--pu-radar); }
   .pu-ev .e.lead .dot { fill: var(--pu-lead); filter: drop-shadow(0 0 5px var(--pu-lead)); }
   .pu-ev .e.remind .dot, .pu-ev .e.job .dot { fill: var(--pu-mem); }
+  .pu-ev .e.plugin .dot { fill: var(--pu-plug); } #pult i.plugin { background: var(--pu-plug); } .pu-tip .pu-k.plugin { color: var(--pu-plug); }
   .pu-ev .e.was .dot { stroke-width: 1.5; opacity: .8; }
   .pu-ev .e:hover .dot, .pu-ev .e:focus-visible .dot { r: 7px; }
   .pu-ev .e:focus-visible .hit, .pu-ev .e:hover .hit { fill: var(--pu-glow); }
@@ -428,11 +430,15 @@
   .pu-tip .pu-k.remind, .pu-tip .pu-k.job { color: var(--pu-mem); }
   .pu-tip small { display: block; margin-top: 2px; color: var(--muted); }
   @keyframes pu-spin { to { transform: rotate(360deg); } }
-  .pu-q { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); width: min(calc(100% - 32px), calc(var(--pu-r, 140px) * 1.7), 380px); padding: 14px 16px 12px; border-radius: 18px;
-          background: var(--paper); box-shadow: 0 16px 36px var(--pu-glow), var(--pu-lift); animation: pu-rise .45s cubic-bezier(.2,.8,.2,1) both; z-index: 1; }
-  #pu-qt { font: 600 15px/1.42 "Manrope", sans-serif; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  #pu-steps { list-style: none; display: flex; flex-direction: column; gap: 3px; margin-top: 9px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
-  #pu-steps li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  /* владелец 21.11: «квадрат в круге — не очень эстетично»: вопрос — в круглой линзе посреди циферблата, по центру */
+  .pu-q { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); --d: min(calc(100% - 32px), calc(var(--pu-r, 140px) * 1.56));
+          width: var(--d); aspect-ratio: 1; border-radius: 50%; padding: 0 calc(var(--d) * .14); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+          background: radial-gradient(circle at 50% 30%, var(--paper) 55%, color-mix(in srgb, var(--paper) 88%, var(--pu-think))); box-shadow: 0 16px 36px var(--pu-glow), var(--pu-lift);
+          animation: pu-rise .45s cubic-bezier(.2,.8,.2,1) both; z-index: 1; }
+  #pu-qt { font: 600 14.5px/1.38 "Manrope", sans-serif; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; }
+  #pu-steps { list-style: none; display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 10px; max-width: 100%; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  #pu-steps li { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pu-steps li i { display: inline-block; vertical-align: .1em; margin-right: 7px; }
   #pu-steps li i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pu-think); }
   #pu-steps li.ok i { background: var(--pu-think); opacity: .55; }
   #pu-steps li.mem i { background: var(--pu-mem); opacity: 1; }
@@ -504,11 +510,15 @@
   .cl-f i { padding: 2px 6px; border-radius: 6px; font: normal 800 10px/1.4 system-ui, sans-serif; letter-spacing: .05em; color: #fff; background: var(--k); }
   .cl-f span { width: 100%; font-size: 13px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   .cl-f small { font-size: 11.5px; color: var(--muted); }
-  .cl-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--muted);
+  .cl-x, .cl-dl { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--muted);
     font: 17px/1 system-ui, sans-serif; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s; }
-  .cl-f:hover .cl-x, .cl-f:focus-within .cl-x { opacity: 1; } .cl-x:hover { background: var(--pu-card); color: var(--ink); box-shadow: var(--pu-lift); }
-  .cl-x:focus-visible { opacity: 1; outline: 2px solid var(--pu-think); }
-  @media (hover: none) { .cl-x { opacity: .7; } }
+  /* «Скачать» (владелец 20.11: «навожу — удалить можно, хорошо бы ещё и скачать») — рядом с «×», тем же кружком */
+  .cl-dl { right: 32px; display: grid; place-items: center; padding: 0; }
+  .cl-dl svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .cl-f:hover :is(.cl-x, .cl-dl), .cl-f:focus-within :is(.cl-x, .cl-dl) { opacity: 1; }
+  :is(.cl-x, .cl-dl):hover { background: var(--pu-card); color: var(--ink); box-shadow: var(--pu-lift); }
+  :is(.cl-x, .cl-dl):focus-visible { opacity: 1; outline: 2px solid var(--pu-think); }
+  @media (hover: none) { .cl-x, .cl-dl { opacity: .7; } }
   .cl-f.ask { cursor: default; gap: 4px; } .cl-f.ask:hover { transform: none; }
   .cl-ask { display: flex; gap: 6px; margin-top: 4px; }
   .cl-ask button { padding: 5px 12px; border: 0; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -537,6 +547,10 @@
   .pu-live { width: 8px; height: 8px; border-radius: 50%; background: var(--pu-lead); animation: pu-breathe 1.6s ease-in-out infinite; }
   .pu-btn { padding: 8px 14px; border-radius: 13px; font-weight: 700; font-size: 13px; background: var(--chip2); color: var(--ink); }
   .pu-btn.main { background: var(--pu-think); color: #fff; box-shadow: 0 8px 18px var(--pu-glow); }
+  .pu-lead.plug { background: var(--pu-plugbg); } .pu-lead.plug .pu-k { color: var(--pu-plug); } .pu-lead.plug .pu-live { background: var(--pu-plug); }
+  .pu-lead.plug .pu-btn.main { background: var(--pu-plug); box-shadow: 0 8px 18px rgba(180,95,18,.28); }
+  .pu-lead .pu-row { display: flex; gap: 8px; }
+  body:not(.light) .pu-lead.plug .pu-btn.main { color: #24170a; }
   .pu-lead .pu-btn.main { background: var(--pu-lead); box-shadow: 0 8px 18px rgba(46,139,87,.3); }
   body:not(.light) .pu-btn.main { color: #10131c; }
   #pult button:focus-visible, .tab.pt:focus-visible, #pu-strip button:focus-visible { outline: none; box-shadow: 0 0 16px var(--pu-glow); background: var(--chip2); }

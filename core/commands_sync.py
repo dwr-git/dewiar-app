@@ -83,10 +83,12 @@ class SyncCommands:
                 dv.remove(str(a.get("name") or ""))
                 self.emit("tools", tools=self.toolbox.catalog())
                 return dv.status()
-            if cmd == "drive_open":
+            if cmd in ("drive_open", "drive_path"):  # drive_path — где лежит, чтобы окно сохранило копию («Скачать», 20.11)
                 p = dv.local().get(str(a.get("name") or ""))
                 if p is None:
                     raise ValueError("этот файл ещё не пришёл на этот компьютер — подождите минуту")
+                if cmd == "drive_path":
+                    return str(p)
                 from tools import launch
                 launch(["xdg-open", str(p)])
                 return True

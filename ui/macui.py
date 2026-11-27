@@ -180,6 +180,28 @@ def front(win, activate=False):
     _main(run)
 
 
+def _where(win, why):
+    """№1049 (25.11, Mac, третий раз: «после „Лира!“ виджет открывается где-то за экраном, виден с 4–5-й попытки»):
+    положение уже проверяется, а причины мы не видим. Запись в журнал окна после показа: где окно, на каком экране, на
+    этом ли рабочем столе (Spaces), видно ли его на самом деле (occlusionState) и уровень — по ней и будет исправление."""
+    def run():
+        try:
+            import AppKit
+            nw = getattr(win, "native", None)
+            if nw is None:
+                return
+            f = nw.frame()
+            scr = nw.screen()
+            occ = int(nw.occlusionState())
+            log(f"виджет ({why}): окно {int(f.origin.x)},{int(f.origin.y)} {int(f.size.width)}×{int(f.size.height)}; "
+                f"экран {'нет' if scr is None else f'{int(scr.frame().size.width)}×{int(scr.frame().size.height)}'} из "
+                f"{len(AppKit.NSScreen.screens())}; показано {bool(nw.isVisible())}; на этом столе {bool(nw.isOnActiveSpace())}; "
+                f"видно {bool(occ & 2)}; уровень {int(nw.level())}; прозрачность {round(float(nw.alphaValue()), 2)}")
+        except Exception as e:  # noqa: BLE001
+            log(f"виджет ({why}): не узнать, где окно: {e}")
+    _main(run)
+
+
 def everywhere(win):
     """Виджет — на всех рабочих столах (Spaces) и поверх программ во весь экран, без места в «Окне» и Cmd+`."""
     def run():
@@ -220,6 +242,67 @@ def seamless(win):
                 f"подложек строки скрыто {hid}); {_frames(nw, win)}")
         except Exception as e:  # noqa: BLE001 — старый macOS: остаётся обычная строка заголовка
             log(f"строка заголовка студии: {e}")
+    _main(run)
+
+
+def _rgb(css):
+    """«rgb(13, 14, 24)» / «rgba(…)» / «#0d0e18» -> (r, g, b) 0–1 или None."""
+    import re as _re
+    m = _re.match(r"\s*rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)", css or "")
+    if m:
+        return tuple(min(1.0, float(x) / 255) for x in m.groups())
+    m = _re.match(r"\s*#([0-9a-f]{6})\b", css or "", _re.I)
+    return tuple(int(m.group(1)[i:i + 2], 16) / 255 for i in (0, 2, 4)) if m else None
+
+
+def match_page_bg(win):
+    """№921 (1.0.48, Mac, снимок: над студией тёмно-серая полоса со светофором, «как в Unsloth — без этой линии»): строка
+    заголовка уже прозрачная и страница под ней, но WKWebView держит сверху отступ безопасной зоны (safeArea 28 в журнале),
+    а под страницей — цвет окна: его и видно полосой. Красим подложку страницы и окна в цвет самой студии.
+    №965 (22.11, 1.0.62, «восьмая попытка»): в журнале «подложка в цвет страницы rgb(38, 42, 49)» — это цвет тёмной темы
+    («Графитовой»), а студия на снимке светлая: красили один раз при загрузке, по теме, с которой окно открылось, и по
+    фону body (у светлых тем он прозрачный). Теперь цвет — основной цвет темы (--sk-base из theme.js), и подложка
+    следит за ним всё время, пока окно открыто: тема сменилась (вручную или по времени суток) — перекрашиваем."""
+    time.sleep(0.4)                                            # страница дорисовала тему
+    js = ("(() => { const r = getComputedStyle(document.documentElement), k = r.getPropertyValue('--sk-base').trim(); if (k) return k; "
+          "const b = getComputedStyle(document.body).backgroundColor; "
+          "return b && !/rgba\\(0, 0, 0, 0\\)|transparent/.test(b) ? b : r.backgroundColor; })()")
+    last = None
+    while True:
+        try:
+            css = win.evaluate_js(js)
+        except Exception as e:  # noqa: BLE001 — окно закрыто
+            if last is None:
+                log(f"цвет студии для строки заголовка: {e}")
+            return
+        rgb = _rgb(str(css or ""))
+        if rgb is None:
+            if last is None:
+                log(f"цвет студии для строки заголовка не разобрал: {css!r}")
+        elif rgb != last:
+            last = rgb
+            _paint_under(win, rgb, css)
+        time.sleep(3)
+
+
+def _paint_under(win, rgb, css):
+    """Подложка окна и WebView — цвет rgb (0–1)."""
+    def run():
+        try:
+            import AppKit
+            col = AppKit.NSColor.colorWithSRGBRed_green_blue_alpha_(rgb[0], rgb[1], rgb[2], 1.0)
+            nw = getattr(win, "native", None)
+            if nw is not None and not hasattr(nw, "setBackgroundColor_"):
+                nw = getattr(nw, "window", None) or getattr(nw, "native", None)
+            if nw is not None and hasattr(nw, "setBackgroundColor_"):
+                nw.setBackgroundColor_(col)
+            n = 0
+            for wv in _webviews(win, nw.contentView() if nw is not None else None):
+                if hasattr(wv, "setUnderPageBackgroundColor_"):
+                    wv.setUnderPageBackgroundColor_(col); n += 1
+            log(f"строка заголовка студии: подложка в цвет страницы {css} (WebView: {n})")
+        except Exception as e:  # noqa: BLE001
+            log(f"цвет студии для строки заголовка: {e}")
     _main(run)
 
 
@@ -310,6 +393,39 @@ def _webviews(win, root):
     return out
 
 
+_POCKET_LOG = []
+
+
+def _no_pocket(wv):
+    """№933 (20.11, macOS 27, 1.0.51: «мимо, последняя версия тоже не решила»): отступ снят, подложка в цвет страницы
+    (rgb 38,42,49), а полоса под светофором — нейтрально-серая, не наша. С macOS 26 WKWebView рисует под строкой заголовка
+    «карман» (scroll pocket / edge effect) — затемнение края прокрутки. Прячем его тем, что есть у этой версии WebKit
+    (имена с pocket / edge effect: «…Hidden_» — да, «…Enabled_» — нет), и пишем в журнал, что нашлось и что сработало."""
+    import re as _re
+    found, did = [], []
+    try:
+        names = [n for n in dir(wv) if _re.search(r"pocket|edgeeffect", n, _re.I)]
+    except Exception:  # noqa: BLE001
+        names = []
+    for n in names:
+        if not n.endswith("_") or not n.startswith(("set", "_set")):
+            found.append(n)
+            continue
+        arg = True if _re.search(r"hidden_$", n, _re.I) else False if _re.search(r"(?:enabled|visible|shows?\w*)_$", n, _re.I) else None
+        if arg is None:
+            found.append(n)
+            continue
+        try:
+            getattr(wv, n)(arg)
+            did.append(f"{n}({arg})")
+        except Exception as e:  # noqa: BLE001
+            found.append(f"{n}: {e}")
+    if not _POCKET_LOG:                                         # в журнал — один раз за запуск
+        _POCKET_LOG.append(1)
+        log("строка заголовка студии: карман WebView — " + (", ".join(did) if did else "прятать нечем")
+            + ("; ещё: " + ", ".join(found[:12]) if found else ""))
+
+
 def _no_insets(win, root, bg=None):
     """№898 (19.11, Mac mini, macOS 27, 1.0.40: «полоса в студии осталась той же», в журнале — «прозрачная»): строка
     заголовка прозрачная, но WKWebView сам отодвигает страницу под строку заголовка (automaticallyAdjustsContentInsets,
@@ -344,6 +460,7 @@ def _no_insets(win, root, bg=None):
                 wv.setObscuredContentInsets_(AppKit.NSEdgeInsets(0, 0, 0, 0)); done = True
             except Exception:  # noqa: BLE001
                 pass
+        _no_pocket(wv)
         n += done
     return n
 
@@ -508,6 +625,7 @@ class MacWindows:
             log(f"виджет: положение не проверить: {e}")
         front(win)
         threading.Timer(0.35, lambda: front(win)).start()
+        threading.Timer(0.8, lambda: _where(win, "показ на имя")).start()
 
     def _hide_now(self):
         self.wins[self.mode].hide()
@@ -653,7 +771,8 @@ class MacWindows:
         self._studio, self._studio_born = win, time.monotonic()
         win.events.closed += lambda *a: self._studio_closed(win)
         win.events.shown += lambda *a: (seamless(win), front(win, activate=True))
-        win.events.loaded += lambda *a: (seamless(win), win.evaluate_js("document.documentElement.classList.add('mac-seam')"))
+        win.events.loaded += lambda *a: (seamless(win), win.evaluate_js("document.documentElement.classList.add('mac-seam')"),
+                                         threading.Thread(target=match_page_bg, args=(win,), daemon=True).start())
         if hasattr(win.events, "resized"):
             win.events.resized += lambda *a: self._studio_resized(win, *a[:2])
 

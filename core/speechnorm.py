@@ -72,16 +72,41 @@ _KNOWN = {"linux": "линукс", "ubuntu": "убунту", "windows": "вин�
           "youtube": "ютуб", "google": "гугл", "yandex": "яндекс", "wifi": "вай-фай", "wi-fi": "вай-фай", "ok": "окей",
           "email": "имейл", "sudo": "судо", "python": "пайтон", "chrome": "хром", "obsidian": "обсидиан", "android": "андроид",
           "iphone": "айфон", "bluetooth": "блютус", "hdmi": "эйч-ди-эм-ай", "jazz": "джаз", "relax": "релакс", "fm": "эф-эм"}
+# №1111 (26.11): «Deep Space One» звучало «дип спаке оне» — частые английские слова названий радио и музыки. Отдельно от
+# _KNOWN: это обычные английские слова, а не имена программ — английский голос (tts._en_spans) их читает сам («Good
+# morning!» на уроке английского — английским голосом, полный прогон 26.11)
+_WORDS = {"deep": "дип", "space": "спейс", "one": "уан", "two": "ту", "three": "фри", "the": "зэ", "of": "оф", "and": "энд",
+          "radio": "радио", "rock": "рок", "pop": "поп", "chill": "чилл", "chillout": "чиллаут", "lounge": "лаунж", "house": "хаус",
+          "dance": "дэнс", "classic": "классик", "classics": "классикс", "love": "лав", "smooth": "смус", "groove": "грув",
+          "soul": "соул", "hits": "хитс", "hit": "хит", "music": "мьюзик", "city": "сити", "sky": "скай", "star": "стар",
+          "stars": "старс", "sun": "сан", "moon": "мун", "night": "найт", "day": "дэй", "live": "лайв", "heart": "харт",
+          "kiss": "кисс", "energy": "энерджи", "plus": "плюс", "record": "рекорд", "best": "бест", "top": "топ", "fresh": "фреш",
+          "cafe": "кафе", "lofi": "лоу-фай", "ambient": "эмбиент", "trance": "транс", "techno": "техно", "beat": "бит",
+          "beats": "битс", "vibe": "вайб", "vibes": "вайбс", "power": "пауэр", "rap": "рэп", "metal": "метал", "blues": "блюз",
+          "country": "кантри", "retro": "ретро", "disco": "диско", "piano": "пиано", "nature": "нэйче", "ocean": "оушен",
+          "world": "ворлд", "news": "ньюс", "sport": "спорт", "hot": "хот", "cool": "кул", "europa": "европа", "radio1": "радио уан",
+          "station": "стейшен", "sound": "саунд", "sounds": "саундс", "mix": "микс", "chart": "чарт", "gold": "голд",
+          "new": "нью", "old": "олд", "school": "скул", "dream": "дрим", "dreams": "дримс", "jungle": "джангл", "bass": "бейс",
+          "drum": "драм", "drive": "драйв", "free": "фри", "time": "тайм", "life": "лайф", "light": "лайт", "zone": "зон",
+          "wave": "вэйв", "waves": "вэйвс", "coffee": "кофи", "morning": "морнинг", "evening": "ивнинг", "lounge fm": "лаунж эф-эм"}
+_MAGIC_E = {"a": "ей", "i": "ай", "o": "оу", "u": "ью"}
 
 
 def latin_word(w):
     low = w.lower()
-    if low in _KNOWN:
-        return _KNOWN[low]
+    if low in _KNOWN or low in _WORDS:
+        return _KNOWN.get(low) or _WORDS[low]
     if w.isupper() and len(w) <= 6 or len(w) == 1:              # USB, HDMI, AI — по буквам
         return "-".join(_LETTER.get(c, c) for c in low)
     out, i = "", 0
+    tail = ""
+    m = re.search(r"([aiou])([bcdfgklmnprstvz])e$", low) if len(low) >= 4 else None
+    if m:                                     # «немое e»: space -> спейс, time -> тайм, tone -> тоун
+        low, tail = low[:m.start()], _MAGIC_E[m.group(1)] + _TR1.get(m.group(2), m.group(2)).replace("к", "с" if m.group(2) == "c" else "к")
     while i < len(low):
+        if low[i] == "c" and i + 1 < len(low) and low[i + 1] in "eiy":   # ce, ci, cy — «с»
+            out, i = out + "с", i + 1
+            continue
         for a, b in _TR2:
             if low.startswith(a, i):
                 out, i = out + b, i + len(a)
@@ -89,7 +114,7 @@ def latin_word(w):
         else:
             out += _TR1.get(low[i], low[i])
             i += 1
-    return out
+    return out + tail
 
 
 def _num(m):
@@ -323,6 +348,31 @@ def _glue(m):
     return " "
 
 
+# Сайт вслух — его имя: «news.rambler.ru», «dewiar.pro/dwrapp/download» → «rambler», «dewiar» (владелец 20.11: «ужасно, когда
+# проговаривает ссылки на сайты»). Только известные зоны — «отчёт.pdf» и «v1.0.48» не задеваем
+DOMAIN_RX = (r"\b(?:www\.)?(?:[A-Za-z0-9-]+\.)*([A-Za-z0-9-]+)\.(?:ru|com|org|net|pro|by|ua|kz|io|ai|app|dev|info|me|tv|online|site)"
+             r"\b(?:/[^\s,;)]*)?")
+
+# Единицы после числа — словами и в нужной форме (владелец 20.11: «ужасно звучат английские аббревиатуры»): «141 GB» было
+# «сто сорок один джи-би», «23 МБ/с» — «двадцать три МБ с»
+UNITS = [("Гбит|Gbit", ("гигабит", "гигабита", "гигабит")), ("Мбит|Mbit", ("мегабит", "мегабита", "мегабит")),
+         ("GiB|GB|ГБ|Гб", ("гигабайт", "гигабайта", "гигабайт")), ("TiB|TB|ТБ|Тб", ("терабайт", "терабайта", "терабайт")),
+         ("MiB|MB|МБ|Мб", ("мегабайт", "мегабайта", "мегабайт")), ("KiB|KB|КБ|Кб|кБ", ("килобайт", "килобайта", "килобайт")),
+         ("ГГц|GHz", ("гигагерц", "гигагерца", "гигагерц")), ("МГц|MHz", ("мегагерц", "мегагерца", "мегагерц")),
+         ("тыс\\.", ("тысяча", "тысячи", "тысяч")), ("млн\\.?", ("миллион", "миллиона", "миллионов")),
+         ("млрд\\.?", ("миллиард", "миллиарда", "миллиардов")), ("мс|ms", ("миллисекунда", "миллисекунды", "миллисекунд")),
+         ("ч\\.?", ("час", "часа", "часов")), ("мин\\.?", ("минута", "минуты", "минут")), ("сек\\.?", ("секунда", "секунды", "секунд"))]
+PER = {"с": " в секунду", "s": " в секунду", "сек": " в секунду", "мин": " в минуту", "ч": " в час", "сут": " в сутки"}
+UNIT_RX = (r"(\d+)(?:([.,])(\d{1,2}))?\s*(" + "|".join(u for u, _ in UNITS) + r")(?:/(сек|сут|мин|с|s|ч))?(?![A-Za-zА-Яа-яЁё])")
+
+
+def _unit(m):
+    n, frac, word, per = int(m.group(1)), m.group(3), m.group(4), m.group(5)
+    forms = next(f for u, f in UNITS if re.fullmatch(u, word))
+    out = f"{n},{frac} {forms[1]}" if frac else f"{n} {_plural(n, forms)}"    # дробь — «и пять десятых гигабайта»
+    return out + (PER.get(per, "") if per else "")
+
+
 def speech_clean(text):
     """Текст для любого голоса без символов, которые голос прочитал бы словами («кавычка», «решётка», «звёздочка»)."""
     t = str(text or "")
@@ -330,6 +380,7 @@ def speech_clean(text):
     t = re.sub(r"`([^`]*)`", r"\1", t)
     t = re.sub(r"!?\[([^\]]*)\]\([^()]*\)", r"\1", t)                       # [текст](ссылка) → текст
     t = re.sub(r"https?://\S+", "ссылка", t)
+    t = re.sub(DOMAIN_RX, r"\1", t)                                          # news.rambler.ru → rambler (владелец 20.11)
     t = re.sub(r"(?m)^[ \t]*(?:#{1,6}|>+|[-*+•·▪◦‣●–—]+)[ \t]+", "", t)       # заголовки, цитаты, пункты списка
     t = re.sub(r"([^\s.!?…:;,])[ \t]*\n\s*", r"\1. ", t)                    # строка без точки — пауза перед следующей
     t = _EMOJI.sub(" ", t)
@@ -341,6 +392,7 @@ def speech_clean(text):
     t = re.sub(r"[#~^|\\<>]+", " ", t)
     t = re.sub(r"[(\[{]", ", ", t)
     t = re.sub(r"[)\]}]", ", ", t)
+    t = re.sub(r"§\s*(?=\d)", "пункт ", t)                                     # «§6.5» — «пункт шесть точка пять»
     t = t.replace("&", " и ").replace("¡", "").replace("¿", "").replace("§", "")
     t = re.sub(r"(^|[.!?…:;]\s*)[-–—]+\s+", r"\1", t)                        # «— Привет», «Итак: — …»
     t = re.sub(r"[ \t]+(?:—|–|-{1,3})[ \t]+|—+", _dash, t)                    # тире — пауза
@@ -360,6 +412,8 @@ def speech_norm(text, latin=True):
     t = roman_norm(speech_clean(text))
     for _ in range(3):                                             # «1 437 500» — одно число (разряды через пробел)
         t = re.sub(r"(?<![\d.,])(\d{1,3})[ \u00a0\u202f](?=\d{3}(?!\d))", r"\1", t)
+    t = re.sub(r"(?<=\d)[–—](?=\d)", "-", t)                         # «2–3 ядра» — «два-три», а не «два три»
+    t = re.sub(r"(?<![\w.,])" + UNIT_RX, _unit, t)
     num = r"(?P<n>\d+)(?:[.,](?P<k>\d{1,2}))?"
     t = re.sub(num + r"\s*(?:руб(?:л[а-яё]*)?\.?|₽|р\.|BYN|RUB)(?![а-яёА-ЯЁA-Za-z])", lambda m: _money(m, "rub"), t)
     t = re.sub(r"\$\s*" + num + r"|" + num.replace("?P<n>", "?P<n2>").replace("?P<k>", "?P<k2>") + r"\s*(?:\$|долл\.|USD)",

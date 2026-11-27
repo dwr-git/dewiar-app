@@ -11,6 +11,7 @@ parse(text, now) → {"text", "at": datetime, "repeat": dict|None, "kind": "remi
 
 repeat: {"kind": "daily", "time": "08:00"}  {"kind": "weekly", "days": [0, 2], "time": "19:00"} (0 — понедельник)
         {"kind": "interval", "minutes": 120}  {"kind": "monthly", "day": 5, "time": "10:00"}
+        {"kind": "monthly", "day": 15, "to_day": 19, "time": "09:00"} — «каждый месяц с 15 по 19 число» (раз в день; №927)
         {"kind": "interval", "minutes": 60, "from": "09:00", "to": "18:00", "days": [0, 1, 2, 3, 4]} — «по будням с 9 до 18
         каждый час» (окно — только днём и только в эти дни; отчёт №137, 20.10)
 Этот формат хранят напоминания (Reminders в tools.py) и фоновые задания (jobs.py), он же уходит в синхронизацию
@@ -29,6 +30,9 @@ UNITS = {"ноль": 0, "один": 1, "одну": 1, "одна": 1, "одно":
 TENS = {"двадцать": 20, "тридцать": 30, "сорок": 40, "пятьдесят": 50, "шестьдесят": 60, "семьдесят": 70,
         "восемьдесят": 80, "девяносто": 90}
 HUNDREDS = {"сто": 100}
+# №350 (20.11): «без пяти шесть», «без четверти восемь» — сколько минут «без» (родительный падеж; цифры — как есть)
+BEZ = {"минуты": 1, "одной": 1, "двух": 2, "трех": 3, "четырех": 4, "пяти": 5, "шести": 6, "семи": 7, "восьми": 8,
+       "девяти": 9, "десяти": 10, "пятнадцати": 15, "четверти": 15, "двадцати": 20, "двадцати пяти": 25, "тридцати": 30}
 ORD_GEN = {"первого": 1, "второго": 2, "третьего": 3, "четвёртого": 4, "четвертого": 4, "пятого": 5, "шестого": 6,
            "седьмого": 7, "восьмого": 8, "девятого": 9, "десятого": 10, "одиннадцатого": 11, "двенадцатого": 12}
 MONTHS = {"январ": 1, "феврал": 2, "март": 3, "апрел": 4, "ма": 5, "июн": 6, "июл": 7, "август": 8, "сентябр": 9,
@@ -143,6 +147,18 @@ def _relative(t):
     return None
 
 
+def _bez(mins, hour, part):
+    """«без 5 шесть» → (5, 55, часть суток); «без пяти час» → 12:55. Не время («без 5 рублей») -> None."""
+    n = int(mins) if mins.isdigit() else BEZ.get(mins)
+    h = 1 if hour == "час" else int(hour)
+    if not n or not 0 < n < 60 or not 1 <= h <= 24:
+        return None
+    h = (h - 1) or 12                                 # «без пяти час» — 12:55; утро/вечер — как у «в 12»
+    if part in ("утра", "ночи") and h == 12:
+        h = 0
+    return h, 60 - n, part
+
+
 def _clock(t):
     """Время суток -> (час, минута, явно ли указана часть суток, (начало, конец)) или None.
     «в 3 часа дня» → 15, «в 2 ночи» → 2, «в 12 утра» → 0, «в половине восьмого» → 7:30. Без части суток час
@@ -152,6 +168,16 @@ def _clock(t):
         (r"\bв\s+полночь\b", lambda m: (0, 0, True)),
         (r"\bв\s+половин[еу]\s+(\w+)(?:\s+(утра|дня|вечера|ночи))?", lambda m: (ORD_GEN[m.group(1)] - 1, 30, m.group(2))
          if m.group(1) in ORD_GEN else None),
+        # №350 (20.11): как говорят — «полшестого» (5:30), «в четверть девятого» (8:15), «в 5 минут седьмого» (6:05),
+        # «без пяти шесть» (5:55), «без четверти восемь вечера» (19:45); утро или вечер — как у «в 6» (parse, guessed)
+        (r"\b(?:в\s+)?пол-?\s?(\w+ого)(?:\s+(утра|дня|вечера|ночи))?\b", lambda m: (ORD_GEN[m.group(1)] - 1, 30, m.group(2))
+         if m.group(1) in ORD_GEN else None),
+        (r"\b(?:в\s+)?четверть\s+(\w+)(?:\s+(утра|дня|вечера|ночи))?", lambda m: (ORD_GEN[m.group(1)] - 1, 15, m.group(2))
+         if m.group(1) in ORD_GEN else None),
+        (r"\b(?:в\s+)?(\d{1,2})\s+минут\w*\s+(\w+ого)(?:\s+(утра|дня|вечера|ночи))?", lambda m: (ORD_GEN[m.group(2)] - 1, int(m.group(1)), m.group(3))
+         if m.group(2) in ORD_GEN and 0 < int(m.group(1)) < 30 else None),
+        (r"\b(?:в\s+|к\s+)?без\s+(двадцати пяти|\d{1,2}|\w+)(?:\s+минут\w*)?\s+(\d{1,2}|час)(?:\s+(утра|дня|вечера|ночи))?\b",
+         lambda m: _bez(m.group(1), m.group(2), m.group(3))),
         (r"\b(?:в|на|к)\s+(\d{1,2}):(\d{2})(?:\s+(утра|дня|вечера|ночи))?", lambda m: (int(m.group(1)), int(m.group(2)), m.group(3))),
         (r"\b(?:в|на|к)\s+(\d{1,2})\s+час(?:а|ов)?(?:\s+(\d{1,2})\s+минут\w*)?(?:\s+(утра|дня|вечера|ночи))?",
          lambda m: (int(m.group(1)), int(m.group(2) or 0), m.group(3))),
@@ -226,6 +252,11 @@ def _day(t, now):
             d = d.replace(year=d.year + 1)
         return d, (m.start(), m.end())
     return None
+
+
+# «каждый месяц с 15 по 19 число», «с 15 по 19 число каждого месяца», «ежемесячно с 1-го по 5-е»
+MONTH_DAYS_RX = re.compile(r"(?:\b(?:каждый\s+месяц|ежемесячно)\s+)?\bс\s+(\d{1,2})(?:-?(?:го|е))?\s+(?:по|до)\s+(\d{1,2})(?:-?(?:е|го))?"
+                           r"\s+(?:числ\w*|день|дня)(?:\s+(?:каждого\s+)?месяца)?(?:\s+каждого\s+месяца|\s+каждый\s+месяц)?")
 
 
 def _repeat(t):
@@ -321,6 +352,16 @@ def next_time(rep, after: datetime):
             c = (after + timedelta(days=d)).replace(hour=hh, minute=mm, second=0, microsecond=0)
             if c > after and c.weekday() in days:
                 return c
+    if k == "monthly" and rep.get("to_day"):            # каждый день с day по to_day каждого месяца (№927)
+        d0, d1 = int(rep.get("day") or 1), int(rep["to_day"])
+        y, mo = after.year, after.month
+        for _ in range(3):
+            last = calendar.monthrange(y, mo)[1]
+            for dd in range(min(d0, last), min(d1, last) + 1):
+                c = datetime(y, mo, dd, hh, mm)
+                if c > after:
+                    return c
+            y, mo = (y + 1, 1) if mo == 12 else (y, mo + 1)
     if k == "monthly":
         day = int(rep.get("day") or after.day)
         y, mo = after.year, after.month
@@ -331,6 +372,27 @@ def next_time(rep, after: datetime):
                 return c
             y, mo = (y + 1, 1) if mo == 12 else (y, mo + 1)
     return after + timedelta(days=1)
+
+
+def after_done(rep, at: datetime, now: datetime):
+    """«Сделано» у повторяющегося напоминания (№927: «каждый месяц с 15 по 19… пока не будет выполнено» — после «Готово»
+    продолжало звенеть): срабатывания этого круга больше не нужны — следующее с нового круга. Круг: для «с 15 по 19
+    число» — месяц, для окна часов «с 9 до 18» и для ежедневных, еженедельных, ежемесячных — день. -> новое время или None
+    (следующее срабатывание уже в новом круге — ничего не меняем; простой интервал без окна — тоже)."""
+    k = (rep or {}).get("kind")
+    if k == "monthly" and rep.get("to_day"):
+        if (at.year, at.month) != (now.year, now.month) or at.day > int(rep["to_day"]):
+            return None
+        last = calendar.monthrange(now.year, now.month)[1]
+        end = datetime(now.year, now.month, min(int(rep["to_day"]), last), 23, 59, 59)
+        return next_time(rep, end)
+    if k == "interval" and not rep.get("from") and not rep.get("days"):
+        return None
+    if k in ("interval", "daily", "weekly", "monthly"):
+        if at.date() != now.date():
+            return None
+        return next_time(rep, now.replace(hour=23, minute=59, second=59, microsecond=0))
+    return None
 
 
 def describe_repeat(rep):
@@ -364,6 +426,8 @@ def describe_repeat(rep):
             return f"по выходным в {tm}"
         names = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
         return ("по " + ", ".join(names[d] for d in days) if days else "каждую неделю") + f" в {tm}"
+    if k == "monthly" and rep.get("to_day"):
+        return f"каждый месяц с {rep.get('day')} по {rep['to_day']} число в {tm}"
     if k == "monthly":
         return f"каждый месяц {rep.get('day')}-го в {tm}"
     return ""
@@ -406,6 +470,9 @@ QUOTED_RX = re.compile(r"«([^»]+)»|\"([^\"]+)\"|„([^“]+)“|“([^”]+)�
 
 
 
+MORNING_RX = re.compile(r"\bутр\w*|\bпо\s+утрам\b|\bрано\b|\bспозаранку\b|\bпроснусь\b|\bвстаю\b", re.I)   # час — утренний
+
+
 def parse(text, now=None):
     """Просьба напомнить -> {"text", "at", "repeat", "kind"} или None (формат — в шапке файла).
     Час без части суток: для напоминаний «в 3», когда 3:00 уже прошло, а 15:00 нет, — 15:00; для повторов 1–6 — днём;
@@ -435,6 +502,13 @@ def parse(text, now=None):
         if not rest.startswith("через"):
             rest = "через " + rest
     spans = []
+    # №927 (20.11): «каждый месяц с 15 по 19 число… раз в день» — дни месяца, а не часы (ставилось «каждый час с 15 до 19»)
+    mdays = MONTH_DAYS_RX.search(rest)
+    if mdays and 1 <= int(mdays.group(1)) < int(mdays.group(2)) <= 31:
+        rest = rest[:mdays.start()] + " каждый месяц " + " " * max(0, mdays.end() - mdays.start() - 14) + rest[mdays.end():]
+        rest = re.sub(r"\bне\s+каждый\s+час\W+(?:а\s+)?раз\s+в\s+день\b|\bне\s+каждый\s+час\b|\b(?:один\s+)?раз\s+в\s+день\b", " ", rest)
+    else:
+        mdays = None
     # окно «с 9 до 18» / «с 9:00 по 18:00» — только днём (дело «проверяй почту по будням с 9 до 18», №137)
     win = re.search(r"\bс\s+(\d{1,2})(?::(\d{2}))?\s+(?:до|по)\s+(\d{1,2})(?::(\d{2}))?(?:\s+час\w*)?(?=\s|$)", rest)
     if win and int(win.group(1)) < int(win.group(3)) <= 24:
@@ -474,12 +548,15 @@ def parse(text, now=None):
         rep.pop("default_hour", None)
         if clock:
             spans.append(clock[3])
-            if not clock[2] and rep["kind"] != "interval" and 1 <= hh <= 6:
+            # «каждое утро… в 5:30», «встаю рано… в 5:30» — утро сказано словами (экзамен 20.11, №857: ставили 17:30)
+            if not clock[2] and rep["kind"] != "interval" and 1 <= hh <= 6 and not MORNING_RX.search(rest):
                 guessed = (f"{hh:02d}:{mi:02d}", f"{hh + 12:02d}:{mi:02d}")
                 hh += 12                                   # «каждый день в 3» — скорее днём
         rep["time"] = f"{hh:02d}:{mi:02d}"
         if rep["kind"] == "weekly" and not rep.get("days"):
             rep["days"] = [(day[0] if day else now.date()).weekday()]
+        if rep["kind"] == "monthly" and mdays:
+            rep["day"], rep["to_day"] = int(mdays.group(1)), int(mdays.group(2))
         if rep["kind"] == "monthly" and not rep.get("day"):
             rep["day"] = (day[0] if day else now.date()).day
         if day:
@@ -504,7 +581,7 @@ def parse(text, now=None):
         else:
             hh, mi, explicit = part or 9, 0, True
         when = datetime.combine(d, datetime.min.time()).replace(hour=hh, minute=mi)
-        if not explicit and 1 <= hh <= 11 and kind != "alarm":
+        if not explicit and 1 <= hh <= 11 and kind != "alarm" and not MORNING_RX.search(rest):
             if not day and when <= now and when.replace(hour=hh + 12) > now:
                 guessed = (f"{hh:02d}:{mi:02d}", f"{hh + 12:02d}:{mi:02d}")
                 when = when.replace(hour=hh + 12)        # «в 3» в 10 утра — это 15:00

@@ -37,6 +37,26 @@ const devOn = (d) => d.me || Date.now() / 1000 - (d.seen || 0) < DEV_ONLINE;
    cloud.php sync_devs_via), — «на связи через „Дом“»; давно не было — «был N мин назад» (не «не на связи»: телефон не исполнитель) */
 const devState = (d) => d.me ? "здесь" : d.via && devOn(d) ? `на связи через «${d.via}»` : devAgo(d.seen);
 const devOwnBrain = () => !!S.llm.base_url && !S.llm.trial && !S.llm.cloud;
+/* Связь телефона и компьютера — понятно (владелец 20.11: «делаем»): ошибка обмена — не «облако ответило 503» или «Failed
+   to fetch», а что случилось и что делать; и отдельной строкой — компьютер: на связи он сейчас или нет и что это значит. */
+function devSyncHuman(msg) {
+  const m = String(msg || "");
+  if (/fetch|network|timeout|timed out|сеть|сети|ssl|abort|соедин|unreachable|failed to connect/i.test(m))
+    return "Нет связи с dewiar.pro — проверьте интернет на телефоне. Ничего не потеряется: правки уйдут сами, как только связь появится.";
+  if (/\b40[13]\b|ключ dewiar|вход|token|авториз|не найден/i.test(m))
+    return "Вход в Dewiar на этом телефоне устарел — войдите снова: Настройки → Мозг → «Войти». Всё, что здесь, сохранится.";
+  if (/\b5\d\d\b|занят|busy|перегруж/i.test(m)) return "dewiar.pro сейчас занят — повторю сама через минуту.";
+  if (/шифр|decrypt|расшифр/i.test(m))
+    return "Ключ шифрования здесь не совпадает с другими устройствами. На компьютере: «Устройства» → «Подключить ещё устройство», здесь — «Ввести код».";
+  return "Не синхронизировалось: " + m;
+}
+function devPcLine(list) {
+  const pcs = (list || []).filter(d => d.app === "pc" && !d.me).sort((a, b) => (b.seen || 0) - (a.seen || 0));
+  if (!pcs.length) return "Компьютера с Dewiar здесь пока нет. Поставьте Dewiar на компьютер и подключите его: «Подключить ещё устройство».";
+  const pc = pcs[0], nm = pc.name || "Компьютер";
+  if (devOn(pc)) return `Компьютер «${nm}» на связи: напоминания, заметки и поручения доходят сразу.`;
+  return `Компьютер «${nm}» сейчас не на связи (${devAgo(pc.seen)}): выключен, спит или без интернета. Когда включится — сам получит всё, что вы здесь сделали.`;
+}
 function devHdr(c) { const h = { Authorization: "Bearer " + c.token, "Content-Type": "application/json" }; if (c.link && c.link !== c.token) h["X-Sync-Link"] = c.link; return h; }
 async function devCall(method, path, body) {
   const c = syncCred(); if (!c) throw new Error("здесь ещё нет входа в Dewiar");
@@ -56,7 +76,8 @@ function devHtml() {
   const me = { name: devMyName(), app: D.web ? "web" : "phone" };
   const others = list.filter(d => !d.me), on = others.filter(devOn).length;
   const stTxt = !c ? "Синхронизации нет: здесь ещё нет входа в Dewiar — введите код с другого устройства."
-    : !S.sync.on ? "Синхронизация выключена." : s.ok === false ? "Не синхронизировалось: " + s.error : t ? `Синхронизировано в ${pad(t.getHours())}:${pad(t.getMinutes())}` : "Первая синхронизация — в течение минуты.";
+    : !S.sync.on ? "Синхронизация выключена." : s.ok === false ? devSyncHuman(s.error) : t ? `Синхронизировано в ${pad(t.getHours())}:${pad(t.getMinutes())}` : "Первая синхронизация — в течение минуты.";
+  const pcTxt = c && S.sync.on && list.length ? devPcLine(list) : "";
   const rows = (list.length ? list : [Object.assign({ me: true, seen: 0, ver: "" }, me)]).map(d => {
     const app = d.app || "phone", live = devOn(d);
     return `<div class="dvr${live ? " on" : ""}"><span class="dvi"><svg viewBox="0 0 24 24">${DEV_IC[app] || DEV_IC.phone}</svg></span><div class="dvt"><b>${esc(d.me ? me.name : (d.name || DEV_APP[app]))}${d.me ? '<em>это устройство</em>' : ""}</b>`
@@ -66,6 +87,7 @@ function devHtml() {
   return `<div class="card dvme"><small class="hint" style="margin:0">Это устройство</small>
       <div class="row2"><b class="dvname" id="dv-name">${esc(me.name)}</b><button class="btn" id="dv-ren">Имя</button></div>
       <div class="res ${!c || !S.sync.on ? "" : s.ok === false ? "bad" : s.ok ? "ok" : ""}" id="dv-st" style="margin:6px 0 0">${esc(stTxt)}</div>
+      ${pcTxt ? `<p class="hint dvpc" id="dv-pc" style="margin:8px 0 0">${esc(pcTxt)}</p>` : ""}
       ${c ? `<button class="btn p w" id="dv-now" style="margin-top:10px" ${S.sync.on ? "" : "disabled"}>Синхронизировать сейчас</button>
       <div class="sw" style="margin-top:10px"><div>Синхронизировать<small class="hint" style="display:block;margin:2px 0 0">${esc(c.via)}</small></div><label class="tg"><input type="checkbox" id="sy-on" ${S.sync.on ? "checked" : ""}><i></i></label></div>
       ${c.home ? `<p class="hint" style="margin:8px 0 0">Обмен идёт только по домашней сети и зашифрован ключом с экрана компьютера.</p>`

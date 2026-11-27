@@ -35,7 +35,8 @@ class ApplyMixin:
                 return False                               # разовое и уже прошло — звенеть задним числом незачем
             self.host.reminders.upsert({"id": iid, "at": at.isoformat(timespec="seconds"), "text": d.get("text") or "Напоминание",
                                         "repeat": d.get("repeat") or None, "kind": d.get("kind") or "reminder",
-                                        "paused": bool(d.get("paused")), **({"note_id": d.get("note") or ""} if "note" in d else {})})
+                                        "paused": bool(d.get("paused")), **({"note_id": d.get("note") or ""} if "note" in d else {}),
+                                        **({"who": str(d["who"])[:40]} if d.get("who") else {})})
         elif kind == "money":
             if deleted:
                 self.host.money.delete(iid)

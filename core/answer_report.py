@@ -56,7 +56,8 @@ class ReportMixin:
         except OSError:
             pass
         u = self.updater.public()
-        add("Версия", not u.get("available"), f"Dewiar {VERSION}" + (f" — есть {u['available']}" if u.get("available") else " — последняя"),
+        add("Версия", not u.get("available"), f"Dewiar {VERSION}" + (f" — есть {(u['available'] or {}).get('version', '') if isinstance(u['available'], dict) else u['available']}"   # №913: не весь словарь
+                                               if u.get("available") else " — последняя"),
             "Обновите: «О программе» → «Обновить».", "about", warn=True)
         if st.get("meeting"):
             add("Созвон", False, "идёт созвон: " + ", ".join(st["meeting"].get("apps") or []), "Пока идёт созвон, ассистент слушает тише — так задумано.",
@@ -68,6 +69,7 @@ class ReportMixin:
         fresh — только то, что случилось после прошлого отправленного отчёта (журнал, ошибки, задачи, ui.log): иначе
         давно исправленная ошибка тянется из отчёта в отчёт и мешает увидеть новую. Отметка — report_mark.json."""
         import platform
+        from datetime import timezone
         # в настройках скрываем всё, чьё имя похоже на секрет (ключи, заголовки и переменные окружения MCP-программ)
         # №311 (пакет 27.10): «max_tokens» в отчёте был «***» — числа и флаги вида *_tokens, keys_* не секрет
         # 0.82.1: и номера установки (cloud.dev — по нему сайт отдаёт прежний ключ) и пульса (report.dev)
@@ -80,9 +82,19 @@ class ReportMixin:
                 return [clean(v) for v in x]
             return x
         lines = [f"Dewiar {VERSION} — отчёт {datetime.now():%Y-%m-%d %H:%M}", f"Система: {OS_NAME}; Python {platform.python_version()}; "
-                 f"{platform.machine()}; ядер: {os.cpu_count()}", ""]
+                 f"{platform.machine()}; ядер: {os.cpu_count()}",
+                 # №937 (21.11: напоминание с Mac на 9:00 пришло на телефон на 6:00) — часовой пояс этого компьютера, как его
+                 # видит программа: по нему время напоминаний переводится в общее для всех устройств
+                 f"Часовой пояс: {datetime.now().astimezone():%Z (UTC%z)}; по UTC сейчас {datetime.now(timezone.utc):%H:%M}", ""]
         if note:
             lines += ["== Со слов человека", note, ""]
+        try:                                           # «Рентген» последних ответов (core/xray.py): путь, модель, подсказка,
+            import xray                                # действия, проверки — разработчику видно, почему ответ такой
+            xb = xray.brief(8)
+            if xb:
+                lines += ["== Рентген последних ответов (путь · модель · подсказка · действия · проверки)", xb, ""]
+        except Exception:  # noqa: BLE001
+            pass
         lines += ["== Состояние", json.dumps(self.status, ensure_ascii=False, indent=1, default=str), ""]
         lines += ["== Настройки (без ключей)", json.dumps(clean(self.s.snapshot()), ensure_ascii=False, indent=1), ""]
         try:

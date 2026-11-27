@@ -159,12 +159,15 @@ window.pmkOpen = () => { const b = $('nav button[data-p="plgnew"]'); if (b) b.cl
   const n = $("#nav-plg-new"); if (n) n.onclick = window.pmkOpen;
   // 04.11 (владелец: «у нас же есть готовые плагины — переводчик, путешествия, художник, — где они?»): каталог готовых —
   // «Все плагины» в группе «Плагины» и полосой на странице «Создать плагин»
-  const allGo = () => { const b = $('nav button[data-p="skills"]'); if (b) b.click(); };
+  // №907 (19.11): «„Все плагины“ и „Настройка“ → „Плагины“ показывают одно и то же» — одна функция, одно место: пункт
+  // «Плагины» в «Настройке» спрятан (.sub), страницу открывает «Все плагины»; группа «Плагины» скрыта — пункт снова виден (show.js)
+  const allGo = () => { const b = $('nav button[data-p="skills"]'); if (b) b.click(); setTimeout(() => { if (na) na.classList.add("cur"); }, 0); };
   const na = $("#nav-plg-all"); if (na) na.onclick = allGo;
   document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#pmk-cat-go")) allGo(); });
   const c = $("#plg-new"); if (c) c.onclick = window.pmkOpen;
   document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("nav button[data-p]");
-    if (b) setTimeout(() => { const nn = $("#nav-plg-new"); if (nn) nn.classList.toggle("cur", !!$("#p-plgnew.cur")); }, 0); }, true);
+    if (b) setTimeout(() => { const nn = $("#nav-plg-new"); if (nn) nn.classList.toggle("cur", !!$("#p-plgnew.cur"));
+      const na2 = $("#nav-plg-all"); if (na2) na2.classList.toggle("cur", !!$("#p-skills.cur")); }, 0); }, true);
 })();
 secLazy("plgnew", pmkRender);
 document.addEventListener("studio-sec", (e) => { if (e.detail === "plgnew" && PMK.tpls && !PMK.busy) { pmkTpls(); pmkMine(); } });

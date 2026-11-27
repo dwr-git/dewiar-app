@@ -73,23 +73,15 @@ function joinIds() {
 /* Автоподключение (0.69; владелец 29.10: «за наш счёт по умолчанию — важно, чтобы у пользователя всё работало сразу;
    взять хотя бы что-то для узнавания, контакт попросить позже»). Мозга нет, входа и заявки нет — заявка auto: модель
    телефона (или «веб-версия»), без контакта; сайт одобряет сам — ключ подключается сразу. Не чаще раза в час; нет сети —
-   при следующем вопросе. S.autoJoin === false — выключено. Контакт — позже, по желанию (contactAsk, «Мозг» → «Как к вам обращаться»). */
-/* После пяти удачных ответов на автоподключении — один раз (и ещё раз через 3 дня, если отложили) попросить контакт —
-   по желанию: «если что-то сломается — разработчик сможет ответить». Оставили — больше не спрашиваем. */
-function contactMaybe() {
-  if (!S.autoJoined || S.contactDone || !S.llm.cloud) return;
-  S.autoTurns = (S.autoTurns || 0) + 1;
-  if (S.autoTurns >= 5 && (S.contactAsks || 0) < 2 && Date.now() - (S.contactAsked || 0) > 3 * 864e5) {
-    S.contactAsked = Date.now(); S.contactAsks = (S.contactAsks || 0) + 1;
-    setTimeout(() => { if (!busy) showCard(contactCardHtml(true)); contactWire(); }, 6000);
-  }
-  saveS();
-}
+   при следующем вопросе. S.autoJoin === false — выключено. Контакт — только по желанию самого человека («Мозг» → «Как к вам обращаться»). */
+/* Контакт — только сам человек, когда захочет: «Мозг» → «Как к вам обращаться» и карточка пополнения. Сами не просим
+   (владелец 24.11: «первый вход в Лиру должен быть простой, лёгкий, приятный.. ничего от пользователей просить и требовать
+   не желательно»); до 1.0.69 после пяти ответов всплывало «Оставите контакт?». */
 function contactCardHtml(ask) {
   return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
     <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">
     <div class="row2" style="margin-top:10px"><button class="btn p" id="ct-go" style="flex:1">Сохранить</button>${ask ? `<button class="btn" id="ct-x">Не сейчас</button>` : ""}</div>
-    <p class="hint" style="margin:10px 0 0">Контакт видит только команда Dewiar; удалить — «Настройки» → «Сообщить о проблеме» со словами «Мои данные». <a href="${siteUrl("dwrapp/privacy.php")}">Политика конфиденциальности</a></p></div>`;
+    <p class="hint" style="margin:10px 0 0">Контакт видит только команда Dewiar; удалить — «Настройки» → «Сообщить о проблеме» со словами «Мои данные». <a href="${siteUrl("dwrapp/privacy")}">Политика конфиденциальности</a></p></div>`;
 }
 function contactWire() {
   const go = $("#ct-go"); if (!go) return;
@@ -374,8 +366,29 @@ async function cloudBalance(force) {
   if (prev && ((cloudInfo.low && !prev.low) || (cloudInfo.empty && !prev.empty)))          // один раз, когда стало мало; site — общий счёт с сайтом (вход аккаунтом)
     D.notify(cloudInfo.site ? (cloudInfo.empty ? "На счёте dewiar.pro закончились ИИ-талеры" : `На счёте dewiar.pro: ${cloudInfo.balance_text || cloudInfo.balance + " тал."}`)
       : cloudInfo.empty ? "Заряд Dewiar Облака закончился" : `Заряд Dewiar Облака: ${cloudInfo.percent}%`, cloudInfo.site ? "Пополнить — в личном кабинете на сайте" : "Настройки → Мозг → Пополнить");
-  balBadge(cloudInfo); payWarnCheck(cloudInfo);
+  giftNote(cloudInfo); paidNote(cloudInfo); balBadge(cloudInfo); payWarnCheck(cloudInfo);
   return cloudInfo;
+}
+/* Подарок месяца пришёл (1.0.48, владелец 20.11: «при начислении сообщать… и что если не потратят, сгорит») — один раз
+   за месяц, как на компьютере (cloud.gift_month_text). */
+function giftNote(c) {
+  const g = c && c.gift;
+  if (!g || !(+g.left > 0) || !g.until || S.giftSeen === g.until) return;
+  S.giftSeen = g.until; saveS();
+  const u = new Date(g.until + "T12:00:00"), when = isNaN(u) ? "конца месяца" : u.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  D.notify("Подарок месяца: " + String(+g.amount).replace(".", ",") + " талера", `Тратится первым; что не потратите до ${when}, сгорит — тогда же придёт новый.`);
+}
+/* Счёт пополнили (1.0.53, владелец 20.11: «как подарочные — и когда просто пополняет») — один тихий уведомлением: деньги
+   дошли, сколько теперь. Первое знакомство (после обновления) — только запомнить: старое пополнение не новость. */
+function paidNote(c) {
+  if (!c || !("paid_last" in c)) return;
+  const pl = c.paid_last, seen = S.paidSeen;
+  if (!pl || !pl.ts) { if (seen === undefined) { S.paidSeen = 0; saveS(); } return; }
+  if (seen === pl.ts) return;
+  S.paidSeen = pl.ts; saveS();
+  if (seen === undefined || Date.now() / 1000 - pl.ts > 3 * 86400) return;
+  const n = (x) => String(Math.round(+x * 100) / 100).replace(".", ",");
+  D.notify("Счёт пополнен: +" + n(pl.amount) + " тал.", "Теперь на счёте " + n(c.balance) + " тал." + (+c.turns > 0 ? ` — это примерно ${c.turns} ответов.` : ""));
 }
 /* Ключ Dewiar удалили или перевыпустили на сайте, а вход в аккаунт есть — не мучаем человека ошибкой: думаем по аккаунту. */
 const keyGone = (m) => /ключ dewiar не найден|invalid_api_key|ключ отозван/i.test(String(m || ""));

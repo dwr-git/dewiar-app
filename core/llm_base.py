@@ -31,6 +31,9 @@ _flat = set()              # серверы, которые не принима�
 _no_kw = set()             # серверы, которые отклоняют запрос с chat_template_kwargs (облако Ollama: «upstream returned HTTP 400»)
 
 
+_no_force = set()          # Опыт 9: серверы, которые не приняли tool_choice «required» (старый vLLM, часть шлюзов)
+
+
 _no_usage = set()          # серверы, которые отклонили stream_options (подсчёт токенов в конце потока)
 
 

@@ -27,6 +27,7 @@ import org.json.JSONObject;
  *  Слух, голос и радио живут в Speech, Tts, Radio; радио одно на приложение и переживает пересоздание экрана. */
 public class MainActivity extends Activity implements Net.Sink {
     WebView web;
+    android.widget.FrameLayout root;                   // корень окна: на Android 15+ — отступы под панели (Compat.edgeInsets)
     Speech speech;
     Tts tts;
     Radio radio;
@@ -112,7 +113,11 @@ public class MainActivity extends Activity implements Net.Sink {
         tts = new Tts(this, this);
         radio = Radio.get(this, this);
         web.addJavascriptInterface(new Bridge(this), "Dewiar");
-        setContentView(web);
+        root = new android.widget.FrameLayout(this);
+        root.setBackgroundColor(Color.parseColor("#0B0B10"));       // за строкой состояния и жестами на Android 15+
+        root.addView(web, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        setContentView(root);
+        Compat.edgeInsets(root);
         handle(getIntent());
         web.loadUrl("file:///android_asset/www/index.html");
         Alarms.rescheduleAll(this);
@@ -138,6 +143,7 @@ public class MainActivity extends Activity implements Net.Sink {
             fileCb.onReceiveValue(out);
             fileCb = null;
         }
+        if (req == SafeKey.REQ) SafeKey.onResult(this, res == RESULT_OK);   // сейф: подтвердили себя экраном блокировки
         if (req == HtmlView.REQ) {                              // окно чужого HTML закрыли: «В «Загрузки»» — сохраняет интерфейс
             try { event("htmlview", new JSONObject().put("save", res == RESULT_OK && data != null && data.getBooleanExtra("save", false))); }
             catch (Exception ignored) { }

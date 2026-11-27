@@ -30,7 +30,7 @@ const wkSave = () => fileSave("work.json", JSON.stringify(WKS));
 const wkJobs = () => Object.values(wkLoad().jobs).sort((a, b) => (a.since || 0) - (b.since || 0));
 const wkHas = () => !kidsOn() && wkJobs().length > 0;
 const wkToken = (s) => { const m = /[?&](?:work|t)=([A-Za-z0-9_-]{8,64})/.exec(String(s || "")); return m ? m[1] : ""; };
-const wkIsLink = (s) => /^dewiar:\/\/work|download\.php\?(?:.*&)?work=/.test(String(s || "").trim());
+const wkIsLink = (s) => /^dewiar:\/\/work|download(?:\.php)?\?(?:.*&)?work=/.test(String(s || "").trim());   // 0.9.73: и короткий адрес
 
 /* связи с сайта: bosses — мои работы (ответ /work/peers, /work/accept, /work/leave). Работы, которой там нет, больше нет. */
 function wkPeers(d, why) {

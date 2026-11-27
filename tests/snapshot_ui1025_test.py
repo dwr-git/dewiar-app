@@ -68,7 +68,7 @@ with sync_playwright() as p:
         pg.click("#sn-help"); pg.wait_for_timeout(250)
         hb = pg.text_content("#help-body")
         ok(pg.evaluate("document.querySelector('#help').classList.contains('open')") and "Добавить недостающее" in hb and "Открытый .zip" in hb
-           and "Пароль закрытого слепка" in hb and "guide.php#snapshot" in pg.inner_html("#help-body"), "«?» в меню — справка: виды, восстановление, советы, ссылка на руководство")
+           and "Пароль закрытого слепка" in hb and "guide#snapshot" in pg.inner_html("#help-body"), "«?» в меню — справка: виды, восстановление, советы, ссылка на руководство")
         pg.evaluate("document.querySelector('#help').classList.remove('open')"); pg.click("#sn-chip"); pg.wait_for_timeout(200)
         pg.click("#sn-go"); pg.wait_for_timeout(150)
         ok("Придумайте пароль" in pg.text_content("#sn-res"), "без пароля закрытый не делаем — подсказка")

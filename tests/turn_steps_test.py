@@ -18,10 +18,13 @@ src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 t = ast.parse(src)
 cls = next(n for n in t.body if isinstance(n, ast.ClassDef) and n.name == "AnswerMixin")
 m = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
-size = {k: m[k].end_lineno - m[k].lineno + 1 for k in ("_run_turn", "_turn_prepare", "_turn_steps", "_turn_finish") if k in m}
-ok(set(size) == {"_run_turn", "_turn_prepare", "_turn_steps", "_turn_finish"}, f"шаги хода на месте: {sorted(size)}")
-ok(size.get("_run_turn", 999) <= 120, f"_run_turn — короткий поток хода ({size.get('_run_turn')} строк, не больше 120)")
-rt = ast.get_source_segment(src, m["_run_turn"])
+# 1.0.57: _run_turn — обёртка «Рентгена» (xray.attach/finish), поток хода — _run_turn_body
+size = {k: m[k].end_lineno - m[k].lineno + 1 for k in ("_run_turn_body", "_turn_prepare", "_turn_steps", "_turn_finish") if k in m}
+ok(set(size) == {"_run_turn_body", "_turn_prepare", "_turn_steps", "_turn_finish"}, f"шаги хода на месте: {sorted(size)}")
+ok(size.get("_run_turn_body", 999) <= 120, f"_run_turn_body — короткий поток хода ({size.get('_run_turn_body')} строк, не больше 120)")
+ok("self._run_turn_body(" in ast.get_source_segment(src, m["_run_turn"]) and "xray.finish" in ast.get_source_segment(src, m["_run_turn"]),
+   "_run_turn — поток хода под рентгеном")
+rt = ast.get_source_segment(src, m["_run_turn_body"])
 ok(rt.index("self._turn_prepare(") < rt.index("self._turn_steps(") < rt.index("self._turn_finish("), "порядок: подготовить → ход → после ответа")
 ok('prof = getattr(e, "turn_prof", prof)' in rt, "сбой модели — по той модели, которой шёл ход")
 for k in ("_turn_prepare", "_turn_steps"):

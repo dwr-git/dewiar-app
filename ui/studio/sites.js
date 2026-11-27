@@ -12,6 +12,13 @@
    05.11 (владелец: «как на наш созданный сайт вставить виджет Лиры?»): строка «Чат Лиры на сайте: включён/выключен» в списке
    и в редакторе (sites_chat {id, on}) — «Включить» включает «Чат для сайта» (знания — с этого сайта, если их ещё нет); кнопка
    чата ставится сервером на все опубликованные сайты аккаунта, а в предпросмотре видно, где она появится. */
+/* №1116 (26.11, macOS): окно правки статьи открывалось под боковым меню — левый край текста не читался. Окна «Сайтов»
+   стояли внутри раздела, а у раздела в некоторых темах свой слой (фон с размытием): fixed считался от раздела, а не от окна.
+   Окна раздела — прямо в body: поверх всей студии в любой теме. */
+for (const id of ["st-pubm", "st-histd", "st-addp", "sb-ed"]) {
+  const el = document.getElementById(id);
+  if (el && el.parentElement !== document.body) document.body.appendChild(el);
+}
 const SITES = { doc: "", lkx: 0, chat: null, meta: null, items: [], sid: "", cur: null, hist: [], page: 0, sel: "", open: "", dev: "pc", scroll: 0, tab: "edit", seg: "blocks", t: {}, days: 30, busy: false };
 const stE = (t) => escH(t);
 const stI = (p, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;

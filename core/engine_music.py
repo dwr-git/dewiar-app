@@ -111,7 +111,9 @@ class MusicMixin:
             except Exception:  # noqa: BLE001
                 log.debug("утро: город из памяти", exc_info=True)
         self._morning_last = d
-        lines = [f"Сегодня {now:%d.%m.%Y}, {morning.WD[now.weekday()]}, сейчас {now:%H:%M}."]
+        # №1056 (телефон, 25.11): «Среда началась. Сегодня четверг» — завтрашний день недели называем прямо
+        lines = [f"Сегодня {now:%d.%m.%Y}, {morning.WD[now.weekday()]} (завтра — {morning.WD[(now.weekday() + 1) % 7]}), "
+                 f"сейчас {now:%H:%M}."]
         if not d.get("weather"):
             lines.append("Погода: данных нет" + ("" if d.get("city") else " (город не задан)") + " — о погоде, температуре и городе "
                          "не говори ничего, не угадывай.")
@@ -244,9 +246,12 @@ class MusicMixin:
         except Exception:  # noqa: BLE001
             items = []
         # 13.11: «по будням, кроме пятницы, в 17:50» (4 дня) — тоже привычка; раньше считали с 5 дней
+        # 20.11 (владелец, снова: «рассказывает о напоминаниях, которые каждый день — бред»; «А — пора выключать комп и бежать
+        # на автобус» по двум дням недели прошла в итог): привычка — повторяющееся два и больше дней в неделю. Раз в неделю
+        # (планёрка в понедельник) — событие недели, о нём в планах на завтра сказать можно; раз в месяц — тоже
         hs = [x for x in items if (x.get("kind") != "job" or weekly) and x.get("repeat")
               and ((x["repeat"].get("kind") in ("daily", "interval"))
-                   or (x["repeat"].get("kind") == "weekly" and (weekly or len(x["repeat"].get("days") or []) >= 3)))]
+                   or (x["repeat"].get("kind") == "weekly" and (weekly or len(x["repeat"].get("days") or []) >= 2)))]
         return {str(x.get("id")) for x in hs if x.get("id")}, {x.get("text", "").strip() for x in hs if x.get("text", "").strip()}
 
     def _habit_pred(self, weekly=False):
@@ -272,9 +277,20 @@ class MusicMixin:
                 if k[1]:
                     days.setdefault(k, set()).add(d)
 
+        hstems = [{w[:4] for w in h.split() if len(w) >= 4} for h in hn]
+
+        def part_of(t):
+            """Кусок привычки своими словами: «обед, карту взяла» модель отметила двумя делами — «Обед» и «Карту взяла»
+            (экзамен 20.11, в пятый раз «карту» в итоге дня). Короткая отметка (до 3 слов), у которой хотя бы половина
+            слов — из привычки (по первым 4 буквам). «Отправила договор Вектору» при привычке «проверить договор» — 1 из 3, нет."""
+            ws = [w for w in t.split() if len(w) >= 4]
+            if not ws or len(t.split()) > 3:
+                return False
+            return any(sum(w[:4] in hs for w in ws) * 2 >= len(ws) for hs in hstems if hs)
+
         def habit(title, rid=""):
             t, r = norm(title), str(rid or "")
-            return bool((r and r in ids) or (t and (t in hn or any(len(h) >= 8 and (h in t or t in h) for h in hn)
+            return bool((r and r in ids) or (t and (t in hn or any(len(h) >= 8 and (h in t or t in h) for h in hn) or part_of(t)
                                                      or len(days.get(("t", t), ())) >= 2)) or (r and len(days.get(("r", r), ())) >= 2))
         habit.titles = sorted(hn | {k[1] for k, v in days.items() if k[0] == "t" and len(v) >= 2})
         return habit
@@ -299,7 +315,9 @@ class MusicMixin:
         return (f"\n\n{what}" + (" (" + "; ".join(f"«{h[:60]}»" for h in habits) + ")" if habits else "")
                 + f" и сами дела по расписанию (утренняя сводка, этот итог) — не события: не упоминай их ни в сделанном, ни в "
                 f"оставшемся, ни {when}, и не говори, что их пропустил(а). Говори только о разовых делах, встречах, отметках "
-                "«сделано» не по привычкам и тратах. Если разовых дел впереди нет — так и скажи одной фразой."
+                "«сделано» не по привычкам и тратах. Если разовых дел впереди нет — так и скажи одной фразой. Сделанное — дела "
+                "пользователя, не твои: «ты проверил», не «проверила». Только факты из данных: без догадок («ужин позади»), "
+                "без серий, «всего дел» и достижений."
                 + (f" Если, кроме привычек, сказать нечего — ответь ровно одним словом: {JOB_SILENT}." if silent else ""))
 
     JOB_RETRY_MIN = (5, 15)            # дело не удалось (модель или сеть) — ещё попытки через столько минут
@@ -324,6 +342,13 @@ class MusicMixin:
         while time.monotonic() < end and (self.turn is not None or self.state in ("speaking", "thinking") or self.alarm):
             time.sleep(1.0)
         title = MusicMixin.job_name(item)
+        if self._eve_done_today(item):
+            log.info("🗓 «%s»: итог дня уже подвели при возвращении — второй раз не повторяю", title)
+            try:
+                self.reminders.update(item.get("id"), {"last_run": datetime.now().isoformat(timespec="seconds"), "last_ok": True, "last_error": ""})
+            except Exception:  # noqa: BLE001
+                pass
+            return
         prompt = self._job_prompt(item)
         log.info("🗓 По расписанию: %s%s", title, f" (попытка {attempt + 1})" if attempt else "")
         bot = self._bot_for(item.get("deliver"))
@@ -362,6 +387,9 @@ class MusicMixin:
         elif ok and not item.get("brief"):
             self.emit("heard", text=f"🗓 {title}")
             self.announce(text)                          # в окно и голосом, с сигналом — как напоминание
+        if ok and not item.get("brief") and not MusicMixin._week_job(item) and (
+                item.get("preset") == "evening" or SUMMARY_JOB_RX.search(str(item.get("text") or ""))):
+            self._eve_said = datetime.now().date()       # итог сегодня подведён — «С возвращением» его не повторит
         if ok is None and ev.is_set():
             return                                       # ход перебили (человек заговорил) — не сбой и не повтор
         try:
@@ -627,6 +655,20 @@ class MusicMixin:
                 return True
         if op == "ask" and self._music_service() == "yandex" and not re.search(r"радио|станци|волн", text.lower()):
             return self._yandex_cmd("", text)
+        q = c.get("query") or ""
+        if op == "ask" and re.search(r"(?<![а-яё])(?:любую|какую-?нибудь|какую-?то)\s+музык", text.lower()) or \
+                op == "play" and not c.get("strict") and re.search(r"люб|нибудь|(?<![а-яё])что-то|какую-то", q.lower()) and not re.sub(
+                r"(?<![а-яё])(?:любую|любой|любое|какую|какой|что|нибудь|то|музыку|музыка|музычку|мне|пожалуйста|уже|ну)(?![а-яё])|\W", "", q.lower()):
+            # №944 (21.11): «включи любую музыку» уходило модели; у человека окно контекста мало, действий нет — и она
+            # «включила радио» словами, а было тихо. «Любую» — это к нам: последняя станция, а нет — первые из списка
+            last = self.radio.last
+            sts = self.music.stations()
+            pick = ([last] if last else []) + [x for x in sts if not last or x["url"] != last.get("url")]
+            if pick:
+                log.info("📻 «%s» — любая музыка: «%s»", text, pick[0].get("name"))
+                self._music_asked = 0.0
+                self._play_station(pick[:4], text, "Включаю «{}».")
+                return True
         if op == "stop":
             if not (self.radio.playing or self.radio.paused):
                 return False                              # играет что-то другое (браузер, плеер) — решит модель
@@ -983,6 +1025,37 @@ class MusicMixin:
                and lo <= x["time"] <= hi and not x.get("done")]
         return sorted(out)
 
+    def _eve_job_pending(self, now=None):
+        """Сегодня ещё будет (или опоздал и выполнится) «Итог дня» по расписанию: дело-итог (не недели), не на паузе, сегодня
+        не выполнялось, время — уже прошло или в ближайшие 3 часа."""
+        now = now or datetime.now()
+        try:
+            items = list(self.reminders.items)
+        except Exception:  # noqa: BLE001
+            return False
+        for x in items:
+            if x.get("kind") != "job" or x.get("paused") or x.get("brief") or MusicMixin._week_job(x):
+                continue
+            if not (x.get("preset") == "evening" or SUMMARY_JOB_RX.search(str(x.get("text") or ""))):
+                continue
+            if str(x.get("last_run") or "")[:10] == now.date().isoformat():
+                continue
+            try:
+                at = datetime.fromisoformat(str(x.get("at") or ""))
+            except ValueError:
+                continue
+            if at.date() == now.date() and at <= now + timedelta(hours=3):
+                return True
+        return False
+
+    def _eve_done_today(self, item):
+        """Дело — «Итог дня», а итог сегодня уже подвели при возвращении — второй раз не подводим (20.11)."""
+        if item.get("brief") or MusicMixin._week_job(item):
+            return False
+        if not (item.get("preset") == "evening" or SUMMARY_JOB_RX.search(str(item.get("text") or ""))):
+            return False
+        return getattr(self, "_eve_said", None) == datetime.now().date()
+
     def _welcome_back(self, gone, wait=3.0):
         """Человек вернулся после gone секунд. Молчим, если: выключено, микрофон выключен, созвон, звенит будильник,
         идёт разговор, виджет спрятали и с тех пор не звали, нет модели. Иначе — presence.plan решает, есть ли что
@@ -1030,8 +1103,13 @@ class MusicMixin:
                 care_line, care_ids = self.care.context()
         except Exception:  # noqa: BLE001
             care_line, care_ids = "", []
+        # итог дня — один: впереди (или опоздал и вот-вот выполнится) «Итог дня» по расписанию — при возвращении его не
+        # подводим и сводку дня вечером не даём (владелец 20.11: включил компьютер в 21:32 — итог «С возвращением», а через
+        # минуту опоздавший «Итог дня» повторил его)
+        eve_job = self._eve_job_pending()
         p = presence.plan(gone, datetime.now() - timedelta(seconds=gone), tasks, upcoming, last, dstat=done,
-                          eve_said=getattr(self, "_eve_said", None), news=news_fact, care=care_line)
+                          eve_said=datetime.now().date() if eve_job else getattr(self, "_eve_said", None),
+                          day_brief=not eve_job, news=news_fact, care=care_line)
         if not p:
             log.info("👋 вернулись через %s — сказать нечего, молчим", presence._hm(gone))
             return False

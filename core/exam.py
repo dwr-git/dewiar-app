@@ -161,8 +161,9 @@ from exam_big import BIG_CHECKS, make_fixture  # noqa: E402,F401
 class Core:
     """Ядро Dewiar в режиме сервера во временных папках; команды и события — по WebSocket, как у студии."""
 
-    def __init__(self, profile, tmp, log=print, lean=False):
-        self.profile, self.tmp, self.log, self.lean = profile, Path(tmp), log, bool(lean)
+    def __init__(self, profile, tmp, log=print, lean=False, scene=False, overrides=None):
+        self.profile, self.tmp, self.log, self.lean, self.scene = profile, Path(tmp), log, bool(lean), bool(scene)
+        self.overrides = dict(overrides or {})      # стенд (tools/stand.py): переключатели гипотезы — {"llm.scene": true, …}
         self.port = _free_port()
         self.proc = None
         self.ws = None
@@ -175,7 +176,7 @@ class Core:
         cfg, st, ws = self.tmp / "cfg", self.tmp / "st", self.tmp / "ws"
         for d in (cfg, st, ws):
             d.mkdir(parents=True, exist_ok=True)
-        (cfg / "settings.json").write_text(json.dumps({
+        conf = {
             "persona": "lira", "user_name": "", "stt": {"engine": "vosk"}, "tts": {"engine": "off"},
             "audio": {"sounds": False, "follow_up_seconds": 0}, "ui": {"intro": "done"}, "report": {"pulse": False, "auto": False},
             "welcome": {"on": False}, "diary": {"night": False}, "night": {"on": False},
@@ -183,7 +184,11 @@ class Core:
             # и «дни рождения Ани и Пети» оказались в «Обо мне» настоящего человека)
             "sync": {"enabled": False},
             "tasks": {"auto_run": True, "self_check": True},
-            "llm": {"active": "exam", "profiles": {"exam": self.profile}, "lean_prompt": self.lean}}, ensure_ascii=False), encoding="utf-8")
+            # --scene («Ум Лиры», шаг 1): сцена разговора; следующий шаг идёт сразу — ждём дописанную сцену до 30 с
+            "llm": {"active": "exam", "profiles": {"exam": self.profile}, "lean_prompt": self.lean,
+                    **({"scene": True, "scene_wait": 30} if self.scene else {"scene": False, "scene_on": False})}}
+        apply_overrides(conf, self.overrides)        # стенд гипотез: «раздел.ключ» -> значение
+        (cfg / "settings.json").write_text(json.dumps(conf, ensure_ascii=False), encoding="utf-8")
         env = dict(os.environ, DEWIAR_CONFIG_DIR=str(cfg), DEWIAR_STATE_DIR=str(st), DEWIAR_WORKSPACE_DIR=str(ws),
                    DEWIAR_PORT=str(self.port), DEWIAR_ASSUME_AEC="1")
         env.pop("DEWIAR_PROMPTER_WAV", None)
@@ -439,6 +444,8 @@ async def check_state(core, state, t_start):
                     return False
             if "hm" in want and f"{at:%H:%M}" != want["hm"]:
                 return False
+            if "dow" in want and at.weekday() != int(want["dow"]):        # «в следующий понедельник» — именно понедельник (№897)
+                return False
             if want.get("kind") and (x.get("kind") or "reminder") != want["kind"]:        # таймер — именно таймер (отсчёт на экране)
                 return False
             if want.get("att") and int(x.get("att") or 0) < int(want["att"]):           # с картинкой — она правда при напоминании
@@ -529,6 +536,36 @@ async def wait_task(core, since_ts, timeout, tid=None):
     return t
 
 
+def asked_back(ans):
+    """Уточнила, а не сделала наугад. 26.11: «Уточни, пожалуйста, кому и что отправить.» — тоже уточнение, хоть и без «?»."""
+    return "?" in ans or bool(re.search(r"\b(уточни|уточните|подскажи|подскажите|скажи|скажите|напиши|напишите)\b[^.!]{0,60}"
+                                         r"\b(кому|кто|что|какой|какую|какое|о ком|о чём|о чем)\b", ans, re.I))
+
+
+JUDGE_RETRY = (5, 20)                 # с: паузы перед повторами оценки судьи (перегруженный прокси, «не с первого раза»)
+
+
+class JudgeDown(RuntimeError):
+    pass
+
+
+_judge_ok = set()
+
+
+def judge_preflight(profile, log=print):
+    """Внешний судья — одна пробная оценка до первого сценария (25.11, стенд 3: 79 минут и платные токены, а судья не оценил
+    ничего — сценарии «сдавались» одними проверками). Не оценил — экзамен не начинается, причина — сразу. -> None или JudgeDown."""
+    key = (profile.get("base_url"), profile.get("model"), profile.get("proxy"))
+    if key in _judge_ok:
+        return
+    r = judge(profile, {"title": "Проверка судьи", "judge": "Помощник вежливо поздоровался."}, "Пользователь: привет\nПомощник: Привет! Чем помочь?", "—")
+    if not r or r.get("score") is None:
+        raise JudgeDown("внешний судья не оценил пробный ответ — экзамен не начат, чтобы не тратить время и токены впустую. "
+                        f"Причина: {(r or {}).get('why') or 'нет ответа'}")
+    _judge_ok.add(key)
+    log(f"Судья на связи: пробная оценка {r['score']:g}/10")
+
+
 def judge(profile, sc, transcript, state_text, at=None, memory=""):
     """Оценка судьи: {score, why} или None (судья не ответил)."""
     from llm import stream_chat
@@ -536,11 +573,31 @@ def judge(profile, sc, transcript, state_text, at=None, memory=""):
     content = (f"СЦЕНАРИЙ: {sc['title']}\n\nРАЗГОВОР:\n{transcript}\n\nЧТО ПРОИЗОШЛО В ПРОГРАММЕ:\n{state_text or '—'}\n\n"
                + (f"ЧТО ПОМОЩНИК ЗНАЛ О ПОЛЬЗОВАТЕЛЕ (его память с прошлых разговоров — упоминать это не выдумка):\n{memory[-2500:]}\n\n" if memory.strip() else "")
                + f"ХОРОШИЙ ОТВЕТ: {sc['judge']}\n\nРазговор шёл {when:%d.%m.%Y} ({WDAYS[when.weekday()]}) в {when:%H:%M}.")
-    try:
-        out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=300, timeout=min(float(profile.get("timeout") or 90), 90)),
-                                  JUDGE_SYSTEM, [{"role": "user", "content": content}]))
-    except Exception as e:  # noqa: BLE001
-        return {"score": None, "why": f"судья не ответил: {e}"}
+    import contextlib
+    px = contextlib.nullcontext()
+    if profile.get("proxy"):                         # внешний судья через свой прокси (исполнитель: DEWIAR_JUDGE_PROXY)
+        import net
+        net.install()
+        px = net.profile_proxy(profile)
+    # Оценка не меняет ничего — повторять безопасно. 26.11 (владелец: «прокси бывает перегружен»): судья через купленный
+    # прокси не отвечал с первого раза, и сценарий оставался без оценки. Ещё две попытки с паузой; пустой ответ — тоже повтор
+    out, err = "", None
+    for i, pause in enumerate(JUDGE_RETRY + (None,)):
+        try:
+            with px:
+                # max_tokens 4096 (25.11): внешний судья бывает думающей моделью (Gemini) — размышления съедают место до JSON
+                out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=4096, timeout=min(float(profile.get("timeout") or 90), 90)),
+                                          JUDGE_SYSTEM, [{"role": "user", "content": content}]))
+            err = None
+        except Exception as e:  # noqa: BLE001
+            out, err = "", e
+        if out.strip() or pause is None:
+            break
+        time.sleep(pause)
+    if err is not None:
+        return {"score": None, "why": "судья не ответил: " + re.sub(r"(\w+://[^:/@\s]+:)[^@\s]+@", r"\1•••@", str(err))[:300]}   # пароль прокси — не в отчёт
+    if not out.strip():
+        return {"score": None, "why": "судья ответил пусто — думающая модель не успела ответить; выберите модель без долгих размышлений"}
     m = re.search(r"\{.*\}", out, re.S)
     try:
         d = json.loads(m.group(0)) if m else {}
@@ -561,6 +618,9 @@ def tools_of(events):
             out.append({"name": e.get("name", ""), "args": json.dumps(args or {}, ensure_ascii=False)[:200],
                         "result": str(e.get("result") or "")[:1500], "error": str(e.get("error") or "")[:300],
                         "ok": e.get("status") == "done"})
+        elif e.get("type") == "quick":     # Опыт 6: быстрая команда сделала дело без модели — тоже действие (судья видит его)
+            out.append({"name": "команда «" + str(e.get("title") or e.get("name") or "") + "»", "args": "{}",
+                        "result": str(e.get("result") or "")[:1500], "error": "", "ok": True})
         elif e.get("type") == "window" and e.get("do") == "play":      # быстрая команда без модели — игра открылась в окне
             out.append({"name": "open_game", "args": json.dumps({"game": e.get("game") or ""}, ensure_ascii=False),
                         "result": "игра открыта в окне Dewiar (лист «Досуг»)", "error": "", "ok": True})
@@ -807,6 +867,9 @@ async def run_scenario(core, sc, judge_prof, work, log):
 async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
     try:
         await core.say("Начнём новый разговор", timeout=30)
+        # «новый разговор» кладёт прошлый (другого испытания) в «Память/Разговоры», и поиск по записям его находил: стенд
+        # 26.11 — в «Что у меня по планам?» всплывала Казань из «Отошли от темы и вернулись», судья: «выдумала поездку»
+        shutil.rmtree(core.tmp / "ws" / "Память" / "Разговоры", ignore_errors=True)
         if (sc.get("seed") or {}).get("history"):
             # разговор до сценария (№625–628: перебитый вопрос «Выполнить?») — ПОСЛЕ «нового разговора»: раньше он
             # ставился до него и тут же стирался — модель не знала, на что «Да.» (экзамен 0.99, 15.11)
@@ -866,7 +929,7 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                 for c in check_answer(stp.get("expect"), ans):
                     res["checks"].append(dict(c, name=f"шаг {n_}: {c['name']}"))
                 if stp.get("ask"):
-                    res["checks"].append({"name": f"шаг {n_}: уточняющий вопрос", "ok": "?" in ans, "detail": ans[:120]})
+                    res["checks"].append({"name": f"шаг {n_}: уточняющий вопрос", "ok": asked_back(ans), "detail": ans[:120]})
                 for name in stp.get("no_tool") or []:
                     hit = [x for x in res["steps"][-1]["tools"] if x["name"] == name]
                     res["checks"].append({"name": f"шаг {n_}: без {name}", "ok": not hit, "detail": ", ".join(str(x.get("args"))[:80] for x in hit)})
@@ -1021,7 +1084,10 @@ def big_metrics(t, sec):
 
 def finish_result(core, res):
     j = (res.get("judge") or {}).get("score")
-    res["passed"] = (not res.get("error") and not res.get("skipped") and all(c["ok"] for c in res["checks"])
+    # судью звали, а оценки нет (не ответил, не JSON, нет связи) — это не «сдано»: стенд 3 (25.11) показал 100% «до» и «после»,
+    # а судья не поставил ни одной оценки. Такой прогон — «не оценён»: ни в сданные, ни в проваленные
+    res["unjudged"] = bool(res.get("judge") is not None and j is None and not res.get("error") and not res.get("skipped"))
+    res["passed"] = (not res.get("error") and not res.get("skipped") and not res["unjudged"] and all(c["ok"] for c in res["checks"])
                      and (j is None or j >= PASS_SCORE))
     # «не проверено» (нет браузера для Б5): не «сдано» и не «провал» — отдельный статус: всё, что проверено, прошло
     unch = [c["name"] for c in res["checks"] if c.get("unchecked")]
@@ -1040,18 +1106,20 @@ def finish_result(core, res):
 def summary(results):
     by = {}
     for r in results:
-        if r.get("skipped"):
+        if r.get("skipped") or r.get("unjudged"):
             continue
         g = by.setdefault(r["group"], {"passed": 0, "total": 0})
         g["total"] += 1
         g["passed"] += 1 if r["passed"] else 0
         if r.get("partial"):
             g["partial"] = g.get("partial", 0) + 1
-    done = [r for r in results if not r.get("skipped")]
+    unj = [r for r in results if r.get("unjudged") and not r.get("skipped")]
+    done = [r for r in results if not r.get("skipped") and not r.get("unjudged")]
     scores = [r["score"] for r in done if r.get("score") is not None]
     out = {"passed": sum(1 for r in done if r["passed"]), "total": len(done), "by_group": by,
            "partial": sum(1 for r in done if r.get("partial")),        # сдано не полностью: часть не проверить (нет браузера)
-           "avg_score": round(sum(scores) / len(scores), 1) if scores else None}
+           "avg_score": round(sum(scores) / len(scores), 1) if scores else None,
+           "unjudged": len(unj), "unjudged_why": str(((unj[0].get("judge") or {}).get("why")) or "")[:300] if unj else ""}
     big = [r["metrics"] for r in done if r.get("metrics")]
 
     def mean(xs):
@@ -1069,7 +1137,10 @@ def markdown(rep):
     lines = [f"# Экзамен Dewiar {rep['version']} — {rep['started'][:16].replace('T', ' ')}", "",
              f"Модель: **{rep['model']}**. Сдано **{s['passed']} из {s['total']}**"
              + (f" (и ещё {s['partial']} — не проверено до конца: нет браузера)" if s.get("partial") else "")
-             + (f", средняя оценка судьи {s['avg_score']}" if s.get("avg_score") is not None else "") + f", {round(rep['duration_s'] / 60)} мин.", ""]
+             + (f", средняя оценка судьи {s['avg_score']}" if s.get("avg_score") is not None else "") + f", {round(rep['duration_s'] / 60)} мин."
+             + (f" Судья: {rep['judge']}." if rep.get("judge") else ""), ""]
+    if s.get("unjudged"):
+        lines[-1:-1] = [f"⚠ Судья не оценил {s['unjudged']} сценариев — они не в счёте. Причина: {s.get('unjudged_why') or '—'}"]
     for g, v in s["by_group"].items():
         lines.append(f"- {g}: {v['passed']} из {v['total']}" + (f", не проверено до конца — {v['partial']}" if v.get("partial") else ""))
     if s.get("big"):
@@ -1151,13 +1222,27 @@ def load_partial(path):
         return None
 
 
-async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False, partial=None, resume=False, big=False):
+async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False, partial=None, resume=False, big=False,
+                   scene=False, groups=None, overrides=None, label=""):
+    """groups — только эти группы сценариев («Напоминания», «Честность»…); overrides — переключатели гипотезы для ядра
+    экзамена ({"llm.scene": True}); label — подпись прогона (стенд «до / после»)."""
     from version import VERSION
     data = json.loads(SCEN.read_text(encoding="utf-8"))
+    if groups:
+        gl = {str(g).strip().lower() for g in groups}
+        ids = {sc["id"] for sc in data["scenarios"] if sc["group"].lower() in gl}
+        only = (set(only) | ids) if only else ids
+        if not ids:
+            raise ValueError("нет таких групп: " + ", ".join(sorted(groups)) + ". Есть: "
+                             + ", ".join(sorted({sc["group"] for sc in data["scenarios"]})))
+    if only:                                   # «sit_» — все сценарии с этим началом (кабинет: «Только „Понимание ситуации“»)
+        only = {s["id"] for s in data["scenarios"] if s["id"] in only or any(o.endswith("_") and s["id"].startswith(o) for o in only)}
     scs = [s for s in data["scenarios"] if (not only or s["id"] in only) and (long or not s.get("long") or (only and s["id"] in only))
            and (big or not s.get("big") or (only and s["id"] in only))]   # большие задачи — только с --big (галочка)
+    if judge_prof and judge_prof is not profile:
+        judge_preflight(judge_prof, log)
     tmp = Path(keep) if keep else Path(tempfile.mkdtemp(prefix="dewiar-exam-"))
-    core = Core(profile, tmp / "core", log, lean=lean)
+    core = Core(profile, tmp / "core", log, lean=lean, scene=scene, overrides=overrides)
     started = dt.datetime.now()
     results = []
     prev = load_partial(partial) if (partial and resume) else None
@@ -1187,7 +1272,9 @@ async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, k
             if sc["id"] in done:
                 continue
             log(f"[{i}/{len(scs)}] {sc['group']} — {sc['title']}")
+            xr0 = _xray_count(tmp / "core")
             r = await run_scenario(core, sc, judge_prof or profile, tmp / "repos", log)
+            r["xray"] = _xray_since(tmp / "core", xr0)    # рентген ходов сценария: путь, подсказка, действия, проверки
             log(f"   {'⏭ пропущен' if r.get('skipped') else ('✅ сдан' if r['passed'] else '✗ не сдан')}"
                 + (f", судья {r['score']:g}" if r.get("score") is not None else "") + f", {r['time_s']} с")
             results.append(r)
@@ -1200,12 +1287,58 @@ async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, k
     order = {s["id"]: k for k, s in enumerate(scs)}
     results.sort(key=lambda r: order.get(r.get("id"), 0))
     rep = {"version": VERSION, "started": started.isoformat(timespec="seconds"), "duration_s": round((dt.datetime.now() - started).total_seconds()),
+           "label": label, "overrides": dict(overrides or {}),
            # проба короткой инструкции — в подписи модели: в кабинете и отчёте сразу видно, какой прогон с чем сравнивать
-           "model": (profile.get("title") or profile.get("model") or "?") + (" · короткая инструкция" if lean else ""), "lean": bool(lean),
+           "model": (profile.get("title") or profile.get("model") or "?") + (" · короткая инструкция" if lean else "") + (" · сцена разговора" if scene else ""),
+           "lean": bool(lean), "scene": bool(scene),
+           # кто судил (26.11: «вроде заработала оценка от Джемини» — а в отчёте не было видно, Gemini это или та же модель)
+           "judge": (judge_prof.get("title") or judge_prof.get("model") or "?") if judge_prof and judge_prof is not profile else "та же модель",
            "host": platform.node()[:40],
            "os": f"{platform.system()} {platform.release()}"[:60], "long": bool(long), "big": bool(big), "scenarios": results}
     rep["summary"] = summary(results)
     return rep
+
+
+def apply_overrides(conf, overrides):
+    """{"llm.scene": True, "tools.enabled_all": False} -> вложенные ключи настроек (стенд гипотез, tools/stand.py)."""
+    for k, v in (overrides or {}).items():
+        d = conf
+        *head, last = str(k).split(".")
+        for h in head:
+            if not isinstance(d.get(h), dict):
+                d[h] = {}
+            d = d[h]
+        d[last] = v
+    return conf
+
+
+def _xray_count(core_dir):
+    f = Path(core_dir) / "st" / "xray.jsonl"
+    try:
+        return sum(1 for _ in f.open(encoding="utf-8"))
+    except OSError:
+        return 0
+
+
+def _xray_since(core_dir, n0):
+    """Рентгены ходов, записанные после строки n0, — кратко (для стенда: почему сдан или не сдан)."""
+    f = Path(core_dir) / "st" / "xray.jsonl"
+    out = []
+    try:
+        lines = f.read_text(encoding="utf-8").splitlines()[n0:]
+    except OSError:
+        return out
+    for ln in lines[:20]:
+        try:
+            x = json.loads(ln)
+        except ValueError:
+            continue
+        p = x.get("prompt") or {}
+        out.append({"q": str(x.get("q") or "")[:120], "route": (x.get("route") or {}).get("label"),
+                    "tokens": sum((p.get("parts") or {}).values()) if p else 0, "parts": p.get("parts") or {},
+                    "tools": len(p.get("tools") or []), "acts": [(a.get("name"), bool(a.get("ok"))) for a in x.get("acts") or []],
+                    "checks": len(x.get("checks") or []), "t": x.get("t")})
+    return out
 
 
 def upload(rep, url, key):
@@ -1215,7 +1348,7 @@ def upload(rep, url, key):
     for r in body["scenarios"]:
         for s in r["steps"]:
             s["answer"] = (s.get("answer") or "")[:1500]
-    body["md"] = markdown(rep)                                   # кабинет отдаёт его как «Отчёт .md» без пересборки
+    body["md"] = rep.get("stand_md") or markdown(rep)            # кабинет отдаёт его как «Отчёт .md» без пересборки
     r = httpx.post(base_of(url) + "?p=/exam", json=body, headers={"Authorization": f"Bearer {norm_key(key)}"}, timeout=60)
     d = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
     if r.status_code >= 400 or not d.get("ok"):
@@ -1230,16 +1363,20 @@ def main():
     ap.add_argument("--model", default="", help="модель облака (по умолчанию первая доступная ключу)")
     ap.add_argument("--llm", help="профиль модели JSON: {kind, base_url, model, api_key}")
     ap.add_argument("--judge", help="профиль судьи JSON (по умолчанию — та же модель)")
-    ap.add_argument("--only", help="только эти сценарии: id через запятую")
+    ap.add_argument("--only", help="только эти сценарии: id через запятую; «sit_» — все с этим началом")
     ap.add_argument("--long", action="store_true", help="и долгие: фоновые задачи и код")
     ap.add_argument("--big", action="store_true", help="и большие задачи (Б1, Б3–Б7, Б11: до часа каждая, docs/HARNESS.md)")
     ap.add_argument("--out", default=".", help="куда положить отчёт")
     ap.add_argument("--upload", action="store_true", help="отправить отчёт в кабинет (тем же ключом)")
     ap.add_argument("--keep", help="папка для временных файлов ядра (не удалять — для разбора)")
     ap.add_argument("--lean", action="store_true", help="короткая инструкция модели (llm.lean_prompt) — проба")
+    ap.add_argument("--scene", action="store_true", help="«Ум Лиры», шаг 1: сцена разговора (llm.scene) — проба")
     ap.add_argument("--json-out", help="записать отчёт JSON (с md) ещё и в этот файл — так его забирает исполнитель")
     ap.add_argument("--partial", help="после каждого сценария — сделанное в этот файл (для --resume)")
     ap.add_argument("--resume", action="store_true", help="продолжить по файлу --partial: пройденные сценарии не повторять")
+    ap.add_argument("--group", default="", help="стенд гипотез: группы сценариев через запятую («Напоминания,Честность»)")
+    ap.add_argument("--set", action="append", help="стенд: переключатель «после» ключ=значение (можно несколько)")
+    ap.add_argument("--repeat", type=int, default=1, help="стенд: сколько раз гонять «до» и «после» (разброс)")
     a = ap.parse_args()
     env_llm = os.environ.get("DEWIAR_EXAM_LLM")           # исполнитель на сервере: профиль с доверенностью — не в командной строке
     if env_llm:
@@ -1255,16 +1392,29 @@ def main():
                 "cloud": True, "title": m.get("title") or m["id"]}
     else:
         ap.error("нужен --key или --llm")
-    jp = json.loads(a.judge) if a.judge else None
-    rep = asyncio.run(run_exam(prof, jp, set(a.only.split(",")) if a.only else None, a.long, keep=a.keep, lean=a.lean,
-                               log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume, big=a.big))
+    env_judge = os.environ.get("DEWIAR_EXAM_JUDGE")       # исполнитель: судья — другая модель облака (доступ — не в командной строке)
+    jp = json.loads(env_judge) if env_judge else (json.loads(a.judge) if a.judge else None)
+    if jp and jp is not prof:                         # внешний судья не оценивает — не начинаем (не тратим час и токены впустую)
+        try:
+            judge_preflight(jp, log=lambda t: print(t, flush=True))
+        except JudgeDown as e:
+            print(f"⚠ {e}", flush=True)
+            sys.exit(2)
+    if a.group or a.set or a.repeat > 1:              # стенд гипотез (core/stand.py): группы, «до / после», повторы
+        import stand
+        groups = [g.strip() for g in (a.group or "").split(",") if g.strip()] or sorted(stand.groups_list())
+        rep = asyncio.run(stand.run_stand(prof, jp, groups, {}, stand.parse_sets(a.set), max(1, min(5, a.repeat)),
+                                          log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume))
+    else:
+        rep = asyncio.run(run_exam(prof, jp, set(a.only.split(",")) if a.only else None, a.long, keep=a.keep, lean=a.lean, scene=a.scene,
+                                   log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume, big=a.big))
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     stem = f"exam-{rep['started'][:16].replace('-', '').replace(':', '').replace('T', '-')}"
     (out / f"{stem}.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
-    (out / f"{stem}.md").write_text(markdown(rep), encoding="utf-8")
+    (out / f"{stem}.md").write_text(rep.get("stand_md") or markdown(rep), encoding="utf-8")
     if a.json_out:
-        Path(a.json_out).write_text(json.dumps(dict(rep, md=markdown(rep)), ensure_ascii=False), encoding="utf-8")
+        Path(a.json_out).write_text(json.dumps(dict(rep, md=rep.get("stand_md") or markdown(rep)), ensure_ascii=False), encoding="utf-8")
     s = rep["summary"]
     print(f"\nСдано {s['passed']} из {s['total']}. Отчёт: {out / stem}.md", flush=True)
     if a.upload:

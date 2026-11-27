@@ -14,7 +14,7 @@
 "use strict";
 const SAFE_F = "safe.json", SAFE_CHECK = "dewiar-safe-v1", SAFE_IT = 600000, SAFE_MIN = 8;
 const SAFE_IDLE = 5 * 60e3, SAFE_SHOW = 15e3, SAFE_CLIP = 30;
-const SF = { k: null, kid: "", list: [], q: "", view: "list", cur: "", edit: null, idle: 0, show: 0, busy: false };
+const SF = { k: null, kid: "", list: [], q: "", view: "list", cur: "", edit: null, idle: 0, show: 0, busy: false, bio: false, bioMsg: "" };
 const SF_IC = {
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/><circle cx="12" cy="15.3" r="1.3"/>',
   open: '<rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8 10.5V8a4 4 0 0 1 7.6-1.7"/><circle cx="12" cy="15.3" r="1.3"/>',
@@ -22,7 +22,8 @@ const SF_IC = {
   back: '<path d="m14.5 6-6 6 6 6"/>', eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   page: '<path d="M6.5 3.5h8l4 4v13h-12z"/><path d="M14.5 3.5v4h4M9.5 12h5M9.5 15.5h5"/>', go: '<path d="m9.5 6 6 6-6 6"/>',
-  link: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>' };
+  link: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  finger: '<path d="M7.5 18.5c1-1.7 1.5-3.6 1.5-6.5a3 3 0 0 1 6 0c0 1.2-.1 2.4-.3 3.5"/><path d="M12 12c0 3.4-.8 6.2-2.3 8.5M5 15.5c.4-1.1.5-2.3.5-3.5a6.5 6.5 0 0 1 11.6-4M18.4 11c.1.3.1.7.1 1 0 2.6-.4 5-1.2 7.1M14.6 19.5c.4-1 .7-2 .9-3"/>' };
 const sfSvg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SF_IC[k]}</svg>`;
 
 /* ---------- хранение (шифром) и синхронизация ---------- */
@@ -117,6 +118,39 @@ function safeLock() {
 function safeSecure(on) { try { if (D.secureScreen) D.secureScreen(!!on); } catch (e) { } }
 function safeIdle() { clearTimeout(SF.idle); if (SF.k) SF.idle = setTimeout(() => { safeLock(); toast("Сейф закрыт — 5 минут без дела"); }, SAFE_IDLE); }
 
+/* ---------- отпечатком, лицом или PIN телефона (идея №224, 15 голосов) ----------
+   Мастер-пароль — один раз, дальше сейф открывает экран блокировки телефона: ключ сейфа (не пароль) хранит Android под
+   защитой отпечатка/PIN (SafeKey.java). Сменили мастер-пароль, отпечатки или блокировку — снова паролем, и предложим опять. */
+const sfBio = () => { try { return typeof D.safeBioState === "function" ? String(D.safeBioState()) : "none"; } catch (e) { return "none"; } };
+function safeBioOpen() {
+  if (SF.bio || SF.k || sfBio() !== "on" || !safeStore().meta) return false;
+  SF.bio = true; SF.bioMsg = ""; D.safeBioOpen(); return true;
+}
+function safeBioOn() {                               // «Включить»: ключ открытого сейфа — под защиту экрана блокировки
+  if (!SF.k || SF.bio) return;
+  // №961: телефону — обычный base64 (+ / =), не «для ссылок»: старый Android-декодер молча выкидывал - и _ и портил ключ
+  const b = DC().b64e(SF.k).replace(/-/g, "+").replace(/_/g, "/");
+  SF.bio = true; D.safeBioSave(b + "===".slice((b.length + 3) % 4));
+}
+N.on("safebio", (e) => {
+  SF.bio = false;
+  if (e.op === "save") {
+    if (e.ok) { prefSet("safe_bio_no", ""); toast("Готово: сейф будет открываться отпечатком или PIN телефона"); }
+    else if (e.error !== "cancel") toast("Не получилось включить вход отпечатком — сейф по-прежнему открывается мастер-паролем");
+    if ($("#safe-body")) safeRender(); return;
+  }
+  const st = safeStore();
+  if (e.ok && e.key && st.meta) {
+    const k = DC().b64d(e.key);
+    let good = false; try { good = DC().fromUtf8(DC().unseal(k, DC().b64d(st.meta.check))) === SAFE_CHECK; } catch (x) { good = false; }
+    if (good) { safeKeep(k, st); safeRender(); return; }
+    k.fill(0); D.safeBioForget();                    // ключ не подошёл: сменили мастер-пароль (здесь или на другом устройстве)
+    // №961: или ключ сохранился порченым (0.9.83) — не утверждаем, что пароль сменился
+    SF.bioMsg = "Отпечаток не открыл сейф — откройте мастер-паролем, и вход отпечатком можно будет включить снова.";
+  } else if (e.error === "changed") SF.bioMsg = "Отпечатки или блокировка экрана сменились — откройте мастер-паролем, и вход отпечатком можно включить снова.";
+  if ($("#safe-body")) safeRender();
+});
+
 /* ---------- запись с телефона ---------- */
 const sfIso = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
 function safePut(x) {
@@ -155,6 +189,7 @@ const sfLines = (x) => String(x.value || "").split("\n").filter(l => l.trim()).l
 function openSafe() {
   if (kidsOn()) { showBot("В детском режиме сейф закрыт.", "err"); return; }
   SF.view = SF.k ? "list" : SF.view; safeRender(); openSheet("#sh-safe");
+  if (!SF.k && safeBioOpen()) return;               // включён вход отпечатком — сразу системное подтверждение
   setTimeout(() => { const f = $(SF.k ? "#sf-q" : "#sf-pw"); if (f && $("#sh-safe.on")) f.focus(); }, 280);
 }
 function safeRender() {
@@ -173,15 +208,18 @@ function sfLocked(box) {
     <p>${fresh ? (linked ? "Пароли с компьютера появятся здесь, когда там включат «Синхронизировать сейф между моими устройствами» (студия → «Сейф паролей»). Или заведите сейф прямо здесь — придумайте мастер-пароль."
         : "Сейф приходит с компьютера синхронизацией: подключите телефон в «Устройствах». Или заведите сейф прямо здесь — придумайте мастер-пароль.")
       : `Мастер-пароль сейфа — тот, что вы придумали, когда включали синхронизацию сейфа. ${Object.keys(st.items).length ? `Записей:&nbsp;${Object.keys(st.items).length}.` : ""}`}</p>
+    ${!fresh && sfBio() === "on" ? `<button class="btn p w sf-biob" id="sf-bio" type="button">${sfSvg("finger")}Открыть отпечатком</button><p class="sf-or">или мастер-паролем</p>` : ""}
+    ${SF.bioMsg ? `<p class="res bad">${esc(SF.bioMsg)}</p>` : ""}
     <form id="sf-gate" autocomplete="off">
       <label class="sf-pwf"><input type="password" id="sf-pw" placeholder="${fresh ? "Придумайте мастер-пароль" : "Мастер-пароль"}" autocomplete="${fresh ? "new-password" : "current-password"}" spellcheck="false" aria-label="Мастер-пароль сейфа">
         <button type="button" class="sf-ib" id="sf-eye" aria-label="Показать мастер-пароль" aria-pressed="false">${sfSvg("eye")}</button></label>
       ${fresh ? `<label class="sf-pwf"><input type="password" id="sf-pw2" placeholder="Ещё раз" autocomplete="new-password" spellcheck="false" aria-label="Мастер-пароль ещё раз"></label>` : ""}
-      <button class="btn p w" id="sf-open" type="submit">${fresh ? "Создать сейф" : "Открыть"}</button>
+      <button class="btn ${!fresh && sfBio() === "on" ? "" : "p "}w" id="sf-open" type="submit">${fresh ? "Создать сейф" : "Открыть"}</button>
       <p class="res" id="sf-res" role="status"></p>
     </form>
     <p class="hint sf-fine">${fresh ? `Не короче ${SAFE_MIN} знаков. Мастер-пароль нигде не хранится и не восстанавливается — запишите его в надёжное место.`
       : "Пароли лежат на телефоне шифром и открываются только здесь. Мастер-пароль и открытые пароли никуда не отправляются — на ваши устройства ходит только шифр."}</p></div>`;
+  if ($("#sf-bio")) $("#sf-bio").onclick = () => safeBioOpen();
   $("#sf-eye").onclick = () => { const i = $("#sf-pw"), on = i.type === "password"; i.type = on ? "text" : "password"; if ($("#sf-pw2")) $("#sf-pw2").type = i.type; $("#sf-eye").setAttribute("aria-pressed", String(on)); };
   $("#sf-gate").onsubmit = async (e) => {
     e.preventDefault(); if (SF.busy) return;
@@ -203,13 +241,23 @@ function sfList(box) {
   const keep = document.activeElement && document.activeElement.id === "sf-q";
   box.innerHTML = `<div class="sf-bar"><label class="sf-find">${sfSvg("find")}<input type="search" id="sf-q" placeholder="Найти: почта, банк, вайфай…" autocomplete="off" spellcheck="false" aria-label="Поиск в сейфе" value="${esc(SF.q)}"></label>
       <button class="sf-add" id="sf-add" aria-label="Добавить запись">${sfSvg("plus")}</button></div>
+    ${sfBio() === "off" && prefGet("safe_bio_no") !== "1" ? `<div class="sf-offer">${sfSvg("finger")}<span><b>Открывать отпечатком?</b><small>Или лицом, или PIN телефона — без мастер-пароля.</small></span>
+      <button class="btn p" id="sf-bio-on">Включить</button><button class="sf-ib" id="sf-bio-no" aria-label="Не сейчас">✕</button></div>` : ""}
     <div class="sf-list" id="sf-list"></div>
-    <p class="hint sf-fine">Сейф закроется сам — при сворачивании и через 5 минут без дела.</p>`;
+    <p class="hint sf-fine">Сейф закроется сам — при сворачивании и через 5 минут без дела.</p>${sfBio() === "on" ? `<p class="hint sf-fine sf-bioline">Открывается отпечатком · <a href="#" id="sf-bio-off">выключить</a></p>`
+      : sfBio() === "off" && prefGet("safe_bio_no") === "1" ? `<p class="hint sf-fine sf-bioline">Открывать отпечатком или PIN телефона · <a href="#" id="sf-bio-on2">включить</a></p>`
+      : sfBio() === "none" ? `<p class="hint sf-fine sf-bioline">Чтобы открывать отпечатком, включите на телефоне блокировку экрана (отпечаток, лицо или PIN)</p>` : ""}`;
+  /* 24.11 (человек: «на телефоне всё по-старому, через пароль, отпечаток не предлагает»): карточку «Открывать отпечатком?»
+     закрыли крестиком — она больше не показывалась, и включить было негде; без блокировки экрана — молчали почему */
   sfRows();
   const q = $("#sf-q");
   q.oninput = () => { SF.q = q.value; sfRows(); safeIdle(); };
   if (keep) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   $("#sf-add").onclick = () => { SF.edit = { kind: "" }; SF.view = "form"; safeRender(); };
+  if ($("#sf-bio-on")) $("#sf-bio-on").onclick = () => safeBioOn();
+  if ($("#sf-bio-on2")) $("#sf-bio-on2").onclick = (e) => { e.preventDefault(); safeBioOn(); };
+  if ($("#sf-bio-no")) $("#sf-bio-no").onclick = () => { prefSet("safe_bio_no", "1"); safeRender(); };
+  if ($("#sf-bio-off")) $("#sf-bio-off").onclick = (e) => { e.preventDefault(); D.safeBioForget(); prefSet("safe_bio_no", "1"); toast("Вход отпечатком выключен — сейф открывается мастер-паролем"); safeRender(); };
 }
 function sfRows() {
   const l = sfHits(), box = $("#sf-list");
@@ -288,6 +336,6 @@ function sfForm(box) {
 }
 $("#sf-lockbtn").onclick = () => { safeLock(); toast("Сейф закрыт"); };
 // закрыть сейф: свернули приложение, закрыли лист
-document.addEventListener("visibilitychange", () => { if (document.hidden && SF.k) safeLock(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden && SF.k && !SF.bio) safeLock(); });   // системное «подтвердите, что это вы» — не сворачивание
 new MutationObserver(() => { if (SF.k && !$("#sh-safe").classList.contains("on")) safeLock(); }).observe($("#sh-safe"), { attributes: true, attributeFilter: ["class"] });
 $("#sh-safe").addEventListener("pointerdown", () => { if (SF.k) safeIdle(); }, true);

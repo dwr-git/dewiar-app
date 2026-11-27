@@ -20,7 +20,7 @@ from settings import MODELS_DIR, STATE_DIR
 log = logging.getLogger("dewiar.speaker")
 MODEL_NAME = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/" + MODEL_NAME
-MODEL_SHA256 = "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"
+MODEL_SHA256 = "53cab20ba8f2eb2f6e2d89ecc18e88ef3222169b61b4419cbc13666744a4574b"   # №914/916 (20.11): прежняя сумма не от этого файла — «контрольная сумма не совпала», голос в «Суфлёре» не запоминался
 OWNER_FILE = STATE_DIR / "voiceprints" / "_owner.json"
 SAME, OTHER = 0.55, 0.40        # косинус: выше SAME — вы, ниже OTHER — точно не вы; между — кто ближе (Diarizer)
 RATE = 16000

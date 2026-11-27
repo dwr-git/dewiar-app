@@ -269,6 +269,8 @@
  "pci.pc": "computer",
  "pci.off": "No computer linked yet",
  "pci.on_p": "You can hand big jobs to it right from here — by voice or text.",
+ "pci.idle": "Computer “{name}” is offline right now",
+ "pci.idle_p": "It's off or Dewiar isn't running on it. It will pick up your jobs when it's back on; urgent ones go to the Dewiar cloud.",
  "pci.off_p": "Install Dewiar on your computer (Windows, Linux or Mac) and sign in to the same account — your phone and computer become one team.",
  "pci.dl": "Download for computer",
  "pci.ask_h": "Hand a job to the computer from here",
@@ -592,6 +594,7 @@
  "insight.src.found0": "Nothing found — check the link",
  "tool.search.tail": "(These are page snippets. If the full text is needed — a poem, an article, instructions — open the link: read_webpage.)",
  "tool.note.read": "You are asked to read an existing work (a poem, a fable, a fairy tale). Don't compose or paraphrase anything — the author's exact text is needed. If you remember it word for word to the last line, read it in full; if you're unsure of even one line, search (web_search), open the page with the text (read_webpage) and read it in full, word for word, to the end, starting with the title and author. A search snippet is not the text. Don't stop halfway and don't ask \"shall I continue?\".",
+ "hud.push.open.plg": "Open the plugin",
  "hud.push.open.insight": "Open in Radar",
  "insight.read.lira": "Lira's take",
  "insight.read.why": "Why it matters",
@@ -793,5 +796,9 @@
  "nav.learn.tip": "A week with Lira, video lessons, questions and answers, short phrases",
  "nav.memsoul": "Memory and soul",
  "nav.memsoul.tip": "What Lira remembers, the diary, soul, constitution and what she knows about you",
- "nav.diary.tab": "Diary"
+ "nav.diary.tab": "Diary",
+ "insight.mind.acc.wait": "forecasts not checked yet: {n} waiting for their date, the nearest — {d}",
+ "insight.mind.acc.none": "no forecasts yet — they appear after an evolution",
+ "insight.mind.evolved": "Mind v{v}: theses {th}, new forecasts {h}, checked {c}",
+ "insight.mind.evolve.same": "The mind thought it over — nothing new yet: forecasts are checked when their date comes"
 }

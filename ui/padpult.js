@@ -106,6 +106,7 @@
   function live() {
     if (PU.active || !PU.on) return;
     const t = PU.lead && Date.now() - PU.lead.seen < 60000 ? `Заявка с сайта: ${PU.lead.name || "посетитель"}`
+      : PU.plug && Date.now() - PU.plug.seen < 3600e3 ? `${PU.plug.src}: ${PU.plug.t}${PU.plug.n > 1 ? ` · и ещё ${PU.plug.n - 1}` : ""}`
       : PU.state === "thinking" ? (PU.steps.length ? `${PU.who}: ${PU.steps[PU.steps.length - 1].t}` : `${PU.who} думает над вопросом`)
       : PU.state === "speaking" ? `${PU.who} отвечает` : "";
     tab.classList.toggle("live", !!t);
@@ -159,6 +160,13 @@
     if (PU.active) drawQ(); else live();
   });
   core.on("diary", () => { if (PU.active) load(); else PU.at = 0; });
+  // Jira: задачу закрыли — точка на круге сразу (26.11); владелец 26.11: «событие проходит слишком незаметно» — свежее
+  // ещё и карточкой сверху «Пульта» и строкой над листом (дышит точка на вкладке), пока не открыли или не прошёл час
+  core.on("plugin_events", (e) => {
+    PU.at = 0;
+    if (e && e.t) PU.plug = { src: e.src || "Плагин", t: e.t, n: +e.n || 1, go: e.go || "skills", ts: Date.now() / 1000, seen: Date.now() };
+    if (PU.active) load(); else live();
+  });
   core.on("insight", () => { PU.at = 0; if (PU.active && PU.state === "idle") load(); });
   core.on("sitechat", (e) => {
     const r = ((e && e.recent) || [])[0];
@@ -196,9 +204,11 @@
      Точки — настоящее: записи дневника (что Лира сделала), находки Радара, заявки с сайта, напоминания и дела. Наведите —
      что это, нажмите — откроется в студии. Думает — по кругу бежит свет, в центре вопрос и шаги. */
   const KIND = { diary: ["Дневник", "diary"], radar: ["Радар", "insight"], lead: ["Заявка с сайта", "clients"],
-                 remind: ["Напоминание", "reminders"], job: ["Дело по расписанию", "reminders"] };
+                 remind: ["Напоминание", "reminders"], job: ["Дело по расписанию", "reminders"], plugin: ["Плагин", "skills"] };
   // находка Радара — сразу статья в «читалке» (владелец 17.11: «из Пульта открывается просто Радар, а не статья»)
-  const goOf = (x) => x.k === "radar" && x.id ? "insight:" + x.id : KIND[x.k][1];
+  // событие плагина (26.11: Jira — кто завёл, перевёл, закрыл) — его страница; подпись — имя плагина
+  const goOf = (x) => x.k === "radar" && x.id ? "insight:" + x.id : x.k === "plugin" && x.go ? x.go : KIND[x.k][1];
+  const kindOf = (x) => x.k === "plugin" && x.src ? x.src : KIND[x.k][0];
   const H12 = 12 * 3600;
   const left = (ts) => { const m = Math.round((ts - Date.now() / 1000) / 60); if (m < 1) return "сейчас";
     const h = Math.floor(m / 60), mm = m % 60; return "через " + (h ? `${h} ч ` : "") + (mm || !h ? `${mm} мин` : "").trim(); };
@@ -251,7 +261,7 @@
       <g class="pu-ticks">${ticks}</g><g class="pu-hours">${labels}</g>
       <path class="pu-hand" d="M${hx.toFixed(1)} ${hy.toFixed(1)}L${nx.toFixed(1)} ${ny.toFixed(1)}"/>
       ${think ? `<g class="pu-sweep" style="transform-origin:${cx}px ${cy}px"><path d="${arc(an - 0.9, an, R)}"/></g>` : ""}
-      <g class="pu-ev">${ev.map((x, i) => `<g class="e ${x.k}${x.was ? " was" : ""}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(hhmm(x.ts) + " · " + KIND[x.k][0] + ": " + x.t)}"><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="9" class="hit"/><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="${x.k === "lead" ? 6 : x.was ? 3.8 : 4.6}" class="dot"/></g>`).join("")}</g>
+      <g class="pu-ev">${ev.map((x, i) => `<g class="e ${x.k}${x.was ? " was" : ""}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(hhmm(x.ts) + " · " + kindOf(x) + ": " + x.t)}"><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="9" class="hit"/><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="${x.k === "lead" ? 6 : x.was ? 3.8 : 4.6}" class="dot"/></g>`).join("")}</g>
       <circle class="pu-now" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="6"/>`;
     // центр: время, что дальше; лента «Сегодня» справа на широком листе
     const nextOne = ev.find(x => x.ts > now);
@@ -283,8 +293,8 @@
     tip.hidden = !x;
     if (!x) return;
     const now = Date.now() / 1000;
-    tip.innerHTML = `<p class="pu-k ${x.k}">${esc(KIND[x.k][0])} · ${esc(hhmm(x.ts))}</p><p>${esc(x.t)}</p>`
-      + (x.src || x.ts > now ? `<small>${esc([x.src, x.ts > now ? left(x.ts) : ""].filter(Boolean).join(" · "))}</small>` : "");
+    tip.innerHTML = `<p class="pu-k ${x.k}">${esc(kindOf(x))} · ${esc(hhmm(x.ts))}</p><p>${esc(x.t)}</p>`
+      + ((x.src && x.k !== "plugin") || x.ts > now ? `<small>${esc([x.k === "plugin" ? "" : x.src, x.ts > now ? left(x.ts) : ""].filter(Boolean).join(" · "))}</small>` : "");
     const st = el("#pu-stage"), tw = Math.min(240, st.clientWidth - 24);
     tip.style.width = tw + "px";
     tip.style.left = Math.max(12, Math.min(st.clientWidth - tw - 12, x.x - tw / 2)) + "px";
@@ -311,7 +321,7 @@
     const steps = nt.concat(mem, PU.steps.map(s => ({ t: s.t, s: s.s })));
     if (PU.state === "thinking" && !PU.steps.some(s => s.s === "run")) steps.push({ t: "Собираю ответ", s: "run" });
     if (PU.state === "speaking") steps.push({ t: "Отвечаю", s: "done" });
-    el("#pu-steps").innerHTML = steps.slice(-5).map(s => `<li class="${s.s === "run" ? "run" : s.s === "error" ? "err" : "ok"}${s.k ? " " + s.k : ""}"><i aria-hidden="true"></i>${esc(s.t)}</li>`).join("");
+    el("#pu-steps").innerHTML = steps.slice(-3).map(s => `<li class="${s.s === "run" ? "run" : s.s === "error" ? "err" : "ok"}${s.k ? " " + s.k : ""}"><i aria-hidden="true"></i>${esc(s.t)}</li>`).join("");
   }
   const hhmm = (ts) => { try { return new Date(ts * 1000).toLocaleTimeString(window.dwLocale ? dwLocale() : "ru", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } };
   const ago = (ts) => { const m = Math.round((Date.now() / 1000 - ts) / 60); return m < 2 ? "только что" : m < 60 ? `${m} мин назад` : `в ${hhmm(ts)}`; };
@@ -319,7 +329,14 @@
     const d = PU.data || {}, c = cfg(), out = [];
     const lead = PU.lead || ((d.leads || [])[0] && Date.now() / 1000 - d.leads[0].ts < 3600 ? d.leads[0] : null);
     const lb = el("#pu-lead");
-    lb.hidden = !lead;
+    const plug = !lead && PU.plug && Date.now() - PU.plug.seen < 3600e3 ? PU.plug : null;
+    lb.hidden = !lead && !plug;
+    lb.classList.toggle("plug", !!plug);
+    if (plug) {
+      lb.innerHTML = `<p class="pu-k"><i class="pu-live" aria-hidden="true"></i>${esc(plug.src)} · ${esc(ago(plug.ts))}</p>
+        <b>${esc(plug.t)}</b><span>${plug.n > 1 ? `и ещё ${plug.n - 1} — точками на круге` : "Точкой на круге — наведите, чтобы прочитать"}</span>
+        <div class="pu-row"><button type="button" class="pu-btn main" data-go="${esc(plug.go)}">Открыть</button><button type="button" class="pu-btn" data-plug-x="1">Понятно</button></div>`;
+    }
     if (lead) {
       lb.innerHTML = `<p class="pu-k"><i class="pu-live" aria-hidden="true"></i>Заявка с сайта · ${esc(ago(lead.ts))}</p>
         <b>${esc(lead.name || "Посетитель сайта")}</b><span>Контакт и разговор — в «Клиентах»</span>
@@ -344,7 +361,9 @@
     const b = e.target.closest("[data-go]"); if (!b) return;
     const a = A(); if (a && a.open_settings) a.open_settings(b.dataset.go);
     if (b.dataset.go === "clients") PU.lead = null;
+    if (PU.plug && b.dataset.go === PU.plug.go) { PU.plug = null; live(); }
   });
+  box.addEventListener("click", (e) => { if (e.target.closest("[data-plug-x]")) { PU.plug = null; live(); drawCards(); } });
   function draw() {
     if (!PU.active) return;
     head(); drawCards(); drawQ();
