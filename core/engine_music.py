@@ -117,7 +117,9 @@ class MusicMixin:
         if not d.get("weather"):
             lines.append("Погода: данных нет" + ("" if d.get("city") else " (город не задан)") + " — о погоде, температуре и городе "
                          "не говори ничего, не угадывай.")
-        t = d.get("today") or {}
+        t = d.get("today")
+        cal_ok = t is not None                     # №1143 (28.11): календарь не прочитался — это не «дел нет»
+        t = t or {}
         # владелец 12.11 (и 28.10 — про итог дня): «зачем мне в утренней сводке каждый будний день „не забыть карту в
         # столовую“?» — привычки (каждый день и по будням) и сами дела по расписанию (итог дня, эта сводка) — не дела дня
         hids, htexts = self._habits() if hasattr(self, "_habits") else (set(), set())
@@ -125,7 +127,9 @@ class MusicMixin:
         hn = {norm(v) for v in htexts}
         todo = [x for x in t.get("todo") or [] if x.get("kind") != "job" and str(x.get("id") or "") not in hids
                 and norm(x.get("title")) not in hn]
-        lines.append("Дела и напоминания на сегодня: " + ("; ".join(f"{x['time']} {x['title']}".strip() for x in todo) or "нет") + ".")
+        lines.append("Дела и напоминания на сегодня: " + ("; ".join(f"{x['time']} {x['title']}".strip() for x in todo) or "нет") + "."
+                     if cal_ok else "Дела и напоминания на сегодня: календарь сейчас не прочитался — о делах дня не говори "
+                     "«их нет»; скажи коротко, что список дел посмотреть не получилось.")
         if len(todo) < len(t.get("todo") or []):
             lines.append("Повторяющиеся каждый день напоминания-привычки и дела по расписанию (итог дня и т. п.) — не дела дня: "
                          "не называй их, даже если узнаешь о них сама.")
@@ -137,7 +141,7 @@ class MusicMixin:
         y = (now.date() - timedelta(days=1)).isoformat()
         sy = self.money.summary(y, y)
         sm = self.money.summary(now.date().replace(day=1).isoformat(), now.date().isoformat())
-        for c in sm["by_currency"][:1]:
+        for c in sm["by_currency"][:3]:              # №1143: несколько валют — каждая (не только первая)
             cy = next((x for x in sy["by_currency"] if x["currency"] == c["currency"]), None)
             lines.append(f"Деньги: вчера потрачено {fmt(cy['expense'] if cy else 0, c['currency'])}; с начала месяца доходы "
                          f"{fmt(c['income'], c['currency'])}, расходы {fmt(c['expense'], c['currency'])}.")
@@ -286,7 +290,10 @@ class MusicMixin:
             ws = [w for w in t.split() if len(w) >= 4]
             if not ws or len(t.split()) > 3:
                 return False
-            return any(sum(w[:4] in hs for w in ws) * 2 >= len(ws) for hs in hstems if hs)
+            # №1145 (28.11): «Оплатить счёт» при привычке «Оплатить интернет» — совпал только глагол; дело — разное.
+            # В счёт идут слова-предметы (карту, обед), а не одни глаголы (оплатить, взяла)
+            verb = lambda w: re.search(r"(ть|ться|ла|ло|ли|лся|лась)$", w)   # noqa: E731
+            return any(sum(w[:4] in hs and not verb(w) for w in ws) * 2 >= len(ws) for hs in hstems if hs)
 
         def habit(title, rid=""):
             t, r = norm(title), str(rid or "")
@@ -614,7 +621,8 @@ class MusicMixin:
         if act and not (self.radio.playing or self.radio.paused):
             import tools as _tools
             explicit = re.search(r"нажми|жми|кнопк|play|плей|трек|песн|воспроизвед|проигрыв|пауз", text.lower())
-            if explicit or (_tools.media_players() or 0) > 0 or self._music_service() == "yandex":
+            # №1156 (28.11): прямая голосовая команда — по тем же правам, что и у модели: «Кнопки плеера» выключены — не жмём
+            if (explicit or (_tools.media_players() or 0) > 0 or self._music_service() == "yandex") and self.toolbox.policy("media_control")[0]:
                 return self._player_cmd(act, text)
             if act == "play":                             # ни радио, ни открытого плеера: снова последняя станция
                 last = self.radio.last
@@ -884,10 +892,29 @@ class MusicMixin:
             self._say_quick("Отменил, компьютер не выключаю." if was else "Выключение и так не запланировано.", text)
             return True
         act = c["action"]
-        msg = self.power.schedule(act, on_error=lambda m: self.note(m))
-        self.emit("power", action=act, seconds=60 if act in ("shutdown", "reboot", "logout") else 0)
-        log.info("⏻ %s → %s", text, act)
-        self._say_quick(msg, text)
+
+        def go():
+            msg = self.power.schedule(act, on_error=lambda m: self.note(m))
+            self.emit("power", action=act, seconds=60 if act in ("shutdown", "reboot", "logout") else 0)
+            log.info("⏻ %s → %s", text, act)
+            return msg
+        if not _conf:
+            self._say_quick(go(), text)
+            return True
+        # №1155 (28.11): в «Умениях» у питания включено «спрашивать» — и голосовая команда спрашивает, как и модель.
+        # Отмену выключения — без вопроса (выше)
+        what = {"shutdown": "Выключить компьютер", "reboot": "Перезагрузить компьютер", "logout": "Выйти из системы",
+                "sleep": "Отправить компьютер в сон", "hibernate": "Отправить компьютер в сон", "lock": "Заблокировать экран"}.get(act, "Выполнить: " + act)
+        self.emit("heard", text=text)
+        self.set_state("idle")
+
+        def run():
+            ok = self.confirm(what + "?", timeout=60)
+            if not ok:
+                self.announce("Хорошо, не трогаю." if ok is False else "Ответа нет — ничего не делаю.")
+                return
+            self.announce(go())
+        threading.Thread(target=run, name="power-ask", daemon=True).start()
         return True
 
     def _obsidian_index_info(self):

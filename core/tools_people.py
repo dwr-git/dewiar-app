@@ -186,7 +186,7 @@ def t_client_deal(a, ctx):
     """Сделка: новая или движение по этапам. «Ромашке выставили счёт на 1200 за коробки, оплатить до пятницы» — счёт;
     «Ромашка оплатила» — оплачено (и в доходы, если не выключено); «Иванов отказался» — отказ."""
     from clients import ClientError
-    from deals import STAGES, DealError, fmt_amount, human_date, stage_of, to_money
+    from deals import STAGES, DealAmbiguous, DealError, fmt_amount, human_date, stage_of, to_money
     C = _clients(ctx)
     stage = stage_of(a.get("stage") or "") or ""
     try:
@@ -195,6 +195,8 @@ def t_client_deal(a, ctx):
         if not a.get("new"):
             try:
                 did = C.deal_find(cid, a.get("title") or "", strict=bool(a.get("title")) and not stage_of(a.get("title") or ""))
+            except DealAmbiguous:
+                raise                                    # №1160: два неоплаченных счёта и «оплатил» — спросить какой, а не новая сделка
             except DealError:
                 did = ""
         if did:
@@ -221,7 +223,7 @@ def t_client_deal(a, ctx):
 def t_deal_remind(a, ctx):
     """«Напомни Ромашке об оплате» — вежливое письмо клиенту о счёте (почта) или текст, чтобы отправить самому."""
     from clients import ClientError
-    from deals import DealError
+    from deals import STAGES as STAGES_, DealError
     C = _clients(ctx)
     try:
         cid = C.find(a.get("who") or "")
@@ -230,7 +232,12 @@ def t_deal_remind(a, ctx):
             raise ToolError("у этого клиента нет выставленных неоплаченных счетов")
         if a.get("title"):
             did = C.deal_find(cid, a.get("title") or "")
-            ds = [d for d in ds if d["id"] == did] or ds
+            got = [d for d in ds if d["id"] == did]
+            if not got:                                  # №1160: названная сделка уже не ждёт оплаты — так и сказать, а не другая
+                x = next((d for d in C.deals(cid=cid) if d["id"] == did), None)
+                raise ToolError(f"сделка «{x['title'] if x else a.get('title')}» не ждёт оплаты"
+                                + (f" — она на этапе «{STAGES_[x['stage']].lower()}»" if x and x.get("stage") in STAGES_ else ""))
+            ds = got
         d = ds[0]
         s = ctx.get("settings")
         me = ((s.get("close") or {}).get("name") or s.get("user_name") or "") if s else ""

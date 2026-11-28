@@ -59,6 +59,8 @@ def collect(fetch, sources, now=None, hours=HOURS, per_source=25, limit=140):
         for x in items[:per_source]:
             url, title = str(x.get("url") or ""), re.sub(r"\s+", " ", str(x.get("title") or "")).strip()
             ts = int(x.get("ts") or 0)
+            if ts > now + 3600:                    # №1146: дата «из будущего» — ошибка ленты: как без даты (в конец, не первой)
+                ts = 0
             if not url or not title or (ts and ts < now - hours * 3600) or STOP.search(title):
                 continue
             k = I.norm_link(url) or title.lower()

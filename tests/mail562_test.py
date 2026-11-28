@@ -50,6 +50,7 @@ class SMTP(socketserver.StreamRequestHandler):
                     data += l[1:] if l.startswith(b"..") else l
                 SENT.append(data); self.w("250 queued")
             elif cmd == "QUIT": self.w("221 bye"); return
+            elif cmd.startswith("RCPT TO") and "nobody@" in cmd.lower(): self.w("550 no such user")   # №1157: один адресат отклонён
             else: self.w("250 ok")
 
 
@@ -76,12 +77,12 @@ def letter(subj, frm, html=True, plain=True):
     return m.as_bytes()
 
 
-ST = {"caps": "IMAP4rev1 AUTH=PLAIN MOVE UIDPLUS", "list": "special", "cmds": []}
+ST = {"caps": "IMAP4rev1 AUTH=PLAIN MOVE UIDPLUS", "list": "special", "cmds": [], "deleted": set(), "store_no": False}
 F = {}
 
 
 def reset(list_kind="special", caps="IMAP4rev1 AUTH=PLAIN MOVE UIDPLUS"):
-    ST.update(list=list_kind, caps=caps, cmds=[])
+    ST.update(list=list_kind, caps=caps, cmds=[], deleted=set(), store_no=False)
     F.clear()
     F["INBOX"] = {1: letter("Счёт за ноябрь", "Бухгалтерия <buh@corp.example>"), 2: letter("Регистрация на сессию", "Александр Панов <panov@tadviser.example>"),
                   3: letter("Только HTML", "Рассылка <news@shop.example>", plain=False)}
@@ -128,6 +129,8 @@ class IMAP(socketserver.StreamRequestHandler):
                     else:
                         self.w(f"* {uid} FETCH (UID {uid})")
                 self.w(f"{tag} OK done")
+            elif cmd.startswith("UID SEARCH DELETED"):     # помеченные «удалено» — свои и чужие (№1158)
+                self.w("* SEARCH " + " ".join(str(k) for k in sorted(u for u in F.get(cur, {}) if (cur, u) in ST["deleted"]))); self.w(f"{tag} OK done")
             elif cmd.startswith("UID SEARCH"): self.w("* SEARCH " + " ".join(str(k) for k in sorted(F.get(cur, {})))); self.w(f"{tag} OK done")
             elif cmd.startswith("UID MOVE") or cmd.startswith("UID COPY"):
                 _, op, uid, dest = rest.split(" ", 3); dest = unq(dest); uid = int(uid)
@@ -135,11 +138,13 @@ class IMAP(socketserver.StreamRequestHandler):
                 F[dest][uid] = F[cur][uid]
                 if op.upper() == "MOVE": del F[cur][uid]
                 self.w(f"{tag} OK done")
-            elif cmd.startswith("UID STORE"): self.w(f"{tag} OK done")
+            elif cmd.startswith("UID STORE"):
+                if ST["store_no"]: self.w(f"{tag} NO read-only mailbox"); continue
+                ST["deleted"].add((cur, int(rest.split(" ")[2]))); self.w(f"{tag} OK done")
             elif cmd.startswith("UID EXPUNGE") or cmd.startswith("EXPUNGE"):
                 uid = int(rest.split(" ")[2]) if cmd.startswith("UID") else None
                 for u in list(F[cur]):
-                    if uid in (None, u) and any(f"UID STORE {u} +FLAGS.SILENT (\\DELETED)" == c.upper() for c in ST["cmds"]): del F[cur][u]
+                    if uid in (None, u) and (cur, u) in ST["deleted"]: del F[cur][u]
                 self.w(f"{tag} OK done")
             elif cmd.startswith("LOGOUT"): self.w("* BYE"); self.w(f"{tag} OK bye"); return
             else: self.w(f"{tag} OK")
@@ -204,6 +209,55 @@ except M.MailError as e:
 ok("не нашла папку «Спам»" in err and 1 in F["INBOX"], f"нет папки «Спам» — письмо не трогаем, так и говорим: {err!r}")
 res = mm.manage("1", "trash")
 ok(res["permanent"] and 1 not in F["INBOX"], "нет корзины — удалено совсем, и это видно (permanent)")
+# №1158 (28.11): без UIDPLUS обычный EXPUNGE стирает все помеченные «удалено» письма папки, а не только это
+trash, junk = reset("names", caps="IMAP4rev1 AUTH=PLAIN")
+ST["deleted"].add(("INBOX", 3))                          # другое письмо уже помечено (почтовая программа не дочистила)
+res = mm.manage("1", "trash")
+ok(3 in F["INBOX"] and 1 in F["Trash"] and res.get("marked") and not any(c.upper() == "EXPUNGE" for c in ST["cmds"]),
+   f"чужое помеченное письмо не стёрто: общей чистки нет, наше — в «Корзине» и помечено: {res}")
+reset("names", caps="IMAP4rev1 AUTH=PLAIN")
+ST["store_no"] = True
+try:
+    mm.manage("2", "trash"); err = ""
+except M.MailError as e:
+    err = str(e)
+ok("не дала убрать" in err and 2 in F["INBOX"], f"почта ответила NO на пометку — не «готово», а честная ошибка: {err!r}")
+reset("none")
+tb_ = T.Toolbox(Settings(tmp / "s1158.json"), None); tb_.hooks["mail"] = mm
+q = tb_.describe("manage_email", {"uid": "1", "action": "delete"})
+ok("совсем" in q and "восстановить не получится" in q, f"нет «Корзины» — спрашиваем про удаление совсем: {q}")
+reset("special")
+q = tb_.describe("manage_email", {"uid": "1", "action": "delete"})
+ok("уйдёт в «Корзину»" in q, f"есть «Корзина» — как раньше: {q}")
+# №1157 (28.11): почта отклонила одного из двух адресатов — «отправлено» только принятому, отказ назван
+from tools_mail import t_send_email, t_send_telegram  # noqa: E402
+out = t_send_email({"to": "andrey@example.org, nobody@example.org", "subject": "Счёт", "body": "Во вложении"}, {"mail": mm})
+ok("отправлено: andrey@example.org" in out and "Почта отклонила: nobody@example.org — им письмо не ушло" in out,
+   f"частичный отказ SMTP — честно: {out}")
+
+
+class _Bot:
+    def __init__(self, t, on): self.TITLE, self.on, self.got = t, on, []
+    def paired(self): return self.on
+    def send(self, x): self.got.append(x); return True
+
+
+_tg, _mx = _Bot("Telegram", False), _Bot("MAX", True)
+_hub = type("H", (), {"bots": [_tg, _mx], "paired": lambda self: True, "send": lambda self, x: _mx.send(x), "problem": ""})()
+try:
+    t_send_telegram({"to": "telegram", "text": "Привет"}, {"telegram": _hub}); err = ""
+except Exception as e:  # noqa: BLE001
+    err = str(e)
+ok("Telegram не подключён" in err and not _mx.got, f"просили Telegram, а подключён только MAX — не шлём в MAX молча: {err}")
+# №1142 (28.11): второй ящик не отвечает — письма первого не выдаём за «все»: называем, какой молчит
+from tools_mail import t_read_emails  # noqa: E402
+mm.save({"address": "work@example.org", "password": "x", "smtp_host": "127.0.0.1", "smtp_port": 1, "smtp_security": "none",
+         "imap_host": "127.0.0.1", "imap_port": 1}, box=1)
+out = t_read_emails({"limit": 3}, {"mail": mm})
+ok(out.startswith("Не ответил ящик work@example.org") and "Счёт за ноябрь" in out, f"один ящик молчит — так и сказано, письма другого — есть: {out[:120]}")
+mm.boxes.pop()
+q = tb_.describe("send_email", {"reply_to": "1", "body": "Оплатим в пятницу"})
+ok("buh@corp.example" in q, f"№1159: в вопросе об ответе — настоящий адрес, куда уйдёт (Reply-To, иначе From): {q}")
 
 # ---------- переслать ----------
 reset("special"); SENT.clear()

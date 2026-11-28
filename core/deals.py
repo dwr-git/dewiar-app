@@ -26,6 +26,10 @@ class DealError(Exception):
     pass
 
 
+class DealAmbiguous(DealError):
+    """Подходит несколько открытых сделок — нужно спросить, какая (№1160: не заводить вместо этого новую)."""
+
+
 def stage_of(word):
     """«оплатил», «выставили счёт», «КП отправили» -> paid / invoice / offer …; не понятно — ""."""
     w = str(word or "").lower().replace("ё", "е")
@@ -97,7 +101,7 @@ class DealsMixin:
             return opened[0]["id"]
         if not opened:
             return sorted(ds, key=lambda x: -x.get("moved", 0))[0]["id"]
-        raise DealError("у клиента несколько сделок: " + "; ".join(f"«{x['title']}»" for x in opened[:5]) + " — какая?")
+        raise DealAmbiguous("у клиента несколько сделок: " + "; ".join(f"«{x['title']}»" for x in opened[:5]) + " — какая?")
 
     def deal_add(self, cid, title, amount=0, cur="", stage="lead", due="", note=""):
         title = re.sub(r"\s+", " ", str(title or "")).strip()[:160]

@@ -20,7 +20,14 @@ ok(why_kind(LLMError("сервер модели не ответил воврем
 ok(why_kind(LLMError("model does not support image input")) != "timeout", "«не поддерживает картинки» — не тайм-аут")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 m = re.search(r"не приняла картинку.*?\n(.*?)msgs = _drop_images\(msgs\)", src, re.S)
-ok(m and 'why_kind(e) != "timeout"' in m.group(1) and "self._blind.add(blind_key)" in m.group(1),
-   "в «не видит картинок» — только не тайм-аут")
+ok(m and 'why_kind(e) in ("rejected", "other")' in m.group(1) and "self._blind.add(blind_key)" in m.group(1),
+   "в «не видит картинок» — только настоящий отказ модели")
+# №1150 (28.11): 429, 503, 401, нет связи — временное, а не «не видит картинок» на 15 минут
+blind = lambda t: why_kind(LLMError(t)) in ("rejected", "other")   # noqa: E731
+for t in ("HTTP 429 Too Many Requests", "503 Service Unavailable", "401 Unauthorized", "не удалось подключиться к серверу модели",
+          "сервер модели не ответил вовремя"):
+    ok(not blind(t), f"«{t}» — не «слепая»")
+for t in ("400 Bad Request: image input is not supported", "model does not support image input"):
+    ok(blind(t), f"«{t}» — да, не видит картинок")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -891,7 +891,10 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                     else:
                         log.info("Модель %s не приняла картинку (%s) — отвечаю без неё", prof.get("model"), e)
                         from health import why_kind
-                        if why_kind(e) != "timeout":         # не дождались — не значит «не видит» (№885: сервер был медленным)
+                        # «не видит картинок» запоминаем только по отказу самой модели (400/422 или непонятная ошибка):
+                        # не дождались (№885), занято/429, нет связи, ключ, заряд, 5xx — временное, а не «слепая» на 15 минут
+                        # (№1150, 28.11: после одного 429 Лира четверть часа не видела картинок)
+                        if why_kind(e) in ("rejected", "other"):
                             self._blind.add(blind_key)
                         msgs = _drop_images(msgs)
                         events = stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)

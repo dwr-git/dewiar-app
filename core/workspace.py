@@ -302,6 +302,28 @@ def _human_date(d=None):
     return f"{d.day} {MONTHS[d.month - 1]} {d.year}, {d:%H:%M}"
 
 
+def _known(fact, text):
+    """Факт уже записан? №1148 (28.11): раньше — «есть ли подстрокой во всём файле», и «Любит кофе» считался известным
+    при записи «Не любит кофе». Теперь — по записям (строкам): та же запись, или факт целыми словами внутри записи, и перед
+    ним нет «не»/«ни»/«нет»."""
+    norm = lambda x: re.sub(r"\s+", " ", re.sub(r"[.!«»\"']", "", x.lower().replace("ё", "е"))).strip()   # noqa: E731
+    f = norm(fact)
+    if not f:
+        return False
+    for ln in text.split("\n"):
+        m = re.match(r"^\s*(?:[-*] )?([^#\s].*?)(?: _\(\d\d\.\d\d\.\d{4}\)_)?\s*$", ln)   # запись «- …» или строка текста
+        if not m:
+            continue
+        t = norm(m.group(1))
+        if t == f:
+            return True
+        for hit in re.finditer(r"(?<![\w-])" + re.escape(f) + r"(?![\w-])", t):
+            before = t[:hit.start()].split()
+            if not before or before[-1] not in ("не", "ни", "нет", "никогда"):
+                return True
+    return False
+
+
 class Workspace:
     def __init__(self, settings):
         self.s = settings
@@ -919,7 +941,7 @@ class Workspace:
                 p.write_text("\n".join(lines), encoding="utf-8")
                 self.mem_changed()
                 return "Исправил: старая запись заменена." + (f" Поправил и в других записях ({fixed})." if fixed else "")
-        if fact.lower().rstrip(".") in old.lower():
+        if _known(fact, old):
             return "Это я уже знаю."
         subj, val = fact_parts(fact)
         if subj:                                   # «Бюджет на мебель — 70 тысяч» после «— 50 тысяч»: обновить, а не копить

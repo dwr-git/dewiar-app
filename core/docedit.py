@@ -12,8 +12,11 @@ docx — замени фамилии или даты — чётко»).
 Только стандартная библиотека (zipfile, re) — работает везде, где работает Dewiar."""
 
 import html
+import os
 import re
+import shutil
 import zipfile
+import zlib
 from pathlib import Path
 
 EXTS = {".docx", ".docm", ".pptx", ".xlsx", ".odt", ".ods", ".odp"}
@@ -213,7 +216,7 @@ def replace(path, pairs, out=None, whole=False, case=False):
         zin = zipfile.ZipFile(p)
     except zipfile.BadZipFile as e:
         raise DocEditError(f"«{p.name}» не открылся как документ Office (повреждён или это не {ext})") from e
-    dst = Path(out) if out else p.with_name(f"{p.stem} (исправлено){p.suffix}")
+    dst = Path(out) if out else _free(p.with_name(f"{p.stem} (исправлено){p.suffix}"))   # №1152: прошлую правку не затираем
     files = {}
     with zin:
         for info in zin.infolist():
@@ -239,6 +242,18 @@ def replace(path, pairs, out=None, whole=False, case=False):
     return {"out": str(dst), "counts": counts, "missing": missing}
 
 
+def _free(dst, folder=False):
+    """Свободное имя рядом: «имя (исправлено).docx» занято — «имя (исправлено 2).docx» и т. д. (№1152, №1154)."""
+    if not dst.exists():
+        return dst
+    stem, suf = (dst.name, "") if folder else (dst.stem, dst.suffix)
+    for n in range(2, 1000):
+        cand = dst.with_name((f"{stem[:-1]} {n})" if stem.endswith(")") else f"{stem} {n}") + suf)
+        if not cand.exists():
+            return cand
+    raise DocEditError("рядом уже слишком много копий — уберите лишние")
+
+
 # ---------- архивы (владелец 12.11: «принимать архивы и смотреть, что в них») ----------
 ARC_MAX_FILES, ARC_MAX_BYTES = 3000, 800 * 1024 * 1024
 
@@ -254,7 +269,59 @@ def unpack(path, dest=None):
         z = zipfile.ZipFile(p)
     except zipfile.BadZipFile as e:
         raise DocEditError(f"«{p.name}» не открылся как архив (повреждён?)") from e
+    # №1154 (28.11): папка «(распаковано)» уже есть — новая рядом, а не поверх прежних файлов; архив оказался битым
+    # (CRC) посреди распаковки — недоделанную папку убираем целиком, а не оставляем половину
     dst = Path(dest) if dest else p.with_name(f"{p.stem} (распаковано)")
+    if not dest:
+        for n in range(1, 1000):                       # тот же архив открыли снова — его папка, ничего не пишем
+            cand = dst if n == 1 else dst.with_name(f"{dst.name[:-1]} {n})")
+            if not cand.exists():
+                dst = cand
+                break
+            same = _same(z, cand)
+            if same is not None:
+                z.close()
+                return same
+    fresh = not dst.exists()
+    try:
+        return _unpack(z, dst)
+    except (zipfile.BadZipFile, zlib.error, EOFError, DocEditError) as e:
+        if fresh:
+            shutil.rmtree(dst, ignore_errors=True)
+        if isinstance(e, DocEditError):
+            raise
+        raise DocEditError(f"«{p.name}» повреждён — распаковка прервалась ({e}); недоделанную папку убрала") from e
+
+
+def _name(i):
+    """Имя файла в архиве; не UTF-8 — скорее всего, cp866 (архиватор Windows) — по-русски."""
+    name = i.filename
+    if not (i.flag_bits & 0x800):
+        try:
+            name = name.encode("cp437").decode("cp866")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return name
+
+
+def _same(z, dst):
+    """Папка уже распакована из этого же архива (те же файлы, те же размеры) -> итог, как у unpack; иначе None."""
+    try:
+        infos = [i for i in z.infolist() if not i.is_dir()]
+        files, root = [], dst.resolve()
+        for i in infos:
+            f = (dst / _name(i)).resolve()
+            if not str(f).startswith(str(root) + os.sep) or (i.external_attr >> 16) & 0o170000 == 0o120000:
+                continue                                 # небезопасное — его и не распаковывали
+            if not f.is_file() or f.stat().st_size != i.file_size:
+                return None
+            files.append((_name(i), i.file_size))
+        return {"dir": str(dst), "files": files, "skipped": []} if files else None
+    except (OSError, ValueError):
+        return None
+
+
+def _unpack(z, dst):
     root = dst.resolve()
     files, skipped, total = [], [], 0
     with z:
@@ -264,12 +331,7 @@ def unpack(path, dest=None):
         if sum(i.file_size for i in infos) > ARC_MAX_BYTES:
             raise DocEditError("архив в распакованном виде больше 800 МБ — не распаковываю")
         for i in infos:
-            name = i.filename
-            if not (i.flag_bits & 0x800):                  # не UTF-8 — имя, скорее всего, в cp866 (архиватор Windows)
-                try:
-                    name = name.encode("cp437").decode("cp866")
-                except (UnicodeEncodeError, UnicodeDecodeError):
-                    pass
+            name = _name(i)
             if (i.external_attr >> 16) & 0o170000 == 0o120000:      # символическая ссылка
                 skipped.append(name)
                 continue

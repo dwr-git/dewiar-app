@@ -165,5 +165,11 @@ ok('typeof loadChat === "function"' in cj, "нажатие «Чата» рань
 html = (ROOT / "ui/settings.html").read_text(encoding="utf-8")
 ok('id="kn-file" multiple accept=".pdf,.docx,.odt,.xlsx' in html, "«Мои файлы» → «Добавить файлы…» принимает Excel")
 
+# №1153 (28.11): копейки в больших суммах не теряются; хвосты float — убираются, как в Excel
+import sheets as _SH  # noqa: E402
+ok(_SH._num("1234567890.12") == "1234567890.12" and _SH._num("123456789.12") == "123456789.12", "большие суммы — с копейками")
+ok(_SH._num("2350.0000000000005") == "2350" and _SH._num("0.30000000000000004") == "0.3" and _SH._num("1.23456") == "1.23456",
+   "хвосты float — нет, обычные дроби — как есть")
+
 print("\nИтог:", "всё хорошо" if not fails else f"ошибок {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -68,6 +68,29 @@ r = TL.t_client_deal({"who": "Петров из Альфы", "title": "Ремо�
 ok("Новая сделка" in r and "заявка" in r and any(c["name"] == "Петров" for c in C.st["clients"].values()), "нового клиента — завести вместе со сделкой")
 ok("плёнка" in TL.t_client_deals({"what": "owed"}, ctx), "client_deals owed")
 ok("client_deal" in TL.TOOLS and "client_deals" in TL.TOOLS and "client_deal" in TL.SAFE_CORE, "у модели — client_deal и client_deals (и в «только безопасное»)")
+# №1160 (28.11): у клиента два неоплаченных счёта, «оплатил» без названия — спросить, какой, а не завести третью сделку
+_ = TL.t_client_deal({"who": "Ромашке", "title": "скотч", "amount": 90, "stage": "invoice"}, ctx)
+n0 = len(C.deals(cid=rom))
+try:
+    TL.t_client_deal({"who": "Ромашка", "stage": "paid"}, ctx); err = ""
+except TL.ToolError as e:
+    err = str(e)
+ok("какая" in err and "плёнка" in err and "скотч" in err and len(C.deals(cid=rom)) == n0, f"два счёта — вопрос «какая?», новой сделки нет: {err}")
+r = TL.t_client_deal({"who": "Ромашка", "title": "скотч", "stage": "paid"}, ctx)
+ok("«скотч» — оплачено" in r, "назвали — оплачен именно он")
+try:
+    TL.t_deal_remind({"who": "Ромашке", "title": "скотч"}, ctx); err = ""
+except TL.ToolError as e:
+    err = str(e)
+ok("не ждёт оплаты" in err and "оплачено" in err, f"напомнить об уже оплаченном — так и сказать, не про другой счёт: {err}")
+import clients as _CL  # noqa: E402
+_bad = _CL.Clients(tmp / "нет" / "clients.json")
+_bad.path = tmp                                            # писать «в папку» — ошибка диска
+try:
+    _bad.add("Тест"); err = ""
+except _CL.ClientError as e:
+    err = str(e)
+ok("не получилось записать" in err, f"не записалось на диск — ошибка, а не «записала»: {err}")
 
 # утро
 import morning as MO  # noqa: E402

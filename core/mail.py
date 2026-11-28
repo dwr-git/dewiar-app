@@ -337,7 +337,9 @@ class Box:
             names.append(fname)
         s = self._smtp()
         try:
-            s.send_message(msg)
+            # №1157 (28.11): часть адресатов почта может отклонить (550), а send_message вернёт их словарём — молча.
+            # Тогда «отправлено всем» — неправда: отправлено тем, кого приняли, а отказ называем
+            refused = s.send_message(msg) or {}
         except smtplib.SMTPException as e:
             raise MailError(f"письмо не отправилось: {e}") from e
         finally:
@@ -345,8 +347,11 @@ class Box:
                 s.quit()
             except Exception:  # noqa: BLE001
                 pass
-        log.info("✉️  Письмо «%s» → %s%s", msg["Subject"], ", ".join(to), f" (вложения: {', '.join(names)})" if names else "")
-        return {"to": to, "subject": msg["Subject"], "attachments": names}
+        bad = [a for a in to if a.lower() in {str(k).lower() for k in refused}]
+        ok_to = [a for a in to if a not in bad]
+        log.info("✉️  Письмо «%s» → %s%s%s", msg["Subject"], ", ".join(ok_to), f" (вложения: {', '.join(names)})" if names else "",
+                 f"; почта отклонила: {', '.join(bad)}" if bad else "")
+        return {"to": ok_to, "subject": msg["Subject"], "attachments": names, **({"refused": bad} if bad else {})}
 
     def inbox(self, limit=10, unread=False, query="", folder="INBOX"):
         """Последние письма: [{uid, from, subject, date, snippet, files, unread}] — новые сверху.
@@ -433,16 +438,22 @@ class Box:
         return (hit[1], hit[2]) if hit else None
 
     def peek(self, uid, folder="INBOX"):
-        """От кого и тема письма — без текста и без отметок (для вопроса «Удалить письмо …?») -> {from, subject}."""
+        """От кого и тема письма — без текста и без отметок (для вопроса «Удалить письмо …?») -> {from, subject,
+        reply (адрес, куда уйдёт ответ: Reply-To, иначе From — №1159), trash (есть ли «Корзина»: нет — удалить значит совсем)}."""
         m = self._imap()
         try:
             m.select(folder, readonly=True)
-            typ, d = m.uid("fetch", str(uid).encode(), "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
+            typ, d = m.uid("fetch", str(uid).encode(), "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT REPLY-TO)])")
             raw = next((x[1] for x in d or [] if isinstance(x, tuple)), b"")
             if not raw:
                 raise MailError("такого письма нет")
             h = email.message_from_bytes(raw)
-            return {"from": _dec(h.get("From")), "subject": _dec(h.get("Subject")) or "(без темы)"}
+            try:
+                trash = bool(self.special("trash", m))
+            except Exception:  # noqa: BLE001 — не узнали: спросим как про корзину
+                trash = True
+            return {"from": _dec(h.get("From")), "subject": _dec(h.get("Subject")) or "(без темы)",
+                    "reply": email.utils.parseaddr(_dec(h.get("Reply-To")) or _dec(h.get("From")))[1], "trash": trash}
         finally:
             try:
                 m.logout()
@@ -485,11 +496,24 @@ class Box:
                     typ, r = m.uid("COPY", u, _q(dest[0]))
                     if typ != "OK":
                         raise MailError(f"почта не перенесла письмо: {(r or [b''])[0]!r}")
-                m.uid("STORE", u, "+FLAGS.SILENT", "(\\Deleted)")
+                # №1158 (28.11): ответы почты проверяем — «NO» не выдаём за успех; без UIDPLUS обычный EXPUNGE стирает
+                # ВСЕ письма папки с пометкой «удалено», а не только это. Тогда стираем, только если помеченное — одно наше;
+                # иначе письмо остаётся помеченным (копия уже в «Корзине»), почта уберёт его сама при следующей чистке
+                typ, r = m.uid("STORE", u, "+FLAGS.SILENT", "(\\Deleted)")
+                if typ != "OK":
+                    raise MailError(f"почта не дала убрать письмо: {(r or [b''])[0]!r}")
                 if "UIDPLUS" in caps:
-                    m.uid("EXPUNGE", u)
+                    typ, r = m.uid("EXPUNGE", u)
+                    if typ != "OK":
+                        raise MailError(f"почта не убрала письмо: {(r or [b''])[0]!r}")
                 else:
-                    m.expunge()
+                    typ, r = m.uid("SEARCH", "DELETED")
+                    marked = (r[0] or b"").split() if typ == "OK" and r else None
+                    if marked is not None and marked == [u]:
+                        m.expunge()
+                    else:
+                        log.info("✉ Письмо %s помечено удалённым; чистку папки не запускаю — там есть и другие помеченные", uid)
+                        return {"ok": True, "folder": dest[1] if dest else "", "permanent": not dest, "marked": True}
             log.info("✉ Письмо %s → %s", uid, dest[1] if dest else "удалено совсем (корзины нет)")
             return {"ok": True, "folder": dest[1] if dest else "", "permanent": not dest}
         except imaplib.IMAP4.error as e:
@@ -773,6 +797,7 @@ class Mail:
                 errs.append(f"{b.data.get('address')}: {e}")
         if errs and not out:
             raise MailError("; ".join(errs))
+        self.last_errs = errs                          # №1142: один ящик не ответил — read_emails скажет об этом
 
         def when(x):
             try:

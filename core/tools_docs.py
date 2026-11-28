@@ -194,7 +194,8 @@ def _doc_path(a, ctx, exts=None):
             p = _ws(ctx).safe(raw)
         except Exception:  # noqa: BLE001
             p = Path(raw)
-    if not p.is_file():
+    # №1152 (28.11): назвали путь (с папками) — ищем ровно его: нет — так и говорим, а не правим похожий файл из «Входящих»
+    if not p.is_file() and not re.search(r"[\\/]", raw):
         try:
             inbox = _ws(ctx).ensure() / "Входящие"
             cands = sorted((x for x in inbox.rglob("*") if x.is_file() and x.suffix.lower() in (exts or DE.EXTS)
@@ -261,7 +262,40 @@ def t_insight_ask(a, ctx):
     if eng is None:
         raise ToolError("Радар работает в программе на компьютере")
     import engine_insight
-    return json.dumps(engine_insight.ask_tool(eng, str(a.get("query") or "")), ensure_ascii=False)[:9000]
+    return fit_json(engine_insight.ask_tool(eng, str(a.get("query") or "")), 9000)
+
+
+def fit_json(obj, limit):
+    """JSON не длиннее limit — без обрыва посреди строки (№1147, 28.11: [:9000] резал объект и модель получала битый JSON).
+    Длинно — убираем последние элементы самых длинных списков и отмечаем «_cut»; потом — укорачиваем длинные строки."""
+    import copy
+    d = copy.deepcopy(obj)
+    s = json.dumps(d, ensure_ascii=False)
+    for _ in range(400):
+        if len(s) <= limit:
+            return s
+        lists = [v for v in (d.values() if isinstance(d, dict) else []) if isinstance(v, list) and v]
+        lists += [w for v in (d.values() if isinstance(d, dict) else []) if isinstance(v, dict) for w in v.values() if isinstance(w, list) and w]
+        if not lists:
+            break
+        max(lists, key=lambda x: len(json.dumps(x, ensure_ascii=False))).pop()
+        if isinstance(d, dict):
+            d["_cut"] = "не всё вошло — уточни вопрос, если нужно больше"
+        s = json.dumps(d, ensure_ascii=False)
+
+    def short(v, n):
+        if isinstance(v, str):
+            return v if len(v) <= n else v[:n] + "…"
+        if isinstance(v, list):
+            return [short(x, n) for x in v]
+        if isinstance(v, dict):
+            return {k: short(x, n) for k, x in v.items()}
+        return v
+    for n in (600, 300, 120, 60):
+        s = json.dumps(short(d, n), ensure_ascii=False)
+        if len(s) <= limit:
+            return s
+    return json.dumps({"_cut": "ответ слишком большой — уточни вопрос"}, ensure_ascii=False)
 
 
 def t_doc_replace(a, ctx):

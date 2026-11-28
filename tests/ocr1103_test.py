@@ -131,6 +131,14 @@ ok(min(pages[0]) > 600, f"страница нарисована крупно д�
 pages.clear()
 ok(ocr.ocr_pdf(scan, pages="2") == "Текст страницы 1" and len(pages) == 1, "pages=«2» — только вторая страница")
 ok(ocr.parse_pages("1-3, 5", 4) == [0, 1, 2] and ocr.parse_pages("", 2) == [0, 1], "номера страниц: «1-3, 5» в пределах документа")
+# №1151 (28.11): «1 - 3» — диапазон; страницы 999 в четырёхстраничном или «абв» — не весь документ, а понятная ошибка
+ok(ocr.parse_pages("1 - 3", 4) == [0, 1, 2] and ocr.parse_pages("2 – 4, 1", 4) == [0, 1, 2, 3], "«1 - 3» с пробелами — диапазон")
+for _sp, _w in (("999", "их 4"), ("абв", "не поняла")):
+    try:
+        ocr.parse_pages(_sp, 4); _e = ""
+    except ocr.OCRError as e:
+        _e = str(e)
+    ok(_w in _e, f"«{_sp}» — не весь документ, а «{_e}»")
 # обычный PDF с одной пустой страницей — не скан: не гоняем распознавание по большим папкам «Документов»
 from pypdf import PdfWriter  # noqa: E402
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject  # noqa: E402

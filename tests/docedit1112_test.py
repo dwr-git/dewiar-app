@@ -105,6 +105,39 @@ try:
 except tools.ToolError as e:
     ok("не нашла" in str(e) or "zip" in str(e).lower(), "rar — понятный ответ")
 
+# №1154 (28.11): папка «(распаковано)» уже есть — не поверх; тот же архив снова — та же папка; битый — без половины
+(dd / "заметка.txt").write_text("моё, правлено руками", encoding="utf-8")
+r = tools.t_archive_open({"path": str(arc)}, ctx)
+ok((dd / "заметка.txt").read_text(encoding="utf-8") == "моё, правлено руками" and "документы (распаковано 2)" in r,
+   f"прежняя папка изменена — новая рядом, правленое не затёрто: {r[:80]}")
+r = tools.t_archive_open({"path": str(arc)}, ctx)
+ok("документы (распаковано 2)" in r and not (tmp / "документы (распаковано 3)").exists(), "тот же архив ещё раз — та же папка, копий не плодим")
+bad = bytearray(arc.read_bytes())
+i = bad.find("привет".encode())
+bad[i:i + 4] = b"XXXX"                                   # данные испорчены — CRC не сойдётся
+(tmp / "битый.zip").write_bytes(bytes(bad))
+try:
+    tools.t_archive_open({"path": str(tmp / "битый.zip")}, ctx); err = ""
+except tools.ToolError as e:
+    err = str(e)
+ok(("повреждён" in err or "не открылся" in err) and not (tmp / "битый (распаковано)").exists(), f"битый архив — честно, недоделанной папки нет: {err[:90]}")
+# №1152: «(исправлено)» уже есть — не затираем; назван полный путь, а файла нет — не берём похожий из «Входящих»
+r1 = tools.t_doc_replace({"path": str(src), "replacements": [{"find": "Иванов", "replace": "Петров"}]}, ctx)
+r2 = tools.t_doc_replace({"path": str(src), "replacements": [{"find": "Иванов", "replace": "Сидоров"}]}, ctx)
+ok("договор (исправлено 2).docx" in r2 or "договор (исправлено 3).docx" in r2, f"повторная правка — в новый файл, прошлая цела: {r2[:100]}")
+import workspace as _W  # noqa: E402
+os.environ["DEWIAR_WORKSPACE"] = str(tmp / "ws")
+ws = _W.Workspace(None)
+(ws.ensure() / "Входящие").mkdir(exist_ok=True)
+(ws.ensure() / "Входящие" / "test.docx").write_bytes(src.read_bytes())
+try:
+    tools.t_doc_find({"path": str(tmp / "нет" / "test.docx"), "text": "Иванов"}, dict(ctx, workspace=ws)); err = ""
+except tools.ToolError as e:
+    err = str(e)
+ok("не нашла" in err, f"полный путь к несуществующему — «не нашла», не чужой test.docx: {err[:80]}")
+ok(tools.t_doc_find({"path": "test.docx", "text": "Иванов"}, dict(ctx, workspace=ws)).startswith("«test.docx»: найдено"),
+   "просто имя — по-прежнему из «Входящих»")
+
 if fails:
     sys.exit(1)
 sk = {n: (ROOT / f"data/skills/{n}/SKILL.md").read_text(encoding="utf-8") for n in ("docx", "pptx", "archive")}

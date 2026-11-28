@@ -1085,18 +1085,27 @@ class Toolbox:
                 return "Опубликовать сайт на dewiar.pro?"
         if name == "manage_email":
             act = str(args.get("action") or "").lower()
-            what = f"письмо {args.get('uid', '')}"
+            what, trash = f"письмо {args.get('uid', '')}", True
             try:                                         # от кого и тема — чтобы человек видел, о каком письме речь
                 h = self.hooks["mail"].peek(args.get("uid", ""))
-                what = f"письмо «{h['subject']}» от {h['from']}"
+                what, trash = f"письмо «{h['subject']}» от {h['from']}", h.get("trash", True)
             except Exception:  # noqa: BLE001
                 pass
             if act == "forward":
                 return f"Переслать {what} → {args.get('to') or '?'}?"
-            return f"Отправить в спам {what}?" if act == "spam" else f"Удалить {what}? Оно уйдёт в «Корзину» почты."
+            if act == "spam":
+                return f"Отправить в спам {what}?"
+            # №1158: корзины в почте нет — письмо сотрётся совсем; так и спрашиваем, а не «уйдёт в корзину»
+            return f"Удалить {what}? Оно уйдёт в «Корзину» почты." if trash else f"Удалить {what} совсем? «Корзины» в этой почте нет — восстановить не получится."
         if name == "send_email" and str(args.get("reply_to") or "").strip():
             b = " ".join(str(args.get("body") or "").split())
-            return f"Отправить ответ на письмо ({args['reply_to']}): «{b[:90]}{'…' if len(b) > 90 else ''}»?"
+            to = str(args["reply_to"])
+            try:                                         # №1159 (28.11): куда на самом деле уйдёт — Reply-To, иначе From
+                h = self.hooks["mail"].peek(args["reply_to"])
+                to = h.get("reply") or h["from"]
+            except Exception:  # noqa: BLE001
+                pass
+            return f"Отправить ответ на {to}: «{b[:90]}{'…' if len(b) > 90 else ''}»?"
         if name == "send_email":
             to = args.get("to") or "вам самим"
             att = args.get("attachments") or []

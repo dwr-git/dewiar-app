@@ -457,17 +457,27 @@ def page_image(path, i, dpi=PDF_DPI):
 
 
 def parse_pages(spec, n):
-    """«1-3, 5» -> [0, 1, 2, 4] (в пределах n страниц); пусто — все."""
+    """«1-3, 5», «1 - 3» -> [0, 1, 2, 4] (в пределах n страниц); пусто — все. №1151 (28.11): «1 - 3» с пробелами давало 1 и 3,
+    а страница 999 из четырёх или «абв» — весь документ. Теперь диапазон с пробелами — диапазон; ни одной такой страницы —
+    PagesError (вызвавший скажет, сколько страниц на самом деле), а не молча весь документ."""
     if not str(spec or "").strip():
         return list(range(n))
-    out = []
-    for part in re.split(r"[,;\s]+", str(spec).strip()):
-        m = re.fullmatch(r"(\d+)(?:\s*[-–—]\s*(\d+))?", part)
+    out, asked = [], False
+    spec = re.sub(r"\s*[-–—]\s*", "-", str(spec).strip())
+    for part in re.split(r"[,;\s]+", spec):
+        m = re.fullmatch(r"(\d+)(?:-(\d+))?", part)
         if not m:
             continue
+        asked = True
         a, b = int(m.group(1)), int(m.group(2) or m.group(1))
         out += [k - 1 for k in range(min(a, b), max(a, b) + 1) if 1 <= k <= n]
-    return sorted(set(out)) or list(range(n))
+    if out:
+        return sorted(set(out))
+    raise PagesError(f"таких страниц нет — в документе их {n}" if asked else f"не поняла, какие страницы: «{spec}» — в документе их {n}")
+
+
+class PagesError(OCRError):
+    """Названные страницы в документе не нашлись (№1151)."""
 
 
 def ocr_pdf_ex(path, pages=None, vision=None, local=True, limit=None):

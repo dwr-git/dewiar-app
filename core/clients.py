@@ -107,7 +107,9 @@ class Clients(DealsMixin):
             tmp.write_text(json.dumps(self.st, ensure_ascii=False, indent=1), encoding="utf-8")
             os.replace(tmp, self.path)
         except OSError as e:
+            # №1160 (28.11): не записалось — не молчим: вызвавший скажет человеку, а не «записала»
             log.warning("Клиенты: не записалось: %s", e)
+            raise ClientError(f"не получилось записать на диск: {e}") from e
         self.emit("clients")
 
     def _get(self, cid):

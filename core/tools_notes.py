@@ -381,7 +381,10 @@ def t_calendar_list(a, ctx):
                     if it["type"] == "money":
                         out.append(f"{d} деньги: {'+' if it['kind'] == 'income' else '−'}{it['amount']} {it['currency']} {it['title']}")
                     else:
-                        kind = {"reminder": "сделано" if it.get("done") else "напоминание", "note": "заметка",
+                        # №1145 (28.11): прозвенело — ещё не «сделано»: сделано — только отмеченное человеком (closed)
+                        rem = ("сделано" if it.get("closed") or it.get("kind") == "done" else "пропущено" if it.get("skipped")
+                               else "прозвенело" if it.get("done") else "напоминание")
+                        kind = {"reminder": rem, "note": "заметка",
                                 "diary": "дневник", "task": "задача", "event": f"событие ({it.get('cal', 'календарь')})"}.get(it["type"], it["type"])
                         tm = (it.get("time") or "") + (f"–{it['end']}" if it.get("end") else "")
                         out.append(f"{d} {tm} {kind}: {it.get('title', '')}".replace("  ", " ") + (f", {it['place']}" if it.get("place") else ""))

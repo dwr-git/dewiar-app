@@ -23,13 +23,18 @@ def t_send_email(a, ctx):
     try:
         if str(a.get("reply_to") or "").strip():          # ответ на письмо: кому, тема и цитата — сами (03.11)
             r = _mail(ctx).reply(a["reply_to"], a.get("body", ""), files)
-            return f"Ответ на письмо «{r['replied']}» отправлен: {', '.join(r['to'])}" + (f"; вложения: {', '.join(r['attachments'])}" if r["attachments"] else "")
+            return f"Ответ на письмо «{r['replied']}» отправлен: {', '.join(r['to'])}" + (f"; вложения: {', '.join(r['attachments'])}" if r["attachments"] else "") + _refused(r)
         if not str(a.get("subject") or "").strip():
             raise ToolError("нужна тема письма (subject) — или reply_to, если это ответ на письмо")
         r = _mail(ctx).send(a.get("to", ""), a.get("subject", ""), a.get("body", ""), files, box=a.get("from") or None)
     except MailError as e:
         raise ToolError(str(e)) from e
-    return f"Письмо «{r['subject']}» отправлено: {', '.join(r['to'])}" + (f"; вложения: {', '.join(r['attachments'])}" if r["attachments"] else "")
+    return f"Письмо «{r['subject']}» отправлено: {', '.join(r['to'])}" + (f"; вложения: {', '.join(r['attachments'])}" if r["attachments"] else "") + _refused(r)
+
+
+def _refused(r):
+    """№1157: адресаты, которых почта отклонила, — названы (им письмо НЕ ушло)."""
+    return f". Почта отклонила: {', '.join(r['refused'])} — им письмо не ушло" if r.get("refused") else ""
 
 
 def t_send_telegram(a, ctx):
@@ -38,8 +43,13 @@ def t_send_telegram(a, ctx):
     if not (tg and tg.paired()):
         raise ToolError("Telegram и MAX не подключены — студия → «Подключение»")
     to = str(a.get("to") or "").lower()
-    if to and hasattr(tg, "bots"):                       # назвали мессенджер — туда, если он подключён; иначе — куда есть
-        tg = next((b for b in tg.bots if b.TITLE.lower() == to and b.paired()), tg)
+    if to and hasattr(tg, "bots"):                       # назвали мессенджер — туда; не подключён — так и говорим
+        # №1157 (28.11): «напиши в Telegram» при подключённом только MAX уходило в MAX — молча, не туда, куда просили
+        named = [b for b in tg.bots if b.TITLE.lower() == to]
+        live = next((b for b in named if b.paired()), None)
+        if named and not live:
+            raise ToolError(f"{named[0].TITLE} не подключён — студия → «Подключение»; отправлять в другой мессенджер не стала")
+        tg = live or tg
     files = a.get("files") or []
     if isinstance(files, str):
         files = [x.strip() for x in files.split(",") if x.strip()]
@@ -67,15 +77,19 @@ def t_send_telegram(a, ctx):
 
 def t_read_emails(a, ctx):
     from mail import MailError
+    m = _mail(ctx)
+    m.last_errs = []
     try:
-        items = _mail(ctx).inbox(limit=max(1, min(20, int(a.get("limit") or 8))), unread=bool(a.get("unread_only")),
-                                 query=a.get("query", ""), box=a.get("box") or None)
+        items = m.inbox(limit=max(1, min(20, int(a.get("limit") or 8))), unread=bool(a.get("unread_only")),
+                        query=a.get("query", ""), box=a.get("box") or None)
     except MailError as e:
         raise ToolError(str(e)) from e
+    # №1142 (28.11): ящиков несколько, один не ответил — письма второго не выдаём за «все», а говорим, какой молчит
+    warn = ("Не ответил ящик " + "; ".join(getattr(m, "last_errs", None) or []) + " — его письма не видны.\n\n") if getattr(m, "last_errs", None) else ""
     if not items:
-        return "Писем не нашлось."
+        return warn + "Писем не нашлось."
     many = len({x.get("box") for x in items}) > 1                 # несколько ящиков — у письма видно, в каком оно
-    return "\n".join(f"[{x['uid']}] {'● ' if x['unread'] else ''}{x['date'][:22]} · " + (f"в {x['box']} · " if many else "")
+    return warn + "\n".join(f"[{x['uid']}] {'● ' if x['unread'] else ''}{x['date'][:22]} · " + (f"в {x['box']} · " if many else "")
                      + f"{x['from']} · «{x['subject']}» — {x['snippet'][:160]}"
                      + (f" (вложения: {', '.join(x['files'])})" if x["files"] else "") for x in items) + \
         "\n\nЦеликом письмо — read_email с номером в скобках; ответить — send_email с reply_to=номер и текстом ответа."
