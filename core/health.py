@@ -32,10 +32,32 @@ BUG_RX = re.compile(r"^(?:(?:сообщи|передай|напиши|отпра
 # Жалоба оборвалась на паузе (отчёт №90, 19.10: «передай разработчику приложения что» — распознавание закончило фразу
 # на вдохе, и «приложения что» ушло разработчику; человек: «меня до конца дослушай»). Хвост — служебное слово или
 # суть короче двух слов — не отправляем, а переспрашиваем и следующую фразу дописываем к началу.
-BUG_LEAD = re.compile(r"^(?:(?:этого\s+|этой\s+)?(?:приложени\w*|программ\w*|dewiar\w*|девиар\w*|деви\s+ар\w*|лиры|ассистент\w*)\s*[,:]?\s*)?(?:что\s+|о\s+том,?\s+что\s+)?", re.I)
+BUG_LEAD = re.compile(r"^(?:разработчик\w*\s*[,:—-]?\s*)?(?:(?:этого\s+|этой\s+)?(?:приложени\w*|программ\w*|dewiar\w*|девиар\w*|деви\s+ар\w*|лиры|ассистент\w*)\s*[,:]?\s*)?(?:что\s+|о\s+том,?\s+что\s+)?", re.I)
 BUG_TAIL = {"что", "чтобы", "и", "а", "но", "или", "в", "во", "на", "про", "о", "об", "у", "с", "со", "к", "ко", "по", "за",
             "для", "из", "от", "до", "когда", "если", "потому", "как", "где", "это", "вот", "ну", "типа", "не", "очень",
             "приложения", "программы", "мне", "меня", "там", "тут", "так"}
+
+
+KB_BUCKETS = (8, 16, 24, 40, 9999)
+
+
+def _med(v):
+    v = sorted(v)
+    return round(v[len(v) // 2] if len(v) % 2 else (v[len(v) // 2 - 1] + v[len(v) // 2]) / 2, 2)
+
+
+def bug_split(t):
+    """№1164 (28.11): «да что за ерунда? сообщи о проблеме разработчикам» уходило модели — просьба не в начале фразы.
+    Просьба последним предложением -> (начало, совпадение BUG_RX) | None."""
+    m = BUG_RX.match(t)
+    if m:
+        return "", m
+    parts = re.split(r"(?<=[.!?…])\s+", t.strip())
+    if 1 < len(parts) <= 4:
+        m = BUG_RX.match(parts[-1])
+        if m:
+            return " ".join(parts[:-1]).strip(), m
+    return None
 
 
 def bug_note(raw):
@@ -562,6 +584,15 @@ class HealthMixin:
                                  Latency.summary([{"total": 0, "line": y["line"]} for y in v]).get("line"),
                                  Latency.summary([{"total": 0, "sent": y["sent"]} for y in v if "sent" in y]).get("sent")]
                              for k, v in list(net.items())[:6]}
+        # 1.0.93: облако Dewiar — заголовки ответа по размеру запроса (сжатого, КБ): ступенька после ~16 КБ — это сеть
+        # по пути (ТСПУ), а не сайт; тогда лечится тем, что запрос короче, а не сервером
+        kb = {}
+        for x in xs:
+            if x.get("how") == "dewiar" and "hdr" in x and x.get("kb"):
+                b = next(str(u) for u in KB_BUCKETS if float(x["kb"]) <= u)
+                kb.setdefault(b, []).append(x["hdr"])
+        if kb:
+            out["kb_by"] = {b: [len(v), _med(v)] for b, v in kb.items()}
         out["cc"] = device_country()                     # «Рентген дороги» (1.0.70): дорога — по странам
         out["_n"] = len(xs)
         return out
@@ -674,20 +705,31 @@ class HealthMixin:
             if re.fullmatch(r"(?i)\s*(отмена|отмени|не надо|ничего|передумал\w*|забудь)\W*", t):
                 self._say_quick("Хорошо, не отправляю.", text, via)
                 return True
-            note = (getattr(self, "_bug_prefix", "") + " " + t).strip()
+            ctx, self._bug_ctx = getattr(self, "_bug_ctx", ""), ""
+            if ctx and re.fullmatch(r"(?i)\s*(да|ага|угу|давай|передай|отправь|конечно|да,?\s*(?:передай|отправь|это)|yes|yeah|sure|ok|okay)\W*", t):
+                note = ctx                                # «да» — жалоба о разговоре выше (№1164: «сообщи о проблеме разработчикам»)
+            else:
+                note = (getattr(self, "_bug_prefix", "") + " " + t).strip()
             self._bug_prefix = ""
         else:
-            m = BUG_RX.match(t)
-            if not m:
+            sp = bug_split(t)
+            if not sp:
                 return False
+            pre, m = sp
             note, cut = bug_note(m.group(1))
+            rest = re.sub(r"(?i)^разработчик\w*", "", m.group(1).strip(" .,:;—-!?")).strip(" .,:;—-!?")
+            ctx = self._bug_context() if cut and not rest else ""
+            if pre and not note and not ctx:
+                note, cut = bug_note(pre)
             if cut:
                 self._bug_wait, self._bug_prefix = time.monotonic(), note
+                self._bug_ctx = ((pre + " ") if pre else "") + "Проблема в разговоре выше, последние вопросы: " + ctx if ctx else ""
 
                 def listen():
                     self.follow_up_until = time.monotonic() + 15
                     self.set_state("listening")
                 ask = "Слушаю — договорите, что передать разработчику." if note else \
+                    "Передать разработчику то, что сейчас было в разговоре? Скажите «да» — или расскажите, что случилось." if ctx else \
                     "Что случилось? Расскажите одной-двумя фразами — передам разработчику."
                 self._say_quick(ask, text, via, then=None if via else listen)
                 return True
@@ -701,6 +743,15 @@ class HealthMixin:
             self._say_quick(msg, text, via)
         threading.Thread(target=send, name="complaint", daemon=True).start()
         return True
+
+    def _bug_context(self):
+        """Последние вопросы человека, если разговор шёл в последние 10 минут (подробности — в «Рентгене» отчёта)."""
+        conv = getattr(self, "conv", None)
+        if time.time() - float(getattr(conv, "last", 0) or 0) > 600:
+            return ""
+        asks = [str(x.get("content") or "") for x in getattr(self, "history", None) or []
+                if isinstance(x, dict) and x.get("role") == "user" and isinstance(x.get("content"), str)][-2:]
+        return "; ".join("«" + " ".join(a.split("\n\nВложения:")[0].split())[:160] + "»" for a in asks if a.strip())
 
     def bug_shot_drop(self, sid):
         """Убрать один снимок из жалобы (× на превью). -> {"shots": [...]}."""

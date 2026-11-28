@@ -914,6 +914,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin, LookMixin)
                             for k_ in ("t_conn", "t_tls", "t_sent", "t_hdr", "t_line"):   # 1.0.70: и дорога по шагам
                                 if wi.get(k_):
                                     self.lat.mark(k_[2:], wi[k_])
+                            if wi.get("kb"):
+                                self.lat.info("kb", wi["kb"])
                     if turn.cancel.is_set():
                         break
                     if kind == "tools":

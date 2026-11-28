@@ -258,12 +258,15 @@ addEventListener("wheel", liteScrollProbe, { passive: true, capture: true });
    «Память и душа», «Обучение» (неделя с Лирой, видеоуроки, вопрос — ответ, что я умею), «Платежи» + «Семья»,
    «Dewiar.pro» + «Рефералы». Каждая страница остаётся своей <section>, сверху — полоска вкладок; вкладку открывает
    скрытая кнопка nav (.sub) с тем же data-p, а первый пункт группы слева возвращает на последнюю открытую вкладку
-   (tab_<первый>). Скрытый на «Главной» или выключенный раздел — скрыт и во вкладках (navTabsSync). */
+   (tab_<первый>). Скрытый на «Главной» или выключенный раздел — скрыт и во вкладках (navTabsSync).
+   Вычитание (28.11, владелец: «спрятать чуть глубже — рефералы, что я умею, душа, обо мне… чтобы при желании найти, но
+   глаза не мозолило»): четвёртый элемент 1 — вкладка «на раз», она в «Ещё ▾» в конце полоски; открытая — видна в полоске.
+   Находятся и поиском (find.js). */
 const NAV_TABS = [
-  [["memory", "nav.memory", "Память"], ["diary", "nav.diary.tab", "Дневник"], ["soul", "nav.soul", "Душа"], ["const", "nav.const", "Конституция"], ["me", "nav.me", "Обо мне"]],
-  [["course", "nav.course", "Неделя с Лирой"], ["lessons", "nav.lessons", "Видеоуроки"], ["qa", "nav.qa", "Вопрос — ответ"], ["tricks", "nav.tricks", "Что я умею"]],
+  [["memory", "nav.memory", "Память"], ["diary", "nav.diary.tab", "Дневник"], ["soul", "nav.soul", "Душа", 1], ["const", "nav.const", "Конституция"], ["me", "nav.me", "Обо мне", 1]],
+  [["course", "nav.course", "Неделя с Лирой"], ["lessons", "nav.lessons", "Видеоуроки"], ["qa", "nav.qa", "Вопрос — ответ"], ["tricks", "nav.tricks", "Что я умею", 1]],
   [["pay", "nav.pay", "Платежи"], ["family", "nav.family", "Семья"]],
-  [["dw", "nav.dw", "Dewiar.pro"], ["ref", "nav.ref", "Рефералы"]]];
+  [["dw", "nav.dw", "Dewiar.pro"], ["ref", "nav.ref", "Рефералы", 1]]];
 const navTabGroup = (p) => NAV_TABS.find(g => g.some(t => t[0] === p));
 const lsGet = (k, d) => { try { return LS.get(k, d); } catch (e) { return d; } };   // LS объявлен позже, в memory.js
 function navGo(p) { const b = $(`nav button[data-p="${p}"]`); if (!b) return; b._direct = true; b.click(); b._direct = false; }
@@ -271,10 +274,21 @@ const soulGo = navGo;                                      // прежнее и�
 NAV_TABS.forEach(g => g.forEach(([p]) => {
   const sec = $("#p-" + p); if (!sec) return;
   const bar = document.createElement("div"); bar.className = "stabs ntabs";
-  bar.innerHTML = g.map(([q, k, t]) => `<button type="button" data-go="${q}" data-i18n="${k}">${t}</button>`).join("");
-  $$("button", bar).forEach(x => x.onclick = () => navGo(x.dataset.go));
+  const rare = g.filter(t => t[3]);
+  bar.innerHTML = g.map(([q, k, t, r]) => `<button type="button" data-go="${q}" data-i18n="${k}"${r ? ' class="nrare"' : ""}>${t}</button>`).join("")
+    + (rare.length ? `<span class="nmore"><button type="button" class="nmore-b" aria-haspopup="menu" aria-expanded="false"><span data-i18n="tab.g.more">Ещё</span>`
+      + `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><div class="nmore-pop" role="menu" hidden>`
+      + rare.map(([q, k, t]) => `<button type="button" role="menuitem" data-go="${q}" data-i18n="${k}">${t}</button>`).join("") + `</div></span>` : "");
+  $$("button[data-go]", bar).forEach(x => x.onclick = () => navGo(x.dataset.go));
+  const mb = $(".nmore-b", bar);
+  if (mb) mb.onclick = (e) => { e.stopPropagation(); const pop = mb.nextElementSibling, open = pop.hidden;
+    $$(".nmore-pop").forEach(x => { x.hidden = true; x.previousElementSibling.setAttribute("aria-expanded", "false"); });
+    pop.hidden = !open; mb.setAttribute("aria-expanded", String(open)); };
   sec.insertBefore(bar, sec.firstChild);
 }));
+const nmoreClose = () => $$(".nmore-pop").forEach(x => { if (!x.hidden) { x.hidden = true; x.previousElementSibling.setAttribute("aria-expanded", "false"); } });
+document.addEventListener("click", (e) => { if (!e.target.closest || !e.target.closest(".nmore-b")) nmoreClose(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") nmoreClose(); });
 /* точка «новое» у спрятанного пункта («Семья»: зовут в семью) — на его вкладке и у первого пункта группы слева */
 NAV_TABS.forEach(g => {
   const lead = $(`nav button[data-p="${g[0][0]}"]`), dots = g.slice(1).map(([p]) => [p, $(`nav button[data-p="${p}"] .ndot`)]).filter(x => x[1]);
@@ -300,10 +314,12 @@ function navTabsSync() {
     const opt = {}, vis = new Set(g.filter(([p], i) => { const b = $(`nav button[data-p="${p}"]`); if (!b) return false;
       if (i === 0 || !b.hidden) return true; return !!(opt[p] = navOptin(p)); }).map(t => t[0]));
     g.forEach(([p]) => { const bar = $(`#p-${p} > .ntabs`); if (!bar) return;
-      $$("button", bar).forEach(x => { const q = x.dataset.go; x.hidden = !vis.has(q); x.classList.toggle("nopt", !!opt[q]);
+      $$("button[data-go]", bar).forEach(x => { const q = x.dataset.go; x.hidden = !vis.has(q); x.classList.toggle("nopt", !!opt[q]);
         x.onclick = opt[q] ? async () => { await save({ features: { [opt[q]]: true } }, true);
           if (window.featuresApply) featuresApply(); toast(`«${x.textContent.trim()}»: включено — выключить можно в «Возможностях»`); navGo(q); }
           : () => navGo(q); });
+      const more = $(".nmore", bar);
+      if (more) more.hidden = !$$(".nmore-pop button", bar).some(x => !x.hidden);
       bar.hidden = vis.size < 2; });
   });
 }

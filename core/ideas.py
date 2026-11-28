@@ -30,6 +30,15 @@ def call(url, dev, path, params=None, body=None, timeout=15):
     return d
 
 
+def _ver(v, pc):
+    """№440: «сделано в 1.0.53» человеку с телефоном 0.9.96 — непонятно; версия компьютера (1.x) и телефона (0.9.x) — с подписью."""
+    v = str(v or "").strip()
+    if not v:
+        return ""
+    is_pc = v.startswith("1.")
+    return f" в версии {v}" if is_pc == pc else f" в версии {v} {'для компьютера' if is_pc else 'для телефона'}"
+
+
 def suggest(eng, title, text=""):
     """«Предложи идею: …» (голосом, 0.61): похожая уже есть — голос за неё; нет — новая, «на рассмотрении». -> фраза для модели."""
     url = eng.s.get("cloud", "url") or ""
@@ -37,11 +46,11 @@ def suggest(eng, title, text=""):
     title = " ".join(str(title or "").split())[:120]
     if len(title) < 4:
         raise IdeasError("скажите идею хотя бы в несколько слов")
-    sim = [x for x in (call(url, dev, "/ideas/similar", {"q": title}).get("items") or []) if x.get("status") in ("plan", "doing", "new", "done")]
+    sim = [x for x in (call(url, dev, "/ideas/similar", {"q": title, "auto": 1}).get("items") or []) if x.get("status") in ("plan", "doing", "new", "done")]
     if sim:
         x = sim[0]
         if x["status"] == "done":
-            return f"Это уже сделано в версии {x.get('ver') or 'новее вашей'}: «{x['title']}». Скажи об этом и предложи обновиться."
+            return f"Это уже сделано{_ver(x.get('ver'), True)}: «{x['title']}». Скажи об этом и предложи обновиться."
         if not x.get("voted"):
             x = dict(x, **call(url, dev, "/ideas/vote", body={"id": x["id"], "on": True}))
         return (f"Похожая идея уже есть: «{x['title']}» — голос за неё отдан (теперь голосов: {x.get('votes')}). Скажи коротко: "

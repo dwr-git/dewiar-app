@@ -52,6 +52,18 @@ nav button.nmode:not(.on):not(.cur) { display: none; }       /* «Для реб�
 .ntabs[hidden], .ntabs button[hidden] { display: none !important; }
 .ntabs button.dot::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #FFB86B; box-shadow: 0 0 10px #FFB86B; }
 .ntabs button.nopt::before { content: "+"; font-weight: 700; opacity: .8; }   /* «+ Семья» — включить и открыть */
+/* «Ещё ▾» (вычитание 28.11): вкладки «на раз» — в меню; открытая — в полоске */
+.ntabs > button.nrare:not(.on) { display: none; }
+.ntabs .nmore { position: relative; display: flex; } .ntabs .nmore[hidden] { display: none; }
+.ntabs .nmore-b svg { width: 14px; height: 14px; stroke-width: 2; transition: transform .15s; }
+.ntabs .nmore-b[aria-expanded="true"] { color: var(--ink); background: rgba(255,255,255,.06); }
+.ntabs .nmore-b[aria-expanded="true"] svg { transform: rotate(180deg); }
+.nmore-pop { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; min-width: 180px; padding: 6px; border-radius: 14px;
+  display: flex; flex-direction: column; gap: 2px; background: var(--glass); box-shadow: 0 18px 50px -16px rgba(0,0,0,.55), 0 0 0 1px var(--line); }
+.nmore-pop[hidden] { display: none; }
+html.st-light .nmore-pop { background: #fbfdff; }
+.stabs .nmore-pop button { justify-content: flex-start; padding: 9px 14px; white-space: nowrap; }
+.stabs .nmore-pop button.on { color: var(--ink); background: rgba(118,75,162,.14); box-shadow: none; }
 nav button.nopt { padding-block: 6px; font-size: 12.5px; color: var(--dim); opacity: .85; }
 nav button.nopt i { width: 18px; height: 18px; flex: none; display: grid; place-items: center; font-style: normal; font-weight: 700; border-radius: 6px; border: 1px dashed currentColor; font-size: 12px; }
 nav button.nopt:hover { opacity: 1; color: var(--accent); }

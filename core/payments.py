@@ -491,6 +491,39 @@ class Payments:
                     "by_group": sorted(({"name": k, "sum": round(v, 2)} for k, v in by_group.items()), key=lambda x: -x["sum"]),
                     "months": months, "meters": meters, "years": sorted({int(p["date"][:4]) for p in self.pays} | {year}, reverse=True)}
 
+    def autopay_due(self, today=None):
+        """28.11 (человек: «автооплата 25 ноября, а дата прошла — будто не сработала; последняя 25.10»): автооплата списывается
+        в банке сама, но программа об этом не знала и оплату не записывала. Теперь в день срока она записывается сама —
+        обычной суммой счёта или прошлой оплатой, с заметкой «записано само»; неверно — поправить карандашом. Удалили —
+        за этот период снова не пишем (marks). Суммы не знаем (по счётчику, ни одной оплаты) — не выдумываем.
+        id — из счёта и периода: два компьютера с синхронизацией не запишут дважды. -> [(счёт, оплата)]."""
+        today = today or dt.date.today()
+        out = []
+        with self._lock:
+            for b in self.bills:
+                if b.get("archived") or not b.get("autopay") or not b.get("day") or b.get("kind") == "meter":
+                    continue
+                per = self.cur_period(b, today)
+                due = self.due(b, per)
+                key = f"{b['id']}:{per}:auto"
+                if due is None or today < due or self.marks.get(key) or str(b.get("created") or "")[:10] > due.isoformat() \
+                        or any(p["bill"] == b["id"] and p.get("period") == per for p in self.pays):
+                    continue
+                last = next(iter(sorted((p for p in self.pays if p["bill"] == b["id"] and p.get("amount") and p.get("status") != "unpaid"),
+                                        key=lambda p: p["date"], reverse=True)), None)
+                amount = b.get("amount") or (last or {}).get("amount")
+                if not amount:
+                    continue
+                p = {"id": f"au{b['id'][:6]}{per.replace('-', '')}", "bill": b["id"], "date": due.isoformat(), "period": per,
+                     "amount": amount, "reading": None, "used": None, "note": "автооплата · записано само", "status": "paid", "att": [],
+                     "created": dt.datetime.now().isoformat(timespec="seconds")}
+                self.pays.append(p)
+                self.marks[key] = today.isoformat()
+                out.append((b, dict(p)))
+            if out:
+                self._save([b["id"] for b, _ in out])
+        return out
+
     def check_due(self, today=None, now_hour=None):
         """Что пора напомнить: [(bill, текст)] — накануне срока (с 10 утра) и в день срока, если за период ещё не оплачено;
         каждое — один раз (marks). Автооплату не напоминаем."""

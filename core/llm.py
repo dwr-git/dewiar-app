@@ -906,6 +906,10 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         bare = BareCallCatcher(known_names if prompt_tools_mode(p) or native else [])
         got_text = False
         send, hdrs, gz = _gz_send(p, url, body)
+        if st is not None and gz:
+            # 1.0.93 («Голос без пауз»): размер запроса на проводе — ТСПУ «замирает» после ~16 КБ к зарубежным адресам;
+            # в пакете — заголовки по размеру запроса: есть ли ступенька после 16 КБ
+            st["kb"] = round(len(send["content"]) / 1024, 1)
         if st is not None:
             send = dict(send, extensions={"trace": _road_trace(st)})
         with _stream_retry("POST", url, **send, headers=hdrs, timeout=timeout) as r:

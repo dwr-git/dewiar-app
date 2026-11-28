@@ -101,9 +101,10 @@ async function ideaSuggest(title, text) {
   title = String(title || "").replace(/\s+/g, " ").trim().slice(0, 120);
   if (title.length < 4) return "Ошибка: скажи идею хотя бы в несколько слов.";
   try {
-    const sim = ((await ideaCall("/ideas/similar", { q: title })).items || []).filter(x => ["plan", "doing", "new", "done"].includes(x.status));
+    const sim = ((await ideaCall("/ideas/similar", { q: title, auto: 1 })).items || []).filter(x => ["plan", "doing", "new", "done"].includes(x.status));
     if (sim.length) { let x = sim[0];
-      if (x.status === "done") return `Это уже сделано в версии ${x.ver || "новее"}: «${x.title}». Скажи об этом и предложи обновиться.`;
+      // №440: версия компьютера (1.x) человеку с телефоном (0.9.x) — с подписью, иначе «1.0.53» кажется будущей
+      if (x.status === "done") return `Это уже сделано${x.ver ? " в версии " + x.ver + (/^1\./.test(x.ver) ? " для компьютера" : "") : ""}: «${x.title}». Скажи об этом и предложи обновиться.`;
       if (!x.voted) x = Object.assign({}, x, await ideaCall("/ideas/vote", {}, { id: x.id, on: true }));
       return `Похожая идея уже есть: «${x.title}» — голос за неё отдан (голосов: ${x.votes}). Скажи коротко: такую уже предлагали, проголосовала; все идеи — «Всё» → «Идеи Лиры».`; }
     const d = await ideaCall("/ideas/new", {}, { title, text: String(text || "").slice(0, 2000), who: S.who || S.user_name || "", app: D.web ? "web" : "phone" });

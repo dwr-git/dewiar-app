@@ -56,11 +56,34 @@ h = types.SimpleNamespace(s=types.SimpleNamespace(get=lambda *a, **k: ""), perso
 h._say_quick = lambda msg, text, via, then=None: said.append(msg)
 h.complaint_send = lambda note, who="", shot=True, via="": sent.append(note) or {"id": 92}
 h._bug_cmd = types.MethodType(health.HealthMixin._bug_cmd, h)
+h._bug_context = types.MethodType(health.HealthMixin._bug_context, h)
 r1 = h._bug_cmd("передай разработчику приложения что")
 r2 = h._bug_cmd("во вкладке рефералы кнопка пригласить перекрывает код")
 time.sleep(0.4)
 ok(r1 and r2 and bool(said) and ("договорите" in said[0] or "Что случилось" in said[0]), f"оборвалось — переспросил: {said[:1]}")
 ok(sent == ["во вкладке рефералы кнопка пригласить перекрывает код"], f"отправлена вся жалоба, а не «приложения что»: {sent}")
+# №1164 (28.11): «да что за ерунда? сообщи о проблеме разработчикам» уходило модели (та предлагала идею), а «сообщи о
+# проблеме разработчикам» отправляло жалобу «разработчикам». Теперь просьба — и последним предложением; без сути сразу после
+# разговора — «передать то, что было?», «да» — жалоба с последними вопросами
+sent.clear(); said.clear()
+h.conv = types.SimpleNamespace(last=time.time() - 30)
+h.history = [{"role": "user", "content": "Найди завершённую задачу 609b327f"}, {"role": "assistant", "content": "…"},
+             {"role": "user", "content": "почему критерий не проходит?"}, {"role": "assistant", "content": "…"}]
+r3 = h._bug_cmd("да что за ерунда? сообщи о проблеме разработчикам")
+r4 = h._bug_cmd("да")
+time.sleep(0.4)
+ok(r3 and r4 and "Скажите «да»" in said[0], f"просьба в конце фразы — команда, переспросила про разговор: {said[:1]}")
+ok(len(sent) == 1 and "609b327f" in sent[0] and "почему критерий не проходит" in sent[0] and "да что за ерунда" in sent[0],
+   f"«да» — жалоба о разговоре выше: {sent}")
+sent.clear(); said.clear(); h.conv.last = 0
+r5 = h._bug_cmd("Радио не работает. Сообщи об ошибке")
+time.sleep(0.4)
+ok(r5 and sent == ["Радио не работает"], f"суть перед просьбой — она и уходит: {sent}")
+sent.clear()
+r6 = h._bug_cmd("сообщи разработчикам о проблеме: радио молчит")
+time.sleep(0.4)
+ok(r6 and sent == ["радио молчит"], f"«разработчикам» не становится жалобой: {sent}")
+ok(not h._bug_cmd("Я вчера смотрела фильм. Он про ошибки молодости"), "обычная фраза — не жалоба")
 
 # ---------- 8. «Напомню тебе…» без напоминания (скриншот 19.10: «должен был утром напомнить, но не напомнил») ----------
 import quality  # noqa: E402
@@ -300,9 +323,14 @@ try:
           out.push((await bugQuick("передай разработчику приложения что")).say);
           out.push((await bugQuick("во вкладке рефералы кнопка пригласить перекрывает код")).say);
           out.push((await bugQuick("сообщи об ошибке: радио молчит")).say);
+          history.push({ role: "user", content: "почему критерий не проходит?" }, { role: "assistant", content: "…", t: Date.now() });   // eslint-disable-line
+          out.push((await bugQuick("да что за ерунда? сообщи о проблеме разработчикам")).say);
+          out.push((await bugQuick("да")).say);
           return { out, got }; }""")
+        ok("Скажите «да»" in r["out"][3] and len(r["got"]) == 3 and "почему критерий не проходит" in r["got"][2],
+           f"телефон №1164: просьба в конце фразы, «да» — жалоба о разговоре: {r['out'][3:]} {r['got'][2:]}")
         ok("договорите" in r["out"][0] or "Что случилось" in r["out"][0], f"телефон: оборвалось — переспросила: {r['out'][0]}")
-        ok(r["got"] == ["во вкладке рефералы кнопка пригласить перекрывает код", "радио молчит"], f"телефон: жалобы целиком: {r['got']}")
+        ok(r["got"][:2] == ["во вкладке рефералы кнопка пригласить перекрывает код", "радио молчит"], f"телефон: жалобы целиком: {r['got']}")
         box = pg.evaluate("""() => { const w = document.createElement('div'); w.style.padding = '16px'; w.innerHTML = '<div id="rf-body"></div>';
           document.body.prepend(w); refInfo = { code: "K7QX2M", invited: [], bonus: 1, days: 7, bonus_new: 1 }; refDraw(true);   // eslint-disable-line
           const a = document.querySelector('.rfcode').getBoundingClientRect(), s = document.querySelector('#rf-share').getBoundingClientRect(),

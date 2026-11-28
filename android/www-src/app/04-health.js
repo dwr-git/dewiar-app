@@ -207,7 +207,7 @@ function complaintsHtml() {
 const BUG_RX = /^(?:(?:сообщи|передай|напиши|отправь|скажи)\s+(?:разработчик\S*\s+)?(?:об?\s+)?(?:ошибк\S*|проблем\S*|баг\S*|сбо\S*)|отправь\s+жалобу(?:\s+разработчик\S*)?|пожалуйся(?:\s+разработчик\S*)?|(?:передай|скажи|напиши)\s+разработчик\S*)(?:\s*[:,.—-]\s*|\s+)?(?:что\s+)?([\s\S]*)$/i;
 /* Жалоба оборвалась на паузе (отчёт №90, 19.10: «передай разработчику приложения что» ушло как есть — «меня до конца
    дослушай»): хвост — служебное слово или пусто — переспросить и дописать следующую фразу к началу (как core/health.py). */
-const BUG_LEAD = /^(?:(?:этого\s+|этой\s+)?(?:приложени\S*|программ\S*|dewiar\S*|девиар\S*|лиры|ассистент\S*)\s*[,:]?\s*)?(?:что\s+|о\s+том,?\s+что\s+)?/i;
+const BUG_LEAD = /^(?:разработчик\S*\s*[,:—-]?\s*)?(?:(?:этого\s+|этой\s+)?(?:приложени\S*|программ\S*|dewiar\S*|девиар\S*|лиры|ассистент\S*)\s*[,:]?\s*)?(?:что\s+|о\s+том,?\s+что\s+)?/i;
 const BUG_TAIL = new Set("что чтобы и а но или в во на про о об у с со к ко по за для из от до когда если потому как где это вот ну типа не очень приложения программы мне меня там тут так".split(" "));
 function bugNote(raw) {
   const s = String(raw || "").trim().replace(/^[\s.,:;—-]+|[\s.,:;—-]+$/g, "").replace(BUG_LEAD, "").replace(/^[\s.,:;—-]+|[\s.,:;—-]+$/g, "");
@@ -216,18 +216,38 @@ function bugNote(raw) {
   if (BUG_TAIL.has(w[w.length - 1])) return [w.length > 2 ? s : "", true];
   return [s, false];
 }
-let bugPrefix = "";
+let bugPrefix = "", bugCtx = "";
+/* №1164 (28.11, как core/health.py): «да что за ерунда? сообщи о проблеме разработчикам» — просьба последним предложением;
+   без сути сразу после разговора — «передать то, что было?», «да» — жалоба с последними вопросами */
+function bugSplit(t) {
+  let m = t.match(BUG_RX); if (m) return ["", m];
+  const parts = t.trim().replace(/([.!?…])\s+/g, "$1\u0001").split("\u0001");   // без «взгляда назад» — старый Safari
+  if (parts.length > 1 && parts.length <= 4 && (m = parts[parts.length - 1].match(BUG_RX))) return [parts.slice(0, -1).join(" ").trim(), m];
+  return null;
+}
+function bugContext() {
+  const last = history.filter(x => x.role === "assistant" && x.t).pop();
+  if (!last || Date.now() - last.t > 6e5) return "";
+  return history.filter(x => x.role === "user" && typeof x.content === "string" && x.content.trim()).slice(-2)
+    .map(x => "«" + x.content.split("\n\n")[0].replace(/\s+/g, " ").trim().slice(0, 160) + "»").join("; ");
+}
 async function bugQuick(text) {
   const t = text.trim();
   let note;
   if (bugWait && Date.now() - bugWait < 40000) {
     bugWait = 0;
     if (/^(отмена|отмени|не надо|ничего|передумал\S*|забудь)\W*$/i.test(t)) { bugPrefix = ""; return { say: "Хорошо, не отправляю." }; }
-    note = (bugPrefix + " " + t).trim(); bugPrefix = "";
+    const ctx = bugCtx; bugCtx = "";
+    note = ctx && /^(да|ага|угу|давай|передай|отправь|конечно|да,?\s*(?:передай|отправь|это)|yes|yeah|sure|ok|okay)\W*$/i.test(t) ? ctx : (bugPrefix + " " + t).trim(); bugPrefix = "";
   } else {
-    const m = t.match(BUG_RX); if (!m) return null;
-    const [n, cut] = bugNote(m[1]);
-    if (cut) { bugWait = Date.now(); bugPrefix = n; return { say: n ? "Слушаю — договорите, что передать разработчику." : "Что случилось? Расскажите одной-двумя фразами — передам разработчику." }; }
+    const sp = bugSplit(t); if (!sp) return null;
+    const [pre, m] = sp;
+    let [n, cut] = bugNote(m[1]);
+    const rest = String(m[1] || "").replace(/^[\s.,:;—!?-]+|[\s.,:;—!?-]+$/g, "").replace(/^разработчик\S*/i, "").replace(/^[\s.,:;—!?-]+/, "");
+    const ctx = cut && !rest ? bugContext() : "";
+    if (pre && !n && !ctx) [n, cut] = bugNote(pre);
+    if (cut) { bugWait = Date.now(); bugPrefix = n; bugCtx = ctx ? (pre ? pre + " " : "") + "Проблема в разговоре выше, последние вопросы: " + ctx : "";
+      return { say: n ? "Слушаю — договорите, что передать разработчику." : ctx ? "Передать разработчику то, что сейчас было в разговоре? Скажите «да» — или расскажите, что случилось." : "Что случилось? Расскажите одной-двумя фразами — передам разработчику." }; }
     note = n;
   }
   try { const r = await complaintSend(note, S.who, false, "голосом"); return { say: gfix(`Передал разработчику — жалоба №${r.id}. Когда ответят или исправят, скажу. Спасибо, что помогаете!`) }; }

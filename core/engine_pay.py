@@ -145,6 +145,11 @@ class PayMixin:
             return
         while not self.stopping.is_set():
             try:
+                for b, p in self.payments.autopay_due():
+                    log.info("💳 Автооплата «%s» за %s — записана сама: %s", b["name"], p["period"], fmt_money(p["amount"]))
+            except Exception as e:  # noqa: BLE001
+                log.warning("Платежи: автооплата — %s", e)
+            try:
                 for b, text in self.payments.check_due():
                     log.info("💳 %s", text)
                     self.push("Платежи", text)

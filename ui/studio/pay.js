@@ -22,7 +22,8 @@ const pyStatus = (st, b) => {
   if (st.s === "unpaid") return ["warn", "Не погашено"];
   if (st.s === "overdue") return ["bad", `Срок был ${pyDay(st.due)}`];
   if (st.s === "soon") { const d = Math.round((new Date(st.due + "T00:00") - new Date(new Date().toDateString())) / 864e5); return ["soon", d <= 0 ? "Срок сегодня" : d === 1 ? "Срок завтра" : `Срок ${pyDay(st.due)}`]; }
-  if (st.s === "wait") return ["", b && b.autopay ? `Автооплата ${pyDay(st.due)}` : `До ${pyDay(st.due)}`];
+  // 28.11: срок автооплаты прошёл, а записи нет (суммы не знаем — сама не записалась) — не «будто не сработала», а «проверьте»
+  if (st.s === "wait") return ["", b && b.autopay ? (st.due && st.due < new Date().toISOString().slice(0, 10) ? `Автооплата ${pyDay(st.due)} — проверьте` : `Автооплата ${pyDay(st.due)}`) : `До ${pyDay(st.due)}`];
   return ["", b && b.autopay ? "Автооплата" : "Срок не задан"];
 };
 

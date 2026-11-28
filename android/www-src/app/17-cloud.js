@@ -793,8 +793,9 @@ function personaEditor(id) {
       <label class="f"><span>Кто это — одной строкой</span><input id="pe-role" maxlength="60" value="${esc(x.role || "")}" placeholder="подруга, тренер по английскому, бизнес-советник"></label>
       <label class="f"><span>Характер и как говорит</span><textarea id="pe-about" rows="4" maxlength="1200" placeholder="Весёлая, отвечает коротко, любит шутить; разбирается в фитнесе и питании. Обращается на «ты».">${esc(x.about || "")}</textarea></label>
       <div class="pe-colors" id="pe-c">${PE_COLORS.map(c => `<button data-c="${c}" style="--c:${c}" class="${c === x.color ? "on" : ""}" aria-label="Цвет ${c}"></button>`).join("")}</div>
-      <p class="hint" style="margin:6px 0 10px">Облик, имя и характер — на этом телефоне; с синхронизацией — и на компьютере. Голос — по полу: женский или мужской. Знания из своих документов — в листе «Кто отвечает» → «Знания».</p>
+      <p class="hint" style="margin:6px 0 10px">Облик, имя и характер — на этом телефоне; с синхронизацией — и на компьютере. Голос — по полу: женский или мужской.</p>
       <button class="btn p w" id="pe-save">Сохранить</button>
+      <button class="btn w" id="pe-kb" style="margin-top:8px">Знания: документы для ответов</button>
       ${x.id ? `<button class="btn w" id="pe-del" style="margin-top:8px">Удалить персонажа</button>` : ""}
       <div class="res" id="pe-res"></div></div>`;
   const showAva = () => { $("#pe-img").innerHTML = peAvatar ? `<img src="${peAvatar}" alt="">` : `<i>+</i>`; };
@@ -805,18 +806,24 @@ function personaEditor(id) {
     const f = ev.target.files && ev.target.files[0]; if (!f) return;
     try { peAvatar = await squareAvatar(f, 384); showAva(); } catch (e) { $("#pe-res").className = "res bad"; $("#pe-res").textContent = "Фото не открылось: " + e.message; }
   };
-  $("#pe-save").onclick = () => {
+  /* 28.11 (человек на скриншоте: «добавить базу данных» в «Своём персонаже»): знания — тем же листом «Кто отвечает»,
+     но отсюда одной кнопкой: сохранить персонажа и сразу открыть выбор его баз */
+  $("#pe-kb").onclick = () => { if (!save(true)) return; $("#who").click();
+    setTimeout(() => { const k = $("#pkb"); if (k) k.scrollIntoView({ block: "start", behavior: "smooth" }); if ($("#kb-edit")) kbPicker(S.persona); }, 350); };
+  $("#pe-save").onclick = () => save(false);
+  function save(quiet) {
     const name = $("#pe-name").value.trim().replace(/\s+/g, " "), r = $("#pe-res");
-    if (!/^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё -]{1,23}$/.test(name)) { r.className = "res bad"; r.textContent = "Имя — буквами, от двух до 24: на него персонаж будет откликаться."; return; }
+    if (!/^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё -]{1,23}$/.test(name)) { r.className = "res bad"; r.textContent = "Имя — буквами, от двух до 24: на него персонаж будет откликаться."; return false; }
     const clash = PERSONAS.find(p => p.id !== x.id && p.name.toLowerCase().replace(/ё/g, "е") === name.toLowerCase().replace(/ё/g, "е"));
-    if (clash) { r.className = "res bad"; r.textContent = `Имя «${clash.name}» уже занято — выберите другое.`; return; }
+    if (clash) { r.className = "res bad"; r.textContent = `Имя «${clash.name}» уже занято — выберите другое.`; return false; }
     const v = { id: x.id || uid("u"), name, gender: ($("#pe-g .on") || {}).dataset ? $("#pe-g .on").dataset.g : "female",
       role: $("#pe-role").value.trim(), about: $("#pe-about").value.trim(), color: ($("#pe-c .on") || { dataset: { c: PE_COLORS[0] } }).dataset.c, avatar: peAvatar };
     const l = myPersonas().filter(q => q.id !== v.id); l.push(v);
-    try { prefSet("my_personas", JSON.stringify(l)); } catch (e) { r.className = "res bad"; r.textContent = "Не сохранилось: " + e.message; return; }
+    try { prefSet("my_personas", JSON.stringify(l)); } catch (e) { r.className = "res bad"; r.textContent = "Не сохранилось: " + e.message; return false; }
     myPersonasApply(); S.persona = v.id; saveS(); applyPersona(); closeSheets(); syncSoon();
-    showYou(""); showBot(`${v.name} — с вами. Зовите по имени.`); say(gfix(`Привет! Это ${v.name}.`));
-  };
+    showYou(""); showBot(`${v.name} — с вами. Зовите по имени.`); if (!quiet) say(gfix(`Привет! Это ${v.name}.`));
+    return true;
+  }
   if ($("#pe-del")) $("#pe-del").onclick = () => {
     if (!confirm(`Удалить персонажа «${x.name}»? Разговор и заметки останутся.`)) return;
     prefSet("my_personas", JSON.stringify(myPersonas().filter(q => q.id !== x.id)));

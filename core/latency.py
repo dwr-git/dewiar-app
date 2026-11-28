@@ -58,6 +58,12 @@ class Latency:
             if self.cur is not None and k not in self.cur:
                 self.cur[k] = t if t is not None else time.monotonic()
 
+    def info(self, k, v):
+        """Не время, а число хода (1.0.93: «kb» — сколько килобайт ушло к облаку, сжатым)."""
+        with self._lock:
+            if self.cur is not None:
+                self.cur.setdefault("i_" + k, v)
+
     def done(self, how=""):
         """Первый звук пошёл: записать ход. -> {этап: секунды, total} или None (не голосовой ход)."""
         with self._lock:
@@ -76,6 +82,8 @@ class Latency:
                     rec[k] = round(c[k] - c["req"], 2)
             if "model" in rec:
                 rec["acts"] = int(c.get("acts", 0))
+            if "i_kb" in c:
+                rec["kb"] = c["i_kb"]
             if how:
                 rec["how"] = how
             if 0 <= rec["total"] < 120:

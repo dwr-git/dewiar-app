@@ -65,6 +65,14 @@ with sync_playwright() as p:
     ok(pg.input_value("#pe-name") == "Меган" and pg.is_visible("#pe-del"), "карандаш — правка того же персонажа")
     pg.fill("#pe-name", "Мэг"); pg.click("#pe-save"); pg.wait_for_timeout(400)
     ok(pg.evaluate("() => persona().name") == "Мэг" and pg.evaluate("() => PERSONAS.filter(p => p.custom).length") == 1, "правка — тот же персонаж с новым именем")
+    # 28.11 (скриншот человека: «добавить базу данных» в «Своём персонаже»): «Знания» — кнопкой прямо в редакторе:
+    # сохранить и открыть «Кто отвечает» на знаниях этого персонажа
+    pg.evaluate("() => { document.querySelectorAll('.sheet.on').forEach(s => s.classList.remove('on')); }")
+    pg.click("#who"); pg.wait_for_timeout(300); pg.click(".pedit"); pg.wait_for_timeout(300)
+    pg.fill("#pe-name", "Мегги"); pg.click("#pe-kb"); pg.wait_for_timeout(700)
+    kb = pg.evaluate("() => ({ name: persona().name, open: document.querySelector('#sh-persona').classList.contains('on'), kb: (document.querySelector('#pkb') || {}).innerText || '' })")
+    ok(kb["name"] == "Мегги" and kb["open"] and "Знания" in kb["kb"], f"«Знания» в редакторе — сохранено и открыты знания персонажа: {kb}")
+    pg.evaluate("() => closeSheets()"); pg.wait_for_timeout(300)
     pg.evaluate("() => { document.querySelectorAll('.sheet.on').forEach(s => s.classList.remove('on')); }")
     pg.click("#who"); pg.wait_for_timeout(300); pg.click(".pedit"); pg.wait_for_timeout(300); pg.click("#pe-del"); pg.wait_for_timeout(400)
     r3 = pg.evaluate("() => ({ id: S.persona, n: PERSONAS.filter(p => p.custom).length })")

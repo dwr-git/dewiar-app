@@ -114,6 +114,7 @@ CRIT_ALIAS = {"exists": "file", "file_exists": "file", "файл": "file", "has"
 
 
 CRIT_MAX = 12
+_SEP = "/\\"
 
 
 def norm_criteria(items):
@@ -137,6 +138,9 @@ def norm_criteria(items):
             continue
         if ck not in ("manual",) and not target:
             errs.append(f"{i} ({ck}): нужен target — путь, адрес или команда")
+            continue
+        if ck in ("contains", "number", "pages", "lines", "rows") and target.endswith(tuple(_SEP)):
+            errs.append(f"{i} ({ck}): «{target}» — папка; укажите конкретный файл, например {target.rstrip(_SEP)}/отчёт.html")
             continue
         if ck in ("contains",) and not str(value or "").strip():
             errs.append(f"{i} (contains): нужен value — какой текст должен быть в файле")
@@ -163,6 +167,20 @@ def crit_label(c):
            "pages": f"страниц в {tg}: {v}", "lines": f"строк в {tg}: {v}", "rows": f"строк таблицы {tg}: {v}",
            "files": f"файлов в {tg}: {v}", "manual": str(c.get("text") or v or tg)}.get(ck, str(c))
     return lab if ck == "manual" or not c.get("text") else f"{c['text']} ({lab})"
+
+
+def _fold(t):
+    return str(t).casefold().replace("ё", "е")
+
+
+def _dir_note(p, tg, want=None):
+    """№1164: критерий по папке — не «текста нет», а «это папка, укажите файл» и какой файл подходит. Иначе модель
+    правит верный файл по кругу, пока задачу не остановят за повтор."""
+    files = sorted(q for q in p.rglob("*") if q.is_file() and not q.is_symlink())[:200]
+    fit = [q for q in files if want is not None and _fold(want) in _fold(file_text(q))] if want is not None else files
+    names = ", ".join(tg.rstrip(_SEP) + "/" + q.relative_to(p).as_posix() for q in fit[:3])
+    return (f"«{tg}» — папка, а не файл: исправьте критерий (set_criteria), укажите конкретный файл"
+            + (f"; текст есть в {names}" if names and want is not None else f", например {names}" if names else ""))
 
 
 def check_criteria(crits, resolve, run_cmd=None, http_ok=None, browser=None, quick=False):
@@ -194,10 +212,12 @@ def check_criteria(crits, resolve, run_cmd=None, http_ok=None, browser=None, qui
                     r["detail"] = "" if r["ok"] else ("файл пустой" if p.exists() else "файла нет")
                 elif not p.exists():
                     r["ok"], r["detail"] = False, "файла нет"
+                elif ck in ("contains", "number") and p.is_dir():
+                    r["ok"], r["detail"] = False, _dir_note(p, tg, v if ck == "contains" else None)
                 elif ck == "contains":
                     txt = file_text(p) if p.is_file() else ""
-                    r["ok"] = str(v).casefold().replace("ё", "е") in txt.casefold().replace("ё", "е")
-                    r["detail"] = "" if r["ok"] else "такого текста в файле нет"
+                    r["ok"] = _fold(v) in _fold(txt)
+                    r["detail"] = "" if r["ok"] else f"такого текста в {tg} нет" + ("" if p.as_posix().endswith(tg.lstrip("./")) else f" (читала {p})")
                 elif ck == "number":
                     want = _nums(str(v))[0]
                     have = _nums(file_text(p)) if p.is_file() else []

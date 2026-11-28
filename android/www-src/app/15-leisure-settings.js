@@ -288,7 +288,6 @@ function appsHtml() {
     t.push(["month", "Мой месяц", "дела и траты"], ["radio", "Радио", "станции и жанры"], ["senior", "Для старших", "лекарства и присмотр"], ["tricks", "Что я умею", "фразы-примеры"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"], ["news", "Что нового", "в этой версии"]);
     return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   }
-  t.push(["soul", "Душа", "дневник и характер"]);
   if (!kidsOn()) t.push(["clients", window.t("apps.clients"), window.t("apps.clients_d")]);   // 0.9.32: отчёты 657, 658 — бизнес-инструменты и на телефоне
   if (!kidsOn() && typeof blogHas === "function" && blogHas()) t.push(["blog", window.t("phone.blog.title"), blogDraftsN() ? window.t("phone.blog.app_n", { n: blogDraftsN() }) : window.t("phone.blog.app_d")]);   // 0.93: статьи своего сайта
   if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "для сотрудников"]);   // 28.10, владелец: «при чём здесь „по коду“»
@@ -296,8 +295,10 @@ function appsHtml() {
   if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
   if (!kidsOn()) t.push(["safe", "Сейф", "пароли с компьютера"]);       // 03.11: пароли — подглядеть с телефона (safe.js)
   t.push(["radio", "Радио", "станции и жанры"]);
-  t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"]);
+  t.push(["course", "Курсы", "урок в день"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"]);
   t.push(["pc", window.t("apps.pc"), window.t("apps.pc_d")]);           // 0.9.32: что есть только на компьютере и как поручить ему отсюда (отчёт 658)
+  // вычитание 28.11 (как «Ещё» в студии): «на раз» — в конце: душа, что я умею, режимы, что нового
+  t.push(["soul", "Душа", "дневник и характер"], ["tricks", "Что я умею", "фразы-примеры"]);
   t.push(["senior", "Для старших", "для мамы и папы"], ["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
   return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}${k === "lessons" && lsnNew().length ? " new" : ""}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
 }

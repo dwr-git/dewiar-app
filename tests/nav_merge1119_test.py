@@ -43,8 +43,17 @@ with sync_playwright() as p:
 
     # «Обучение»: вкладки, возврат на последнюю
     pg.click('nav button[data-p="course"]'); pg.wait_for_timeout(200)
-    tabs = pg.evaluate("[...document.querySelectorAll('#p-course > .ntabs button')].filter(x => !x.hidden).map(x => x.textContent.trim())")
-    ok(tabs == ["Неделя с Лирой", "Видеоуроки", "Вопрос — ответ", "Что я умею"], f"«Обучение» — четыре вкладки: {tabs}")
+    tabs = pg.evaluate("[...document.querySelectorAll('#p-course > .ntabs > button')].filter(x => x.offsetParent).map(x => x.textContent.trim())")
+    ok(tabs == ["Неделя с Лирой", "Видеоуроки", "Вопрос — ответ"], f"«Обучение» — три вкладки, «Что я умею» — в «Ещё» (28.11): {tabs}")
+    ok(pg.is_visible("#p-course .nmore-b") and not pg.is_visible("#p-course .nmore-pop"), "«Ещё ▾» в конце полоски, меню закрыто")
+    pg.click("#p-course .nmore-b"); pg.wait_for_timeout(150)
+    more = pg.evaluate("[...document.querySelectorAll('#p-course .nmore-pop button')].filter(x => x.offsetParent).map(x => x.dataset.go)")
+    ok(more == ["tricks"], f"«Ещё» → «Что я умею»: {more}")
+    pg.click('#p-course .nmore-pop button[data-go="tricks"]'); pg.wait_for_timeout(200)
+    ok(pg.evaluate("document.querySelector('#p-tricks').classList.contains('cur')") and pg.is_visible('#p-tricks > .ntabs > button[data-go="tricks"]')
+       and not pg.is_visible("#p-tricks .nmore-pop"), "открыли «Что я умею» — вкладка видна в полоске, меню закрылось")
+    pg.click('nav button[data-p="course"]'); pg.wait_for_timeout(100)
+    pg.click('#p-tricks > .ntabs button[data-go="course"]'); pg.wait_for_timeout(200)
     pg.click('#p-course > .ntabs button[data-go="qa"]'); pg.wait_for_timeout(200)
     ok(pg.evaluate("document.querySelector('#p-qa').classList.contains('cur') && document.querySelector('nav button[data-p=course]').classList.contains('cur')"),
        "вкладка «Вопрос — ответ» открыта, слева горит «Обучение»")
@@ -55,9 +64,14 @@ with sync_playwright() as p:
 
     # «Память и душа»
     pg.click('nav button[data-p="memory"]'); pg.wait_for_timeout(200)
-    tabs = pg.evaluate("[...document.querySelectorAll('#p-memory > .ntabs button')].map(x => x.textContent.trim())")
-    ok(tabs == ["Память", "Дневник", "Душа", "Конституция", "Обо мне"], f"«Память и душа» — пять вкладок: {tabs}")
-    pg.click('#p-memory > .ntabs button[data-go="soul"]'); pg.wait_for_timeout(200)
+    tabs = pg.evaluate("[...document.querySelectorAll('#p-memory > .ntabs > button')].filter(x => x.offsetParent).map(x => x.textContent.trim())")
+    ok(tabs == ["Память", "Дневник", "Конституция"], f"«Память и душа» — три вкладки, «Душа» и «Обо мне» — в «Ещё» (28.11): {tabs}")
+    pg.click("#p-memory .nmore-b"); pg.wait_for_timeout(150)
+    more = pg.evaluate("[...document.querySelectorAll('#p-memory .nmore-pop button')].filter(x => x.offsetParent).map(x => x.dataset.go)")
+    ok(more == ["soul", "me"], f"«Ещё» → «Душа», «Обо мне»: {more}")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(100)
+    ok(not pg.is_visible("#p-memory .nmore-pop"), "Esc — меню «Ещё» закрыто")
+    pg.click("#p-memory .nmore-b"); pg.click('#p-memory .nmore-pop button[data-go="soul"]'); pg.wait_for_timeout(200)
     ok(pg.evaluate("document.querySelector('#p-soul').classList.contains('cur') && document.querySelector('nav button[data-p=memory]').classList.contains('cur')"),
        "«Душа» — вкладкой, слева горит «Память и душа»")
 
@@ -77,8 +91,10 @@ with sync_playwright() as p:
 
     # «Dewiar.pro» + «Рефералы»
     pg.click('nav button[data-p="dw"]'); pg.wait_for_timeout(200)
-    tabs = pg.evaluate("[...document.querySelectorAll('#p-dw > .ntabs button')].filter(x => !x.hidden).map(x => x.dataset.go)")
-    ok(tabs == ["dw", "ref"], f"«Dewiar.pro» — вкладка «Рефералы»: {tabs}")
+    tabs = pg.evaluate("[...document.querySelectorAll('#p-dw > .ntabs button[data-go]')].filter(x => x.offsetParent).map(x => x.dataset.go)")
+    ok(tabs == ["dw"] and pg.is_visible("#p-dw .nmore-b"), f"«Dewiar.pro» — «Рефералы» в «Ещё»: {tabs}")
+    q = pg.evaluate("() => { fdIndex(); FD.at = 0; return fdIndex().filter(o => o.p === 'tricks' || o.p === 'ref' || o.p === 'soul').map(o => o.p); }")
+    ok({"tricks", "ref", "soul"} <= set(q), f"спрятанные в «Ещё» находятся поиском: {sorted(set(q))}")
 
     # режимы: в меню — только включённый
     pg.evaluate("() => { _mode = 'senior'; mdLoad(); }"); pg.wait_for_timeout(300)

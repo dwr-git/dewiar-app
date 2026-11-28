@@ -45,7 +45,9 @@ with sync_playwright() as p:
     pg.evaluate("closeSheets()"); pg.wait_for_timeout(300)
     pg.click("#b-apps"); pg.wait_for_timeout(400)
     apps = pg.evaluate("() => [...document.querySelectorAll('#apps-body [data-app]')].map(b => b.dataset.app)")
-    ok(apps[:2] == ["play", "soul"] and {"ideas", "tricks", "course", "qa", "kids", "news", "work"} <= set(apps), f"«Всё»: Досуг, Душа, Работа, Идеи, обучение: {apps}")
+    ok(apps[0] == "play" and {"ideas", "tricks", "course", "qa", "kids", "news", "work", "soul"} <= set(apps)
+       and apps.index("soul") > apps.index("qa") and apps.index("tricks") > apps.index("qa"),
+       f"«Всё»: Досуг, Работа, Идеи, обучение; «на раз» (Душа, Что я умею) — в конце (вычитание 28.11): {apps}")
     pg.screenshot(path=str(SHOTS / "phone-apps.png"))
     pg.click("[data-app=soul]"); pg.wait_for_timeout(500)
     ok(pg.evaluate("document.querySelector('#sh-soul').classList.contains('on')"), "«Душа» открывается из «Всё»")
